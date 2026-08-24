@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getEthereumTokenMetrics } from "./onchain";
+import { getEthereumTokenMetrics, resetTokenMetricCache } from "./onchain";
 
 const weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); resetTokenMetricCache(); });
 
 describe("getEthereumTokenMetrics", () => {
   it("rejects invalid contract addresses before any network request", async () => {
@@ -37,5 +37,17 @@ describe("getEthereumTokenMetrics", () => {
     expect(result.token.name).toBe("Wrapped Ether");
     expect(result.market).toBeNull();
     expect(result.sources.market).toBe("unavailable");
+  });
+
+  it("returns a bounded fresh cache entry without repeating public upstream calls", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ address_hash: weth, name: "Wrapped Ether", symbol: "WETH", decimals: "18", holders_count: "9", exchange_rate: "2000.12", volume_24h: "90", circulating_market_cap: "100" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const first = await getEthereumTokenMetrics(weth);
+    const second = await getEthereumTokenMetrics(weth.toLowerCase());
+    expect(first.freshness).toBe("live");
+    expect(second.freshness).toBe("cached");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -21,6 +21,24 @@ type DexPair = {
   url?: string;
 };
 
+type TokenMetrics = {
+  token: { address: string; name: string; symbol: string; decimals: number; holders: number | null; explorerPriceUsd: number | null; explorerVolume24h: number | null; marketCap: number | null };
+  market: { priceUsd: number | null; liquidityUsd: number | null; volume24h: number | null; priceChange24h: number | null; dex: string; pairAddress: string; sourceUrl: string | null } | null;
+  scopes: string[];
+  authority: string;
+  sources: { explorer: string; market: string };
+  fetchedAt: number;
+  freshness: "live" | "cached";
+};
+
+const CACHE_TTL_MS = 30_000;
+const CACHE_MAX_ENTRIES = 50;
+const tokenCache = new Map<string, { expiresAt: number; value: TokenMetrics }>();
+
+export function resetTokenMetricCache() {
+  tokenCache.clear();
+}
+
 function numberOrNull(value: string | number | null | undefined) {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -30,6 +48,9 @@ function numberOrNull(value: string | number | null | undefined) {
 export async function getEthereumTokenMetrics(address: string) {
   if (!ETHEREUM_ADDRESS.test(address)) throw new Error("A valid Ethereum token contract address is required.");
   const normalized = address.toLowerCase();
+  const cached = tokenCache.get(normalized);
+  if (cached && cached.expiresAt > Date.now()) return { ...cached.value, freshness: "cached" as const };
+  if (cached) tokenCache.delete(normalized);
   const explorerUrl = `https://eth.blockscout.com/api/v2/tokens/${normalized}`;
   const dexUrl = `https://api.dexscreener.com/token-pairs/v1/ethereum/${normalized}`;
   const [explorerResult, dexResult] = await Promise.allSettled([
@@ -47,7 +68,7 @@ export async function getEthereumTokenMetrics(address: string) {
     bestPair = pairs.sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0] ?? null;
   }
 
-  return {
+  const value: TokenMetrics = {
     token: {
       address: token.address_hash,
       name: token.name,
@@ -71,5 +92,9 @@ export async function getEthereumTokenMetrics(address: string) {
     authority: "public read-only endpoints; no wallet, signature, exchange, or execution scope",
     sources: { explorer: "Blockscout public API", market: bestPair ? "DexScreener public API" : "unavailable" },
     fetchedAt: Date.now(),
+    freshness: "live",
   };
+  if (tokenCache.size >= CACHE_MAX_ENTRIES) tokenCache.delete(tokenCache.keys().next().value as string);
+  tokenCache.set(normalized, { expiresAt: Date.now() + CACHE_TTL_MS, value });
+  return value;
 }

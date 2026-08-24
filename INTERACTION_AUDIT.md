@@ -31,3 +31,7 @@ The strategy-variation control was tested and registered `STRAT-ETH-YIELD v0.4` 
 The anonymous public-data workflow was tested with the WETH ERC-20 contract `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`. The viewer returned live token metadata, holder count, price, DEX liquidity, 24-hour volume, change, market-cap figures, source attribution, and a fetch timestamp from Blockscout and DexScreener. No sample metric was presented before a successful response.
 
 The workspace navigation was tested by selecting **On-chain viewer**. The page scrolled to the viewer and the persistent control-plane breadcrumb changed from **Control plane** to **On-chain viewer**.
+
+## v0.3 cached public-data verification
+
+The WETH public contract view was re-tested after adding the bounded server-side cache. The UI returned live Blockscout and DexScreener metrics with source attribution, a fetch timestamp, and the explicit **live** freshness label. The adapter’s unit coverage separately verifies that a repeated request for the same normalized contract returns a **cached** response without repeating the two upstream requests.

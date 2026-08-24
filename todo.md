@@ -30,6 +30,7 @@
 - [x] Test persistence, policy validation, live-data fallback behavior, and responsive operator workflows before release.
 - [x] Implement the initial viewer against credential-free public endpoints and expose source, freshness, and unavailable states without synthetic fallback metrics.
 - [ ] Complete a logged-in owner persistence check for IPS save, simulation history, scope audit, and on-chain-view audit after the Cloudflare login check is available.
+- [x] Add bounded server-side caching for public token metrics, expose response freshness, and cover cache behavior in the data-adapter tests.
 - [x] Test IPS validation, public live-data success and fallback behavior, workspace navigation, and responsive anonymous viewer workflows.
 - [x] Add an authenticated research-record workspace for durable lineage, evaluation, and outcome submission and review.
 - [x] Render authenticated review lists for saved lineage, evaluation, and outcome records with key statuses and timestamps.
