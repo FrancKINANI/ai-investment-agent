@@ -17,4 +17,12 @@ describe("owner preferences", () => {
   it("returns safe defaults when no preference record exists", () => {
     expect(readOwnerPreferences("new-owner")).toEqual(defaultOwnerPreferences);
   });
+
+  it("uses the browser save-data hint for an owner’s initial prefetch state without overriding a saved choice", () => {
+    Object.defineProperty(navigator, "connection", { configurable: true, value: { saveData: true } });
+    expect(readOwnerPreferences("metered-owner").prefetchOnIntent).toBe(false);
+    saveOwnerPreferences("metered-owner", { ...defaultOwnerPreferences, prefetchOnIntent: true });
+    expect(readOwnerPreferences("metered-owner").prefetchOnIntent).toBe(true);
+    Object.defineProperty(navigator, "connection", { configurable: true, value: undefined });
+  });
 });
