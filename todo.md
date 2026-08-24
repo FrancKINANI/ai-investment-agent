@@ -37,3 +37,6 @@
 - [x] Add coverage for the research-record review data contracts and responsive rendering states.
 - [x] Add frontend rendering tests for unauthenticated, empty, and populated research-record review states.
 - [x] Revalidate the research-record review panels on a mobile viewport after the responsive layout change.
+- [x] Fix the authenticated empty-IPS query so it returns an explicit nullable value rather than undefined.
+- [x] Add regression coverage for authenticated owners with no saved IPS.
+- [ ] Complete browser validation for IPS save, paper simulation, scope audit, public-token view audit, and durable review records under the authenticated owner session.

@@ -40,12 +40,19 @@ beforeEach(() => {
   db.createStrategyLineage.mockResolvedValue({ id: 4 });
   db.createStrategyEvaluation.mockResolvedValue({ id: 5 });
   db.createOutcomeRecord.mockResolvedValue({ id: 6 });
+  db.getInvestmentPolicy.mockResolvedValue(null);
   db.listStrategyLineages.mockResolvedValue([{ id: 11, lineageId: "L-1" }]);
   db.listStrategyEvaluations.mockResolvedValue([{ id: 12, lineageId: "L-1", gateResult: "review" }]);
   db.listOutcomeRecords.mockResolvedValue([{ id: 13, lineageId: "L-1", deviation: "underperforming" }]);
 });
 
 describe("authenticated persistence contracts", () => {
+  it("returns null, not undefined, when an authenticated owner has no saved IPS", async () => {
+    const caller = appRouter.createCaller(context());
+    await expect(caller.policy.current()).resolves.toBeNull();
+    expect(db.getInvestmentPolicy).toHaveBeenCalledWith(7);
+  });
+
   it("creates a paper run, operator action, and Action-awareness record together", async () => {
     const caller = appRouter.createCaller(context());
     await caller.history.startSimulation({ policyVersion: 2 });
