@@ -184,3 +184,7 @@
 - [x] Add a dark-theme contrast token audit covering Command, Chat, Wallets, Connections, Settings, and Activity.
 - [x] Refine entrance timing and add subtle, reduced-motion-safe button hover feedback.
 - [x] Run route-wide visual and regression validation, then save a checkpoint.
+- [x] Inventory Markdown documentation, consolidate outdated content, and identify redundant files for safe removal.
+- [x] Remove superseded base-style declarations while retaining the tokenized Ledgerline operating shell.
+- [x] Add smooth, reduced-motion-safe loading skeletons to data-heavy Command, Chat, Settings, and Activity states.
+- [x] Update documentation and verify skeleton behavior, responsive layouts, tests, and build before checkpointing.

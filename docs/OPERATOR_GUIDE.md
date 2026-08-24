@@ -1,57 +1,24 @@
 # Operator Guide
 
-## Before you begin
+Ledgerline is designed for deliberate operator control. Its workflows are evidence-led, owner-scoped, and simulation-only.
 
-Ledgerline is a simulation-first tool. Use it to record a mandate, inspect public token data, and produce reviewable paper artifacts. It does not place trades or connect to a wallet.
+## Command
 
-## 1. Sign in to your private workspace
+Create a bounded watchlist, set the evidence standard, and inspect a public Ethereum contract through the Evidence Lab. Watchlist and evidence outputs may create a paper proposal, but neither action connects an account or executes an order. The proposal queue exposes explicit owner approval, rejection, and simulated settlement states.
 
-The public token viewer works without authentication. Sign in before saving an IPS, starting a paper simulation, creating research records, or reviewing private history. A signed-in owner without an IPS should see **No saved IPS**; this is the expected empty state.
+## Chat
 
-## 2. Create an Investment Policy Statement
+Use the dedicated supervisor conversation for a concrete research brief. The Bull and Bear views make disagreement legible; the Fund Manager review records a bounded synthesis. Confidence labels describe note completeness, not expected return or a forecast. The composer supports a newline with Enter and a send action with Command/Control+Enter.
 
-Provide a policy name and specify limits in basis points. Add only full Ethereum ERC-20 contract addresses to the approved asset universe.
+## Wallets and Connections
 
-| Field | Interpretation |
-| --- | --- |
-| Max concentration | Maximum permitted concentration for a single candidate. |
-| Minimum reserve | Minimum amount that remains reserved under the policy. |
-| Max transaction | Upper limit for a single paper proposal. |
-| Daily mandate | Aggregate daily paper-simulation limit. |
-| Approved asset universe | Contracts eligible for inspection as policy candidates. |
+Wallet screens describe purpose and mandate state only. Connections declare intended capability and revocation expectations. No screen accepts a private key, a seed phrase, a venue secret, or a signing request. Real mode remains locked by the server.
 
-The editor rejects an individual transaction limit above the daily mandate and rejects a concentration plus reserve combination above 100%.
+## Settings and Activity
 
-## 3. Inspect a public token
+Settings exposes protected model routes, optional read-only specialists, inactive discovery schedules, and browser-local owner preferences. The Activity page is the durable review surface; “Mark all as read” only changes the owner browser’s local read marker and never edits the immutable event record.
 
-Paste an ERC-20 Ethereum contract into **Read-only Ethereum token viewer**. Ledgerline displays sourced metadata, public DEX price/liquidity/volume data when available, the selected DEX identity, fetch time, and whether the result is `live` or `cached`. No wallet data is requested.
+## Interpreting loading states
 
-## 4. Start a paper simulation
+Skeletons indicate a request is pending. Empty states indicate no record was returned. Errors are separate from both. This distinction prevents an operator from mistaking delayed data for a safe policy, a disconnected venue, or a completed simulation.
 
-After an IPS has been saved, select **Start policy-bound simulation**. The result is stored as a durable paper run with an operator-history record and an Action-awareness record. It remains simulation-only even if the policy result passes.
-
-## 5. Maintain a research lifecycle
-
-Use **Research records** to create:
-
-| Record | What to capture |
-| --- | --- |
-| Strategy lineage | A thesis or strategy branch, its stage, generation, and rationale. |
-| Hard evaluation | A version, gate result, evidence coverage, complexity penalty, and justification. |
-| Outcome review | Expected and realized paper basis points, deviation state, and observation narrative. |
-
-Each record is presented in its corresponding review panel after saving. The panels are private to the authenticated owner.
-
-## 6. Use the history responsibly
-
-The history page is an audit trail, not a performance guarantee. Review source freshness, outcome deviation, policy version, and why a research record was created before acting elsewhere. Ledgerline does not make personal investment recommendations.
-
-## Troubleshooting
-
-| Symptom | Explanation and action |
-| --- | --- |
-| “No saved IPS” | Expected for a new owner. Sign in and create an IPS. |
-| Token view is unavailable | Verify the ERC-20 address; then retry later if Blockscout is temporarily unavailable. |
-| Market metric is unavailable | The contract metadata may be valid while no public DEX pair is returned. |
-| `cached` freshness label | A recent public-source result was served from the bounded server cache. Retry later for a live refresh. |
-| Cannot save a record | Ensure the owner session is authenticated and check the mandatory fields. |

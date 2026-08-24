@@ -1,25 +1,17 @@
 # Getting Started
 
+This guide runs Ledgerline locally and introduces the safest first workflow. The application is a **research and simulation workspace**. It does not place live orders or accept credentials, private keys, or signing requests.
+
 ## Prerequisites
 
-Use Node.js 22 or later and the version of pnpm pinned by the repository. The project uses an existing MySQL-compatible database and the Manus OAuth configuration injected by the web application environment. Do not commit `.env` files or replace the managed secrets with literal credentials.
-
-## Install and run
-
-Clone the repository, install dependencies, and start the development server.
+Install Node.js 22+ and pnpm. The project uses React, Vite, TypeScript, tRPC, Express, Drizzle, and a MySQL-compatible database supplied by the project environment.
 
 ```bash
-git clone <your-repository-url>
-cd ai-investment-agent-mvp
 pnpm install
 pnpm dev
 ```
 
-The development server prints a local preview URL. The application provides a public, read-only Ethereum token viewer without login. Sign in only when you need to create a private owner record.
-
-## Verify the codebase
-
-Run all checks before making or reviewing a change.
+Run the baseline checks before committing a change:
 
 ```bash
 pnpm test
@@ -27,34 +19,19 @@ pnpm check
 pnpm build
 ```
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm test` | Runs server contracts, deterministic policy tests, data-adapter tests, and frontend SSR state tests. |
-| `pnpm check` | Runs TypeScript without emitting output. |
-| `pnpm build` | Builds the Vite client and bundles the server entrypoint. |
-| `pnpm dev` | Starts the development API and Vite bridge. |
-
 ## First safe workflow
 
-1. Open **Read-only Ethereum token viewer**.
-2. Paste a public ERC-20 contract, such as the wrapped Ether contract published by Ethereum ecosystem tooling, only if you independently intend to inspect it. Ledgerline retrieves public data; it does not attest that a token is safe.
-3. Inspect source labels, fetch time, freshness, and any unavailable fields.
-4. Sign in when the project’s OAuth flow is available.
-5. Create an IPS with basis-point limits and at least one approved contract.
-6. Start a paper simulation and record a research lineage, evaluation, or outcome.
+1. Open **Command** and read the simulation-only authority strip.
+2. Open **Settings** to review protected agent routes, optional specialists, and inactive discovery schedules. Changing a model route does not add a tool scope or financial authority.
+3. Use **Chat** to give the supervisor a research brief. Bull and Bear views are evidence discussion, not trade instructions.
+4. Create a watchlist in **Command** and use the Evidence Lab only with a valid public Ethereum contract address.
+5. Review paper-proposal states and the immutable **Activity** log. Owner approval is required before simulated settlement.
 
-> The application has no live transaction path. Do not treat a paper record as a trading instruction.
+## Authentication and data states
 
-## Database migrations
+Signed-in workspaces load owner-scoped data. A loading skeleton means a request is still in progress; an empty state means that no relevant owner data exists. Do not treat a loading state as a policy, connection, balance, or execution result.
 
-Schema changes are managed through Drizzle migration files under `drizzle/`. For a new schema change, edit `drizzle/schema.ts`, generate a migration, review its SQL, and apply the SQL through the managed database workflow.
+## Database changes
 
-```bash
-pnpm drizzle-kit generate
-```
+For a schema change, update `drizzle/schema.ts`, generate a migration, inspect it, and apply it through the managed database workflow. Do not store file bytes, secrets, or wallet material in the database.
 
-Never apply an unreviewed migration to a production database. The project already includes migrations for the initial agent workspace, awareness/lineage data, outcome records, and the IPS/operator-action tables.
-
-## Authentication note
-
-The product requires a valid authenticated owner session for persisted records. The implementation has regression coverage for the “no IPS yet” state and returns `null` explicitly rather than an invalid undefined query result. The remaining manual browser validation is listed in [the runbook](ENGINEERING_AND_OPERATIONS.md).
