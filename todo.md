@@ -44,5 +44,5 @@
 - [x] Write product, architecture, security, data-provenance, and operator-workflow documentation.
 - [x] Write engineering setup, local development, testing, runbook, and getting-started documentation.
 - [x] Review documentation accuracy against the source code and sync the documentation package to the connected GitHub repository.
-- [ ] Commit the README and documentation package, then synchronize it to the `user_github` remote.
-- [ ] Record the GitHub branch and commit used for the documentation sync.
+- [x] Commit the README and documentation package, then synchronize it to the `user_github` remote.
+- [x] Record the GitHub branch and commit used for the documentation sync.
