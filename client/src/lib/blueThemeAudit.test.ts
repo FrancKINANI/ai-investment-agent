@@ -24,6 +24,8 @@ describe("active blue theme audit", () => {
     expect(stylesheet).toContain("--ring:#2768f5");
     expect(stylesheet).toContain(".dark { --background:#071225");
     expect(stylesheet).toContain("--primary:#67a4ff");
+    expect(stylesheet).toContain("--ll-success:#0aa8e8");
+    expect(stylesheet).toContain("--ll-success:#5ce2ff");
     expect(stylesheet).toContain(":root { --ll-success:var(--ll-cyan); }");
   });
 
@@ -52,5 +54,14 @@ describe("active blue theme audit", () => {
     expect(latestRuleContaining(".os-topbar-status i")).toContain("background:var(--ll-cyan)");
     expect(latestRuleContaining(".status-success")).toContain("background:var(--ll-cyan)");
     expect(stylesheet).toContain(".command-page-next .mandate-strip { display:grid!important; grid-template-columns:minmax(0,1.35fr)");
+  });
+
+  it("keeps the final dark theme readable and guards motion for reduced-motion users", () => {
+    expect(stylesheet).toContain(".dark { --ll-canvas:#061426");
+    expect(stylesheet).toContain("--ll-ink:#f4f8ff");
+    expect(stylesheet).toContain("--ll-muted:#bfd1e8");
+    expect(stylesheet).toContain("@media (prefers-reduced-motion:no-preference)");
+    expect(stylesheet).toContain("@media (prefers-reduced-motion:reduce)");
+    expect(stylesheet).toContain(".os-main { padding-bottom:30px!important; }");
   });
 });

@@ -173,3 +173,9 @@
 - [x] Inspect the stale DashboardLayout navigation target and determine the intended removable surface.
 - [x] Remove the requested navigation surface while preserving an accessible route to Command, Chat, and Activity on mobile.
 - [x] Revalidate the dashboard shell and save a checkpoint with the visual corrections.
+- [x] Audit active legacy CSS selectors and remove remaining green visual treatments from rendered Ledgerline workspaces.
+- [x] Strengthen dark-theme foreground, surface, and focus contrast using the blue/cyan token system.
+- [x] Add restrained, reduced-motion-safe transitions and entrance motion to the active operating shell.
+- [x] Extend visual/theme regression coverage, verify desktop and mobile themes, and save a checkpoint.
+- [x] Directly inspect the Command workspace in persisted dark theme and confirm the revised foreground, surface, and control contrast remains readable.
+- [x] Directly inspect persisted dark-theme Chat and Connections workspaces; confirm the visible shell, cards, and status treatments remain blue/cyan with readable text.
