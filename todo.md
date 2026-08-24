@@ -161,3 +161,7 @@
 - [x] Validate Connections and dashboard controls in both themes, run regression checks, and save a checkpoint.
 - [x] Apply token-based light/dark styling to Wallets mandate state badges and policy callout surfaces.
 - [x] Revalidate Connections, Wallets, and shared controls after the full theme correction before checkpointing.
+- [x] Refine the desktop Command research composer to match the ChatGPT-style composer used in the dedicated Chat workspace.
+- [x] Validate Command and Chat composer consistency across desktop/mobile and save a checkpoint.
+- [x] Apply the same ChatGPT-style desktop composer treatment to the dedicated Chat workspace.
+- [x] Validate the unified Command and Chat composer system before checkpointing.
