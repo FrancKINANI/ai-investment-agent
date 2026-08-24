@@ -1,16 +1,21 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
+import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { decideProposal } from "@shared/agentRuntime";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
+import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { createAgentProposal, createAgentRun, createAwarenessRecord, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getInvestmentPolicy, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
+import { composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
+import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
+import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -20,7 +25,7 @@ const proposalSchema = z.object({
 });
 
 const actionSchema = z.object({
-  kind: z.enum(["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed"]),
+  kind: z.enum(["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "agent_configured", "subagent_created", "subagent_retired", "chat_message", "watchlist_created", "watchlist_updated", "discovery_schedule_configured", "discovery_completed"]),
   status: z.enum(["success", "review", "blocked"]),
   subject: z.string().trim().min(1).max(160),
   detail: z.string().trim().min(1).max(2000),
@@ -65,6 +70,13 @@ const mandateCreateSchema = z.object({
   dailyCapBps: z.number().int().min(1).max(10_000),
 });
 const connectionCreateSchema = z.object({ venue: venueSchema, capabilities: z.array(z.string().trim().min(1).max(80)).min(1).max(12) });
+const providerSchema = z.enum(["openai", "anthropic", "google", "custom"]);
+const modelRouteSchema = z.object({ agentId: z.string().trim().min(1).max(64), provider: providerSchema, model: z.string().trim().min(1).max(160) });
+const optionalSubagentSchema = z.object({ parentAgentId: z.string().trim().min(1).max(64), roleKey: z.string().trim().regex(/^[a-z0-9_-]+$/).min(3).max(64), name: z.string().trim().min(3).max(120), provider: providerSchema, model: z.string().trim().min(1).max(160), toolScopes: z.array(z.enum(["market.read", "portfolio.read", "chain.read", "proposal.write"])).min(1).max(4) });
+const chatMessageSchema = z.object({ threadId: z.string().trim().min(1).max(64).optional(), message: z.string().trim().min(2).max(4_000) });
+const watchlistSchema = z.object({ name: z.string().trim().min(2).max(120) });
+const watchlistItemSchema = z.object({ watchlistId: z.string().trim().min(1).max(64), label: z.string().trim().min(2).max(120), address: z.string().trim().max(64).optional(), symbol: z.string().trim().max(32).optional(), chain: z.string().trim().max(32).optional() });
+const watchlistScopeSchema = z.object({ watchlistId: z.string().trim().min(1).max(64), chains: z.array(z.enum(["ethereum"])).min(1).max(1), evidenceStandard: z.enum(["strict", "balanced"]) });
 
 export const appRouter = router({
   system: systemRouter,
@@ -110,6 +122,135 @@ export const appRouter = router({
         payload: { version: policy?.version, allowedAssets: normalized.allowedAssets, executionMode: "simulation" },
       });
       return policy;
+    }),
+  }),
+  agentFabric: router({
+    nodes: protectedProcedure.query(({ ctx }) => ensureProtectedAgentNodes(ctx.user.id)),
+    conversations: protectedProcedure.query(({ ctx }) => listConversations(ctx.user.id)),
+    messages: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64) })).query(({ ctx, input }) => listAgentMessages(ctx.user.id, input.threadId)),
+    evolution: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64).optional() })).query(({ ctx, input }) => listEvolutionEvents(ctx.user.id, input.threadId)),
+    updateModel: protectedProcedure.input(modelRouteSchema).mutation(async ({ ctx, input }) => {
+      const node = await updateAgentModel(ctx.user.id, input.agentId, input.provider, input.model);
+      if (!node) throw new TRPCError({ code: "NOT_FOUND", message: "Agent node not found." });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "agent_configured", status: "success", subject: `Model route: ${node.name}`, detail: `Owner assigned ${input.model} to ${node.name}. Tool and execution authority remain unchanged.`, payload: { agentId: node.agentId, provider: input.provider, model: input.model } });
+      return node;
+    }),
+    createOptionalSubagent: protectedProcedure.input(optionalSubagentSchema).mutation(async ({ ctx, input }) => {
+      const nodes = await ensureProtectedAgentNodes(ctx.user.id);
+      const parent = nodes.find((node) => node.agentId === input.parentAgentId && node.state !== "retired");
+      if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Parent agent is not active." });
+      const optionalCount = nodes.filter((node) => !node.protectedRole && node.state !== "retired").length;
+      if (optionalCount >= optionalSubagentLimit) throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Optional subagent capacity is limited to ${optionalSubagentLimit}.` });
+      if (!input.toolScopes.every(isSafeAgentToolScope)) throw new TRPCError({ code: "FORBIDDEN", message: "Optional subagents may only receive read and paper-proposal scopes." });
+      const node = await createOptionalSubagent(ctx.user.id, { agentId: nanoid(), ...input });
+      await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), agentId: node?.agentId, state: "created", summary: `Optional subagent ${input.name} was added beneath ${parent.name}.`, evidence: ["owner-configured", `parent:${parent.agentId}`, "execution-sealed"] });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "subagent_created", status: "success", subject: `Subagent created: ${input.name}`, detail: "A bounded optional subagent was created with simulation-safe scopes.", payload: { agentId: node?.agentId, parentAgentId: input.parentAgentId, toolScopes: input.toolScopes } });
+      return node;
+    }),
+    retireOptionalSubagent: protectedProcedure.input(z.object({ agentId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+      const node = await retireOptionalSubagent(ctx.user.id, input.agentId);
+      if (!node) throw new TRPCError({ code: "FORBIDDEN", message: "Protected roles cannot be deleted and optional subagents must exist before retirement." });
+      await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), agentId: node.agentId, state: "retired", summary: `Optional subagent ${node.name} was retired.`, evidence: ["owner-configured", "execution-sealed"] });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "subagent_retired", status: "success", subject: `Subagent retired: ${node.name}`, detail: "The optional subagent was retired; protected roles remain intact.", payload: { agentId: node.agentId } });
+      return node;
+    }),
+    sendSupervisorMessage: protectedProcedure.input(chatMessageSchema).mutation(async ({ ctx, input }) => {
+      const nodes = await ensureProtectedAgentNodes(ctx.user.id);
+      const supervisor = nodes.find((node) => node.roleKey === "supervisor" && node.protectedRole) ?? nodes[0];
+      if (!supervisor) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Supervisor configuration could not be initialized." });
+      const threadId = input.threadId ?? nanoid();
+      if (!input.threadId) await createConversation(ctx.user.id, { threadId, title: input.message.slice(0, 120) });
+      await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "owner", content: input.message, evidence: ["owner-message"] });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "chat_message", status: "success", subject: "Owner message to supervisor", detail: "Owner initiated a simulation-only supervisor conversation.", payload: { threadId } });
+      const threadHistory = await listAgentMessages(ctx.user.id, threadId);
+      const history = threadHistory.map((message) => ({ actor: message.actor, content: message.content }));
+      const delegatedAgents = defaultDelegation.map((roleKey) => nodes.find((node) => node.roleKey === roleKey)).filter((agent): agent is NonNullable<typeof agent> => Boolean(agent));
+      for (const agent of delegatedAgents) await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "delegated", summary: `${agent.name} was delegated a bounded research perspective.`, evidence: ["supervisor-delegation", `model:${agent.model}`, "execution-sealed"] });
+      const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, output: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history }) })));
+      const specialistReports: { role: string; name: string; output: string }[] = [];
+      for (const result of settled) {
+        if (result.status === "fulfilled") {
+          const { agent, output } = result.value;
+          specialistReports.push({ role: agent.roleKey, name: agent.name, output });
+          await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "agent", agentId: agent.agentId, content: output, evidence: ["specialist-working-note", `role:${agent.roleKey}`, `model:${agent.model}`, "execution-sealed"] });
+          await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "completed", summary: `${agent.name} completed a bounded working note.`, evidence: ["specialist-working-note", `model:${agent.model}`, "execution-sealed"] });
+        } else {
+          await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, state: "blocked", summary: "A specialist note could not be completed; the supervisor will preserve this uncertainty.", evidence: ["specialist-call-failed", "execution-sealed"] });
+        }
+      }
+      const reply = await composeSupervisorReply({ model: supervisor.model || defaultAgentModel, message: input.message, agentNames: nodes.filter((node) => node.protectedRole).map((node) => node.name), history, specialistReports });
+      await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "supervisor", agentId: supervisor.agentId, content: reply, evidence: ["supervisor-synthesis", `model:${supervisor.model}`, "no-live-execution"] });
+      await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: supervisor.agentId, state: "completed", summary: "Supervisor returned a bounded research synthesis and next safe step.", evidence: ["supervisor-synthesis", `model:${supervisor.model}`, "execution-sealed"] });
+      return { threadId, reply };
+    }),
+  }),
+  watchlists: router({
+    lists: protectedProcedure.query(async ({ ctx }) => ({ lists: await listWatchlists(ctx.user.id), items: await listWatchlistItems(ctx.user.id), findings: await listDiscoveryFindings(ctx.user.id) })),
+    create: protectedProcedure.input(watchlistSchema).mutation(async ({ ctx, input }) => {
+      const record = await createWatchlist(ctx.user.id, { watchlistId: nanoid(), name: input.name, criteria: { scope: "owner-defined", execution: "simulation-only" } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_created", status: "success", subject: `Watchlist: ${input.name}`, detail: "Owner created a bounded discovery universe.", payload: { watchlistId: record?.watchlistId } });
+      return record;
+    }),
+    addItem: protectedProcedure.input(watchlistItemSchema).mutation(async ({ ctx, input }) => {
+      const record = await createWatchlistItem(ctx.user.id, { itemId: nanoid(), ...input });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_updated", status: "success", subject: `Watchlist item: ${input.label}`, detail: "Owner added an asset to the bounded discovery universe.", payload: { itemId: record?.itemId, watchlistId: input.watchlistId } });
+      return record;
+    }),
+    removeItem: protectedProcedure.input(z.object({ itemId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+      const record = await deleteWatchlistItem(ctx.user.id, input.itemId);
+      if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found." });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_updated", status: "success", subject: `Watchlist item removed: ${record.label}`, detail: "Owner removed an asset from discovery scope.", payload: { itemId: input.itemId } });
+      return record;
+    }),
+    updateScope: protectedProcedure.input(watchlistScopeSchema).mutation(async ({ ctx, input }) => {
+      const record = await updateWatchlistCriteria(ctx.user.id, input.watchlistId, { scope: "owner-defined", chains: input.chains, evidenceStandard: input.evidenceStandard, execution: "simulation-only" });
+      if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist not found." });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_updated", status: "success", subject: `Watchlist scope: ${record.name}`, detail: "Owner changed the bounded discovery scope. No execution authority changed.", payload: { watchlistId: record.watchlistId, criteria: record.criteria } });
+      return record;
+    }),
+    evaluatePolicy: protectedProcedure.mutation(async ({ ctx }) => {
+      const [items, policy] = await Promise.all([listWatchlistItems(ctx.user.id), getInvestmentPolicy(ctx.user.id)]);
+      const allowedAssets = new Set((policy?.allowedAssets ?? []).map((asset) => asset.toLowerCase()));
+      const updated = [];
+      for (const item of items) {
+        const status = !item.address ? "review" as const : !policy ? "review" as const : allowedAssets.has(item.address.toLowerCase()) ? "candidate" as const : "blocked" as const;
+        const record = await updateWatchlistItemStatus(ctx.user.id, item.itemId, status);
+        if (record) updated.push(record);
+      }
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_updated", status: policy ? "success" : "review", subject: "Watchlist IPS evaluation", detail: policy ? "Watchlist contract candidates were evaluated against the active IPS approved universe." : "No active IPS exists; watchlist assets remain under review.", payload: { itemCount: updated.length, policyVersion: policy?.version ?? null, simulationOnly: true } });
+      return { updated, policyPresent: Boolean(policy) };
+    }),
+  }),
+  discovery: router({
+    schedules: protectedProcedure.query(({ ctx }) => listDiscoverySchedules(ctx.user.id)),
+    configureInactive: protectedProcedure.input(z.object({ cadence: z.enum(["daily", "six_hour"]) })).mutation(async ({ ctx, input }) => {
+      const record = await createDiscoverySchedule(ctx.user.id, { scheduleId: nanoid(), cadence: input.cadence });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "review", subject: `${input.cadence === "daily" ? "Daily deep discovery" : "Six-hour signal scanner"} configured`, detail: "The schedule is saved inactive and cannot run until deployment and explicit owner activation.", payload: { scheduleId: record?.scheduleId, cadence: input.cadence, enabled: false } });
+      return record;
+    }),
+    activate: protectedProcedure.input(z.object({ scheduleId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+      if (process.env.NODE_ENV !== "production") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Deploy the site before activating scheduled discovery. The development preview cannot receive durable scheduler callbacks." });
+      const schedule = await getDiscoverySchedule(ctx.user.id, input.scheduleId);
+      if (!schedule) throw new TRPCError({ code: "NOT_FOUND", message: "Discovery schedule not found." });
+      const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+      const cron = schedule.cadence === "daily" ? "0 0 9 * * *" : "0 0 */6 * * *";
+      const job = schedule.scheduleCronTaskUid
+        ? await updateHeartbeatJob(schedule.scheduleCronTaskUid, { enable: true, cron, path: "/api/scheduled/discovery", description: `Ledgerline ${schedule.cadence} simulation-only watchlist discovery` }, sessionToken).then(() => ({ taskUid: schedule.scheduleCronTaskUid! }))
+        : await createHeartbeatJob({ name: `ledgerline-discovery-${schedule.scheduleId}`, cron, path: "/api/scheduled/discovery", payload: { schemaVersion: 1 }, description: `Ledgerline ${schedule.cadence} simulation-only watchlist discovery` }, sessionToken);
+      const active = await activateDiscoverySchedule(ctx.user.id, schedule.scheduleId, job.taskUid);
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "success", subject: `${schedule.cadence} discovery activated`, detail: "Owner activated an authenticated, simulation-only watchlist discovery job on the deployed site.", payload: { scheduleId: schedule.scheduleId, taskUid: job.taskUid, cadence: schedule.cadence, execution: "simulation-only" } });
+      return active;
+    }),
+    pause: protectedProcedure.input(z.object({ scheduleId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+      const schedule = await getDiscoverySchedule(ctx.user.id, input.scheduleId);
+      if (!schedule) throw new TRPCError({ code: "NOT_FOUND", message: "Discovery schedule not found." });
+      if (schedule.scheduleCronTaskUid) {
+        const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+        await updateHeartbeatJob(schedule.scheduleCronTaskUid, { enable: false }, sessionToken);
+      }
+      const paused = await pauseDiscoverySchedule(ctx.user.id, input.scheduleId);
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "review", subject: `${schedule.cadence} discovery paused`, detail: "Owner paused this discovery schedule. No new automated finding will be created until reactivated.", payload: { scheduleId: schedule.scheduleId, enabled: false } });
+      return paused;
     }),
   }),
   research: router({

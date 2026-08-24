@@ -43,6 +43,13 @@
       "when": 1787568807947,
       "tag": "0005_shiny_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787570467811,
+      "tag": "0006_easy_skullbuster",
+      "breakpoints": true
     }
   ]
 }
