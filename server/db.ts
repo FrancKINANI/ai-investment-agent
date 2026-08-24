@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentRuns, InsertUser, investmentPolicies, operatorActions, users } from "../drizzle/schema";
+import { agentProfiles, agentRuns, awarenessRecords, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -121,4 +121,90 @@ export async function listOperatorActions(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(operatorActions).where(eq(operatorActions.userId, userId)).orderBy(desc(operatorActions.createdAt)).limit(80);
+}
+
+export async function createAwarenessRecord(userId: number, record: {
+  layer: "action" | "justification" | "result" | "evolutionary";
+  subject: string;
+  runId?: string;
+  evidence: string[];
+  summary: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(awarenessRecords).values({ userId, ...record });
+  const saved = await db.select().from(awarenessRecords).where(eq(awarenessRecords.userId, userId)).orderBy(desc(awarenessRecords.createdAt)).limit(1);
+  return saved[0];
+}
+
+export async function listAwarenessRecords(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(awarenessRecords).where(eq(awarenessRecords.userId, userId)).orderBy(desc(awarenessRecords.createdAt)).limit(80);
+}
+
+export async function listStrategyLineages(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(strategyLineages).where(eq(strategyLineages.userId, userId)).orderBy(desc(strategyLineages.updatedAt)).limit(80);
+}
+
+export async function listStrategyEvaluations(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(strategyEvaluations).where(eq(strategyEvaluations.userId, userId)).orderBy(desc(strategyEvaluations.createdAt)).limit(80);
+}
+
+export async function listOutcomeRecords(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(outcomeRecords).where(eq(outcomeRecords.userId, userId)).orderBy(desc(outcomeRecords.updatedAt)).limit(80);
+}
+
+export async function createStrategyLineage(userId: number, record: {
+  lineageId: string;
+  name: string;
+  stage: "research" | "simulation" | "decision" | "retired";
+  generation: number;
+  parentVersion?: string;
+  scores: Record<string, number>;
+  rationale: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(strategyLineages).values({ userId, ...record, parentVersion: record.parentVersion ?? null });
+  const saved = await db.select().from(strategyLineages).where(eq(strategyLineages.userId, userId)).orderBy(desc(strategyLineages.createdAt)).limit(1);
+  return saved[0];
+}
+
+export async function createStrategyEvaluation(userId: number, record: {
+  lineageId: string;
+  version: string;
+  gateResult: "pass" | "review" | "block";
+  simulationPassed: boolean;
+  coverage: number;
+  complexityPenalty: number;
+  rationale: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(strategyEvaluations).values({ userId, ...record });
+  const saved = await db.select().from(strategyEvaluations).where(eq(strategyEvaluations.userId, userId)).orderBy(desc(strategyEvaluations.createdAt)).limit(1);
+  return saved[0];
+}
+
+export async function createOutcomeRecord(userId: number, record: {
+  lineageId: string;
+  runId?: string;
+  expectedBps: number;
+  realizedBps?: number;
+  attribution: Record<string, number>;
+  deviation: "on_track" | "underperforming" | "outperforming" | "inconclusive";
+  narrative: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(outcomeRecords).values({ userId, ...record, runId: record.runId ?? null, realizedBps: record.realizedBps ?? null });
+  const saved = await db.select().from(outcomeRecords).where(eq(outcomeRecords.userId, userId)).orderBy(desc(outcomeRecords.createdAt)).limit(1);
+  return saved[0];
 }

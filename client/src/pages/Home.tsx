@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,14 @@ type PolicyDraft = {
   dailyMandateBps: string;
 };
 
+type LineageDraft = { lineageId: string; name: string; stage: "research" | "simulation" | "decision" | "retired"; generation: string; rationale: string };
+type EvaluationDraft = { lineageId: string; version: string; gateResult: "pass" | "review" | "block"; coverage: string; complexityPenalty: string; rationale: string };
+type OutcomeDraft = { lineageId: string; runId: string; expectedBps: string; realizedBps: string; deviation: "on_track" | "underperforming" | "outperforming" | "inconclusive"; narrative: string };
+
 const emptyPolicy: PolicyDraft = { name: "", maxConcentrationBps: "", minReserveBps: "", maxTransactionBps: "", dailyMandateBps: "" };
+const emptyLineage: LineageDraft = { lineageId: "", name: "", stage: "research", generation: "1", rationale: "" };
+const emptyEvaluation: EvaluationDraft = { lineageId: "", version: "", gateResult: "review", coverage: "", complexityPenalty: "", rationale: "" };
+const emptyOutcome: OutcomeDraft = { lineageId: "", runId: "", expectedBps: "", realizedBps: "", deviation: "inconclusive", narrative: "" };
 
 function SectionNav({ label, target, onNavigate }: { label: string; target: string; onNavigate: (label: string) => void }) {
   return <button onClick={() => { onNavigate(label); document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}><ChevronRight size={15} /><span>{label}</span></button>;
@@ -53,6 +60,9 @@ export default function Home() {
   const [assetDraft, setAssetDraft] = useState("");
   const [addressDraft, setAddressDraft] = useState("");
   const [viewAddress, setViewAddress] = useState("");
+  const [lineageDraft, setLineageDraft] = useState<LineageDraft>(emptyLineage);
+  const [evaluationDraft, setEvaluationDraft] = useState<EvaluationDraft>(emptyEvaluation);
+  const [outcomeDraft, setOutcomeDraft] = useState<OutcomeDraft>(emptyOutcome);
   const [activeSection, setActiveSection] = useState("Control plane");
   const lastRecordedMetric = useRef<string | null>(null);
 
@@ -62,6 +72,12 @@ export default function Home() {
   const policyMutation = trpc.policy.save.useMutation();
   const actionMutation = trpc.history.record.useMutation({ onSuccess: () => historyQuery.refetch() });
   const simulationMutation = trpc.history.startSimulation.useMutation({ onSuccess: () => { historyQuery.refetch(); runsQuery.refetch(); } });
+  const lineagesQuery = trpc.audit.lineages.useQuery(undefined, { enabled: isAuthenticated, retry: false, refetchOnWindowFocus: false });
+  const evaluationsQuery = trpc.audit.evaluations.useQuery(undefined, { enabled: isAuthenticated, retry: false, refetchOnWindowFocus: false });
+  const outcomesQuery = trpc.audit.outcomes.useQuery(undefined, { enabled: isAuthenticated, retry: false, refetchOnWindowFocus: false });
+  const lineageMutation = trpc.audit.createLineage.useMutation({ onSuccess: () => lineagesQuery.refetch() });
+  const evaluationMutation = trpc.audit.createEvaluation.useMutation({ onSuccess: () => evaluationsQuery.refetch() });
+  const outcomeMutation = trpc.audit.createOutcome.useMutation({ onSuccess: () => outcomesQuery.refetch() });
   const tokenQuery = trpc.onchain.ethereumToken.useQuery({ address: viewAddress }, { enabled: isEthereumAddress(viewAddress), retry: false, refetchOnWindowFocus: false });
 
   useEffect(() => {
@@ -163,12 +179,42 @@ export default function Home() {
     toast.success("Scope audit saved", { description: "Read-only data scopes were recorded in operator history." });
   };
 
+  const submitLineage = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAuthenticated) return startLogin();
+    try {
+      await lineageMutation.mutateAsync({ ...lineageDraft, generation: Number(lineageDraft.generation) });
+      setLineageDraft(emptyLineage);
+      toast.success("Lineage record saved");
+    } catch (error) { toast.error("Lineage record was not saved", { description: error instanceof Error ? error.message : "Review the submitted fields." }); }
+  };
+
+  const submitEvaluation = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAuthenticated) return startLogin();
+    try {
+      await evaluationMutation.mutateAsync({ ...evaluationDraft, simulationPassed: true, coverage: Number(evaluationDraft.coverage), complexityPenalty: Number(evaluationDraft.complexityPenalty) });
+      setEvaluationDraft(emptyEvaluation);
+      toast.success("Evaluation record saved");
+    } catch (error) { toast.error("Evaluation was not saved", { description: error instanceof Error ? error.message : "Review the submitted fields." }); }
+  };
+
+  const submitOutcome = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAuthenticated) return startLogin();
+    try {
+      await outcomeMutation.mutateAsync({ ...outcomeDraft, runId: outcomeDraft.runId || undefined, expectedBps: Number(outcomeDraft.expectedBps), realizedBps: outcomeDraft.realizedBps ? Number(outcomeDraft.realizedBps) : undefined });
+      setOutcomeDraft(emptyOutcome);
+      toast.success("Outcome record saved");
+    } catch (error) { toast.error("Outcome was not saved", { description: error instanceof Error ? error.message : "Review the submitted fields." }); }
+  };
+
   return <div className="data-shell">
     <aside className="data-sidebar">
       <div className="data-brand"><div className="data-mark"><img src={logoUrl} alt="Ledgerline" /></div><div><strong>ledgerline</strong><span>control plane · v0.3</span></div></div>
       <div className="runtime-stamp"><span><Activity size={13} /></span><div><small>OPERATING MODE</small><strong>SIMULATION ONLY</strong></div></div>
       <div className="data-side-label">Workspaces</div>
-      <nav className="data-nav"><SectionNav label="Control plane" target="control-plane" onNavigate={setActiveSection} /><SectionNav label="IPS constitution" target="ips-editor" onNavigate={setActiveSection} /><SectionNav label="On-chain viewer" target="onchain-viewer" onNavigate={setActiveSection} /><SectionNav label="Operator history" target="operator-history" onNavigate={setActiveSection} /></nav>
+      <nav className="data-nav"><SectionNav label="Control plane" target="control-plane" onNavigate={setActiveSection} /><SectionNav label="IPS constitution" target="ips-editor" onNavigate={setActiveSection} /><SectionNav label="On-chain viewer" target="onchain-viewer" onNavigate={setActiveSection} /><SectionNav label="Research records" target="research-records" onNavigate={setActiveSection} /><SectionNav label="Operator history" target="operator-history" onNavigate={setActiveSection} /></nav>
       <div className="sidebar-spacer" />
       <div className="sidebar-seal"><LockKeyhole size={15} /><div><strong>Execution sealed</strong><span>No custody · no signing path</span></div></div>
       <div className="profile-strip"><div><span>{isAuthenticated ? user?.name ?? "Operator" : "Private workspace"}</span><small>{isAuthenticated ? "authenticated operator" : "sign in to persist controls"}</small></div>{isAuthenticated ? <Button variant="ghost" size="sm" onClick={() => document.getElementById("operator-history")?.scrollIntoView({ behavior: "smooth" })}>History</Button> : <Button size="sm" onClick={startLogin}>Sign in</Button>}</div>
@@ -188,6 +234,10 @@ export default function Home() {
 
         <section id="onchain-viewer" className="workspace-section"><div className="section-heading"><div><span>Public chain data</span><h2>Read-only Ethereum token viewer</h2><p>Paste any ERC-20 contract address to query live metadata, holder figures, and the highest-liquidity DEX market record. No wallet address is requested.</p></div><div className="heading-state"><Globe2 size={15} /> chain.read · market.read</div></div><div className="onchain-layout"><div className="onchain-query"><form onSubmit={loadToken}><label>Ethereum token contract<input value={addressDraft} onChange={(event) => setAddressDraft(event.target.value)} placeholder="0x…" /></label><Button className="primary-mint" type="submit" disabled={tokenQuery.isFetching}>{tokenQuery.isFetching ? <RefreshCw size={14} className="spin" /> : <SearchIcon />} {tokenQuery.isFetching ? "Loading live data" : "Load live metrics"}</Button></form><Button type="button" variant="outline" className="policy-asset-shortcut" onClick={loadFirstPolicyAsset} disabled={!policyQuery.data?.allowedAssets.length}>Load first IPS asset</Button><div className="scope-proof"><ShieldCheck size={15} /><div><strong>Authorized scopes</strong><span>Public `chain.read` and `market.read` only. No `execution.request`, wallet, or signing scope is present.</span></div></div>{tokenQuery.error && <div className="data-error"><CircleAlert size={16} /> {tokenQuery.error.message}</div>}</div><div className="live-metric-card">{tokenQuery.data ? <><div className="token-heading"><div><span>{tokenQuery.data.token.symbol}</span><strong>{tokenQuery.data.token.name}</strong><small>{tokenQuery.data.token.address}</small></div><a href={`https://eth.blockscout.com/token/${tokenQuery.data.token.address}`} target="_blank" rel="noreferrer">Explorer <ArrowUpRight size={13} /></a></div><div className="metric-grid"><div><span>Price</span><strong>{money(tokenQuery.data.market?.priceUsd ?? tokenQuery.data.token.explorerPriceUsd)}</strong><small>{tokenQuery.data.market?.dex ?? "Explorer reference"}</small></div><div><span>24h volume</span><strong>{money(tokenQuery.data.market?.volume24h ?? tokenQuery.data.token.explorerVolume24h)}</strong><small>public source</small></div><div><span>Liquidity</span><strong>{money(tokenQuery.data.market?.liquidityUsd)}</strong><small>highest-liquidity pair</small></div><div><span>Holders</span><strong>{compactNumber(tokenQuery.data.token.holders)}</strong><small>Blockscout</small></div><div><span>24h change</span><strong>{tokenQuery.data.market?.priceChange24h === null || tokenQuery.data.market?.priceChange24h === undefined ? "Unavailable" : `${tokenQuery.data.market.priceChange24h.toFixed(2)}%`}</strong><small>DEX pair</small></div><div><span>Market cap</span><strong>{money(tokenQuery.data.token.marketCap)}</strong><small>explorer supplied</small></div></div><div className="metric-foot"><span>Fetched {new Date(tokenQuery.data.fetchedAt).toLocaleTimeString()}</span><span>{tokenQuery.data.sources.explorer} · {tokenQuery.data.sources.market}</span></div></> : <div className="metric-empty"><Landmark size={23} /><strong>Load a real contract to inspect live metrics.</strong><span>No demo price, balance, liquidity, or holder figure is displayed before a public-source response succeeds.</span></div>}</div></div></section>
 
+        <section id="research-records" className="workspace-section"><div className="section-heading"><div><span>Durable research lifecycle</span><h2>Lineage, evaluation, and outcome records</h2><p>Create owner-controlled strategy records that become evolutionary, justification, and result awareness entries. These records remain research and simulation artifacts only.</p></div><div className="heading-state"><Layers3 size={15} /> {isAuthenticated ? "owner write enabled" : "sign in to write"}</div></div><div className="research-grid"><form className="research-card" onSubmit={submitLineage}><div><span>01 · Evolutionary</span><h3>Strategy lineage</h3></div><label>Lineage ID<input value={lineageDraft.lineageId} onChange={(event) => setLineageDraft({ ...lineageDraft, lineageId: event.target.value })} placeholder="e.g. STRAT-001" disabled={!isAuthenticated} /></label><label>Name<input value={lineageDraft.name} onChange={(event) => setLineageDraft({ ...lineageDraft, name: event.target.value })} placeholder="Research thesis" disabled={!isAuthenticated} /></label><div className="research-pair"><label>Stage<select value={lineageDraft.stage} onChange={(event) => setLineageDraft({ ...lineageDraft, stage: event.target.value as LineageDraft["stage"] })} disabled={!isAuthenticated}><option value="research">Research</option><option value="simulation">Simulation</option><option value="decision">Decision</option><option value="retired">Retired</option></select></label><label>Generation<input type="number" min="1" value={lineageDraft.generation} onChange={(event) => setLineageDraft({ ...lineageDraft, generation: event.target.value })} disabled={!isAuthenticated} /></label></div><label>Rationale<textarea value={lineageDraft.rationale} onChange={(event) => setLineageDraft({ ...lineageDraft, rationale: event.target.value })} placeholder="Why this research branch exists" disabled={!isAuthenticated} /></label><Button className="primary-mint" type="submit" disabled={!isAuthenticated || lineageMutation.isPending}>Save lineage</Button><small>{isAuthenticated ? `${lineagesQuery.data?.length ?? 0} saved lineage records` : "Authentication required"}</small></form><form className="research-card" onSubmit={submitEvaluation}><div><span>02 · Justification</span><h3>Hard evaluation</h3></div><label>Lineage ID<input value={evaluationDraft.lineageId} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, lineageId: event.target.value })} placeholder="STRAT-001" disabled={!isAuthenticated} /></label><div className="research-pair"><label>Version<input value={evaluationDraft.version} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, version: event.target.value })} placeholder="v1" disabled={!isAuthenticated} /></label><label>Gate<select value={evaluationDraft.gateResult} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, gateResult: event.target.value as EvaluationDraft["gateResult"] })} disabled={!isAuthenticated}><option value="pass">Pass</option><option value="review">Review</option><option value="block">Block</option></select></label></div><div className="research-pair"><label>Coverage %<input type="number" min="0" max="100" value={evaluationDraft.coverage} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, coverage: event.target.value })} disabled={!isAuthenticated} /></label><label>Complexity %<input type="number" min="0" max="100" value={evaluationDraft.complexityPenalty} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, complexityPenalty: event.target.value })} disabled={!isAuthenticated} /></label></div><label>Rationale<textarea value={evaluationDraft.rationale} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, rationale: event.target.value })} placeholder="Evidence and gate justification" disabled={!isAuthenticated} /></label><Button className="primary-mint" type="submit" disabled={!isAuthenticated || evaluationMutation.isPending}>Save evaluation</Button><small>{isAuthenticated ? `${evaluationsQuery.data?.length ?? 0} saved evaluation records` : "Authentication required"}</small></form><form className="research-card" onSubmit={submitOutcome}><div><span>03 · Result</span><h3>Outcome review</h3></div><label>Lineage ID<input value={outcomeDraft.lineageId} onChange={(event) => setOutcomeDraft({ ...outcomeDraft, lineageId: event.target.value })} placeholder="STRAT-001" disabled={!isAuthenticated} /></label><label>Optional paper run ID<input value={outcomeDraft.runId} onChange={(event) => setOutcomeDraft({ ...outcomeDraft, runId: event.target.value })} placeholder="run identifier" disabled={!isAuthenticated} /></label><div className="research-pair"><label>Expected bps<input type="number" value={outcomeDraft.expectedBps} onChange={(event) => setOutcomeDraft({ ...outcomeDraft, expectedBps: event.target.value })} disabled={!isAuthenticated} /></label><label>Realized bps<input type="number" value={outcomeDraft.realizedBps} onChange={(event) => setOutcomeDraft({ ...outcomeDraft, realizedBps: event.target.value })} disabled={!isAuthenticated} /></label></div><label>Deviation<select value={outcomeDraft.deviation} onChange={(event) => setOutcomeDraft({ ...outcomeDraft, deviation: event.target.value as OutcomeDraft["deviation"] })} disabled={!isAuthenticated}><option value="inconclusive">Inconclusive</option><option value="on_track">On track</option><option value="underperforming">Underperforming</option><option value="outperforming">Outperforming</option></select></label><label>Observation narrative<textarea value={outcomeDraft.narrative} onChange={(event) => setOutcomeDraft({ ...outcomeDraft, narrative: event.target.value })} placeholder="What the observed paper result means" disabled={!isAuthenticated} /></label><Button className="primary-mint" type="submit" disabled={!isAuthenticated || outcomeMutation.isPending}>Save outcome</Button><small>{isAuthenticated ? `${outcomesQuery.data?.length ?? 0} saved outcome records` : "Authentication required"}</small></form></div></section>
+
+        <ResearchRecordReview isAuthenticated={isAuthenticated} lineages={lineagesQuery.data ?? []} evaluations={evaluationsQuery.data ?? []} outcomes={outcomesQuery.data ?? []} />
+
         <section id="operator-history" className="workspace-section"><div className="section-heading"><div><span>Immutable review trail</span><h2>Operator action history</h2><p>Policy saves, simulations, data views, and scope audits are persisted for the authenticated owner. No event is seeded into this view.</p></div><div className="heading-state"><History size={15} /> {isAuthenticated ? `${historyQuery.data?.length ?? 0} saved records` : "Sign in to view"}</div></div>{isAuthenticated ? <div className="history-panel">{historyQuery.isLoading ? <div className="history-empty">Loading durable operator records…</div> : (historyQuery.data?.length ?? 0) === 0 ? <div className="history-empty"><FileCheck2 size={20} /><strong>No operator actions saved yet.</strong><span>Save an IPS, query a token, run a scope audit, or start a simulation to create the first durable record.</span></div> : historyQuery.data?.map((item) => <div className="history-row" key={item.actionId}><span className={`history-dot status-${item.status}`} /><time>{new Date(item.createdAt).toLocaleString()}</time><div><strong>{item.subject}</strong><p>{item.detail}</p></div><span className="history-kind">{item.kind.replaceAll("_", " ")}</span></div>)}</div> : <div className="history-empty guarded"><LockKeyhole size={20} /><strong>Your history remains private.</strong><span>Authenticate to create and review the operator-owned audit trail.</span><Button onClick={startLogin}>Authenticate</Button></div>}</section>
         <footer className="data-footer"><span>LEDGERLINE / DATA-BACKED CONTROL PLANE</span><span>PUBLIC READ-ONLY DATA · PERSISTENT OWNER RECORDS · EXECUTION SEALED</span></footer>
       </div>
@@ -196,3 +246,19 @@ export default function Home() {
 }
 
 function SearchIcon() { return <Gauge size={14} />; }
+
+type LineageReview = { id: number; lineageId: string; name: string; stage: string; generation: number; createdAt: Date };
+type EvaluationReview = { id: number; lineageId: string; version: string; gateResult: string; coverage: number; complexityPenalty: number; createdAt: Date };
+type OutcomeReview = { id: number; lineageId: string; expectedBps: number; realizedBps: number | null; deviation: string; createdAt: Date };
+
+export function ResearchRecordReview({ isAuthenticated, lineages, evaluations, outcomes }: { isAuthenticated: boolean; lineages: LineageReview[]; evaluations: EvaluationReview[]; outcomes: OutcomeReview[] }) {
+  return <div className="research-review-grid">
+    <ReviewPanel title="Saved lineage" count={lineages.length}>{!isAuthenticated ? "Authenticate to review private research records." : lineages.length === 0 ? "No persisted lineage records yet." : lineages.slice(0, 5).map((record) => <div className="review-row" key={record.id}><div><strong>{record.name}</strong><span>{record.lineageId} · generation {record.generation}</span></div><div><b className={`review-status ${record.stage}`}>{record.stage}</b><time>{new Date(record.createdAt).toLocaleDateString()}</time></div></div>)}</ReviewPanel>
+    <ReviewPanel title="Saved evaluations" count={evaluations.length}>{!isAuthenticated ? "Authenticate to review private evaluation records." : evaluations.length === 0 ? "No persisted evaluation records yet." : evaluations.slice(0, 5).map((record) => <div className="review-row" key={record.id}><div><strong>{record.lineageId} · {record.version}</strong><span>Coverage {record.coverage}% · Complexity {record.complexityPenalty}%</span></div><div><b className={`review-status ${record.gateResult}`}>{record.gateResult}</b><time>{new Date(record.createdAt).toLocaleDateString()}</time></div></div>)}</ReviewPanel>
+    <ReviewPanel title="Saved outcomes" count={outcomes.length}>{!isAuthenticated ? "Authenticate to review private outcome records." : outcomes.length === 0 ? "No persisted outcome records yet." : outcomes.slice(0, 5).map((record) => <div className="review-row" key={record.id}><div><strong>{record.lineageId}</strong><span>Expected {record.expectedBps} bps · Realized {record.realizedBps ?? "—"} bps</span></div><div><b className={`review-status ${record.deviation}`}>{record.deviation.replaceAll("_", " ")}</b><time>{new Date(record.createdAt).toLocaleDateString()}</time></div></div>)}</ReviewPanel>
+  </div>;
+}
+
+function ReviewPanel({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  return <section className="review-panel"><header><span>{title}</span><b>{count} records</b></header><div className="review-list">{children}</div></section>;
+}

@@ -6,7 +6,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createAgentRun, createOperatorAction, getInvestmentPolicy, listAgentProfiles, listAgentRuns, listOperatorActions, saveInvestmentPolicy } from "./db";
+import { createAgentRun, createAwarenessRecord, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, getInvestmentPolicy, listAgentProfiles, listAgentRuns, listAwarenessRecords, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, saveInvestmentPolicy } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 
@@ -23,6 +23,34 @@ const actionSchema = z.object({
   subject: z.string().trim().min(1).max(160),
   detail: z.string().trim().min(1).max(2000),
   payload: z.record(z.string(), z.unknown()).default({}),
+});
+
+const lineageSchema = z.object({
+  lineageId: z.string().trim().min(3).max(64),
+  name: z.string().trim().min(2).max(160),
+  stage: z.enum(["research", "simulation", "decision", "retired"]),
+  generation: z.number().int().positive().max(10_000),
+  parentVersion: z.string().trim().max(64).optional(),
+  rationale: z.string().trim().min(5).max(4_000),
+});
+
+const evaluationSchema = z.object({
+  lineageId: z.string().trim().min(3).max(64),
+  version: z.string().trim().min(1).max(64),
+  gateResult: z.enum(["pass", "review", "block"]),
+  simulationPassed: z.boolean(),
+  coverage: z.number().int().min(0).max(100),
+  complexityPenalty: z.number().int().min(0).max(100),
+  rationale: z.string().trim().min(5).max(4_000),
+});
+
+const outcomeSchema = z.object({
+  lineageId: z.string().trim().min(3).max(64),
+  runId: z.string().trim().max(64).optional(),
+  expectedBps: z.number().int().min(-100_000).max(100_000),
+  realizedBps: z.number().int().min(-100_000).max(100_000).optional(),
+  deviation: z.enum(["on_track", "underperforming", "outperforming", "inconclusive"]),
+  narrative: z.string().trim().min(5).max(4_000),
 });
 
 export const appRouter = router({
@@ -91,7 +119,35 @@ export const appRouter = router({
         detail: "Owner started a policy-bound paper simulation. No execution adapter is available.",
         payload: { runId, policyVersion: input.policyVersion, simulationOnly: true },
       });
+      await createAwarenessRecord(ctx.user.id, {
+        layer: "action",
+        subject: `Paper simulation ${runId}`,
+        runId,
+        evidence: [`ips-version:${input.policyVersion}`, "simulation-only", "execution-sealed"],
+        summary: "A paper simulation was initiated by the authenticated owner under the active IPS.",
+      });
       return run;
+    }),
+  }),
+  audit: router({
+    awareness: protectedProcedure.query(({ ctx }) => listAwarenessRecords(ctx.user.id)),
+    lineages: protectedProcedure.query(({ ctx }) => listStrategyLineages(ctx.user.id)),
+    evaluations: protectedProcedure.query(({ ctx }) => listStrategyEvaluations(ctx.user.id)),
+    outcomes: protectedProcedure.query(({ ctx }) => listOutcomeRecords(ctx.user.id)),
+    createLineage: protectedProcedure.input(lineageSchema).mutation(async ({ ctx, input }) => {
+      const record = await createStrategyLineage(ctx.user.id, { ...input, scores: {} });
+      await createAwarenessRecord(ctx.user.id, { layer: "evolutionary", subject: `Lineage ${input.lineageId}`, evidence: ["owner-recorded", `stage:${input.stage}`], summary: input.rationale });
+      return record;
+    }),
+    createEvaluation: protectedProcedure.input(evaluationSchema).mutation(async ({ ctx, input }) => {
+      const record = await createStrategyEvaluation(ctx.user.id, input);
+      await createAwarenessRecord(ctx.user.id, { layer: "justification", subject: `Evaluation ${input.lineageId}:${input.version}`, evidence: [`gate:${input.gateResult}`, `coverage:${input.coverage}`], summary: input.rationale });
+      return record;
+    }),
+    createOutcome: protectedProcedure.input(outcomeSchema).mutation(async ({ ctx, input }) => {
+      const record = await createOutcomeRecord(ctx.user.id, { ...input, attribution: {} });
+      await createAwarenessRecord(ctx.user.id, { layer: "result", subject: `Outcome ${input.lineageId}`, runId: input.runId, evidence: [`deviation:${input.deviation}`, `expected-bps:${input.expectedBps}`], summary: input.narrative });
+      return record;
     }),
   }),
   onchain: router({

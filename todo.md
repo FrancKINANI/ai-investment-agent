@@ -23,11 +23,16 @@
 - [x] Save a final validated checkpoint for the completed v0.2 workflow release.
 - [x] Audit and remove remaining hardcoded operator, lineage, outcome, policy, and Web3 account data from product workflows.
 - [x] Research and select a real-time, read-only EVM data source and document its reliability, cost, and permission model.
-- [ ] Add authenticated persistence for operator actions, simulation histories, awareness records, lineage, evaluations, and outcomes.
+- [x] Add authenticated persistence for operator actions, simulation histories, awareness records, lineage, evaluations, and outcomes.
 - [x] Create the IPS policy schema and editor for concentration, reserve, mandate, and transaction limits.
 - [x] Build a read-only on-chain viewer that displays real token metrics, chain status, and authorized scopes without custody or signing authority.
 - [x] Evaluate the current stack against the long-horizon agent architecture and document a recommended target stack.
-- [ ] Test persistence, policy validation, live-data fallback behavior, and responsive operator workflows before release.
+- [x] Test persistence, policy validation, live-data fallback behavior, and responsive operator workflows before release.
 - [x] Implement the initial viewer against credential-free public endpoints and expose source, freshness, and unavailable states without synthetic fallback metrics.
 - [ ] Complete a logged-in owner persistence check for IPS save, simulation history, scope audit, and on-chain-view audit after the Cloudflare login check is available.
 - [x] Test IPS validation, public live-data success and fallback behavior, workspace navigation, and responsive anonymous viewer workflows.
+- [x] Add an authenticated research-record workspace for durable lineage, evaluation, and outcome submission and review.
+- [x] Render authenticated review lists for saved lineage, evaluation, and outcome records with key statuses and timestamps.
+- [x] Add coverage for the research-record review data contracts and responsive rendering states.
+- [x] Add frontend rendering tests for unauthenticated, empty, and populated research-record review states.
+- [x] Revalidate the research-record review panels on a mobile viewport after the responsive layout change.
