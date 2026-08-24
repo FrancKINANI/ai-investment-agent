@@ -52,6 +52,10 @@ describe("Chat and Wallets theme rendering", () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout>{workspace}</DashboardLayout></ThemeProvider>));
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(host.querySelector(selector)).not.toBeNull();
+    if (_name === "Chat") {
+      expect(host.querySelector('form[aria-label="Supervisor message composer"] .chatgpt-input-shell')).not.toBeNull();
+      expect(host.querySelector('button[aria-label="Send research brief"]')).not.toBeNull();
+    }
 
     const profileButton = host.querySelector<HTMLButtonElement>('button[aria-label="Open owner profile menu"]');
     await act(async () => profileButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));

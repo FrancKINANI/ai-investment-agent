@@ -144,3 +144,7 @@
 - [x] Verify profile edits, reset behavior, and responsive presentation before saving the repair checkpoint.
 - [x] Repair the dedicated Chat composer layout and interaction hierarchy flagged by the visual editor.
 - [x] Validate the Profile details panel and Chat composer together before the repair checkpoint.
+- [x] Remove nested horizontal/vertical mobile overflow across the global shell, Chat, and Wallets workspaces.
+- [x] Replace the narrow Chat composer with a compact ChatGPT-style docked input and send control.
+- [x] Make the Profile details editor fully visible, scroll-safe, and reachable within a narrow mobile viewport.
+- [x] Add regression coverage and validate Chat, Wallets, and Profile details at narrow mobile widths before checkpointing.
