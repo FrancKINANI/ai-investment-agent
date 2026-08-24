@@ -8,15 +8,29 @@ export const defaultOwnerPreferences: OwnerPreferences = {
   prefetchOnIntent: true,
 };
 
+type ConnectionAwareNavigator = Navigator & { connection?: { saveData?: boolean }; mozConnection?: { saveData?: boolean }; webkitConnection?: { saveData?: boolean } };
+
+export function browserPrefersReducedData() {
+  if (typeof navigator === "undefined") return false;
+  const connection = navigator as ConnectionAwareNavigator;
+  return Boolean(connection.connection?.saveData ?? connection.mozConnection?.saveData ?? connection.webkitConnection?.saveData);
+}
+
+export function initialOwnerPreferences(): OwnerPreferences {
+  return { ...defaultOwnerPreferences, shortcuts: { ...defaultOwnerPreferences.shortcuts }, prefetchOnIntent: !browserPrefersReducedData() };
+}
+
 export const ownerPreferencesKey = (ownerId?: string) => `ledgerline.owner-preferences.${ownerId ?? "anonymous"}`;
 
 export function readOwnerPreferences(ownerId?: string): OwnerPreferences {
-  if (typeof window === "undefined") return defaultOwnerPreferences;
+  if (typeof window === "undefined") return initialOwnerPreferences();
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(ownerPreferencesKey(ownerId)) ?? "{}") as Partial<OwnerPreferences>;
-    return { ...defaultOwnerPreferences, ...parsed, shortcuts: { ...defaultOwnerPreferences.shortcuts, ...parsed.shortcuts } };
+    const raw = window.localStorage.getItem(ownerPreferencesKey(ownerId));
+    if (!raw) return initialOwnerPreferences();
+    const parsed = JSON.parse(raw) as Partial<OwnerPreferences>;
+    return { ...initialOwnerPreferences(), ...parsed, shortcuts: { ...defaultOwnerPreferences.shortcuts, ...parsed.shortcuts } };
   } catch {
-    return defaultOwnerPreferences;
+    return initialOwnerPreferences();
   }
 }
 
