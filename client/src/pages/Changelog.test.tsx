@@ -25,5 +25,7 @@ describe("Changelog", () => {
     expect(host.textContent).toContain("Performance and public experience");
     expect(host.textContent).toContain("No wallet keys, venue credentials, signing, custody, live orders, or real execution capability were added.");
     expect(host.querySelector<HTMLAnchorElement>('a[href="/"]')?.textContent).toContain("Open Command");
+    expect(host.querySelectorAll('a[aria-label*="Share"][aria-label*="on X"]').length).toBe(3);
+    expect(host.querySelectorAll('a[aria-label*="Share"][aria-label*="LinkedIn"]').length).toBe(3);
   });
 });

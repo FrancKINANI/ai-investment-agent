@@ -7,10 +7,11 @@ describe("owner preferences", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("persists display, density, and configured shortcuts under the owner-scoped key", () => {
-    const preferences = { displayName: "Ledger Operator", density: "compact" as const, shortcuts: { navigation: "m" as const, chat: "j" as const, activity: "l" as const } };
+    const preferences = { displayName: "Ledger Operator", density: "compact" as const, shortcuts: { navigation: "m" as const, chat: "j" as const, activity: "l" as const }, prefetchOnIntent: false };
     saveOwnerPreferences("owner-1", preferences);
     expect(readOwnerPreferences("owner-1")).toEqual(preferences);
     expect(localStorage.getItem(ownerPreferencesKey("owner-1"))).toContain("Ledger Operator");
+    expect(readOwnerPreferences("owner-1").prefetchOnIntent).toBe(false);
   });
 
   it("returns safe defaults when no preference record exists", () => {

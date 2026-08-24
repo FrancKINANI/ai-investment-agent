@@ -26,7 +26,8 @@ const routeLoaders: Record<(typeof prefetchablePaths)[number], Array<() => Promi
 
 const requested = new Set<string>();
 
-export function prefetchRoute(path: string) {
+export function prefetchRoute(path: string, enabled = true) {
+  if (!enabled) return;
   const loaders = routeLoaders[path as keyof typeof routeLoaders];
   if (!loaders || requested.has(path)) return;
   requested.add(path);
