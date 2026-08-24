@@ -1,6 +1,7 @@
 import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { getChatPresentation } from "@/lib/chatDebate";
 import { trpc } from "@/lib/trpc";
 import { Activity, ArrowRight, Bot, BrainCircuit, CircleAlert, Eye, Gauge, Landmark, LockKeyhole, MessageSquareText, Network, Plus, Radar, RefreshCw, Send, ShieldAlert, ShieldCheck, Sparkles, Target, WalletCards, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
@@ -12,13 +13,7 @@ function formatEventState(state: string) {
   return state.replaceAll("_", " ");
 }
 
-export function getChatPresentation(actor: string, agentId: string | null | undefined, roleByAgentId: ReadonlyMap<string, string>) {
-  const roleKey = agentId ? roleByAgentId.get(agentId) : undefined;
-  const tone = roleKey === "bull_researcher" ? "bull" : roleKey === "bear_researcher" ? "bear" : "neutral";
-  const label = tone === "bull" ? "BULL CASE · UPSIDE" : tone === "bear" ? "BEAR CASE · RISK" : actor === "owner" ? "YOU" : actor === "supervisor" ? "SUPERVISOR" : "AGENT";
-  const cue = tone === "bull" ? "Positive thesis" : tone === "bear" ? "Challenge thesis" : undefined;
-  return { tone, label, cue };
-}
+export { getChatPresentation } from "@/lib/chatDebate";
 
 export default function CommandCenter() {
   const { isAuthenticated } = useAuth();

@@ -18,6 +18,14 @@ An authenticated owner message creates or continues a persisted conversation thr
 
 Specialist output deliberately names uncertainty when no factual evidence is supplied. It does not claim live market retrieval, give personalized investment advice, request credentials, or recommend a live order. A separate evidence-bound ERC-20 research flow remains available for public Blockscout and DexScreener evidence.
 
+The dedicated **Chat** route keeps this conversation separate from the broader Command workspace. It offers `All`, `Bull`, `Bear`, and `Supervisor` filters, explicit ▲/▼ labels, and a persisted delegation/completion timeline so the debate remains interpretable without color and its work is inspectable in sequence. Canonical protected role keys (`bull` and `bear`) and the prior researcher aliases resolve to the same presentation.
+
+Bull and Bear notes receive a persisted **research-note completeness score** from 35 to 88 with an accessible `Limited coverage`, `Developing coverage`, or `Strong coverage` label. This deterministic heuristic rewards the requested working-note structure and provenance cues while preserving declared uncertainty; it is **not** a market forecast, a trade probability, or a performance claim. When both notes exist, the Fund Manager stores a distinct disagreement review that compares those completeness signals, names whether the issue is unresolved, and requires evidence, Risk review, IPS checks, and owner-approved paper simulation before any promotion. The Fund Manager review is explicitly not an execution approval.
+
+## Execution-mode control
+
+Wallets & Mandates now exposes the current simulation state alongside a visible **Real mode · locked** control and its readiness checklist. The control truthfully represents the server boundary: the real-mode API rejects every request in this release. Ledgerline presently has no live venue adapter, credential vault, private-key intake, signing interface, live order endpoint, or owner arming ceremony. A future real-capability design would require all listed controls, independent risk review, auditable emergency-stop validation, and a separate security implementation.
+
 ## Watchlists and discovery
 
 Watchlists bound where future discovery may look. Owners create named lists, add labels and optional Ethereum contract addresses, select a `strict` or `balanced` evidence standard, and evaluate candidate state against the saved IPS.
@@ -36,6 +44,6 @@ The callback is cron-authenticated, validates that its scheduler task is known a
 
 ## Themes and validation
 
-The blue visual system supports persistent dark and light modes from the global navigation control. Both visual treatments were checked across Command, Agent & Policy, Wallets & Mandates, Connections, and Activity Log; command and configuration layouts were also checked at a 390 px mobile viewport. A rendered DOM test clicks the shipped `DashboardLayout` theme control, confirming that it changes the root theme class and persists the owner preference.
+The blue visual system supports persistent dark and light modes from the global navigation control. The global semantic fallbacks and active Command, Chat, Wallets & Mandates, Connections, Agent & Policy, and Activity Log surfaces align to blue tokens for operating accents; red and amber remain reserved for semantic risk and warning states. Command, Chat, Wallets & Mandates, Connections, Agent & Policy, and Activity Log were checked at desktop size, while Chat and Wallets & Mandates were also checked at a 390 px mobile viewport. Rendered DOM tests use the shipped `DashboardLayout` toggle to verify the refined Chat and Wallets screens remain mounted from dark to light mode and that the owner preference persists.
 
-Automated verification at this milestone: **14 test files / 50 tests**, `pnpm check`, and `pnpm build` all passed. Browser validation of private owner mutations and deployed scheduler activation remains dependent on an authenticated owner session and a published deployment, respectively.
+Automated verification at this milestone: **19 test files / 62 tests**, including route-level blue-token audit assertions, `pnpm check`, and `pnpm build` all passed. Browser validation of private owner mutations and deployed scheduler activation remains dependent on an authenticated owner session and a published deployment, respectively.

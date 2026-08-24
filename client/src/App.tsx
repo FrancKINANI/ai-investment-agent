@@ -6,6 +6,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Activity from "./pages/Activity";
+import Chat from "./pages/Chat";
 import CommandCenter from "./pages/CommandCenter";
 import Connections from "./pages/Connections";
 import Home from "./pages/Home";
@@ -17,6 +18,7 @@ function Router() {
   return (
     <Switch>
       <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
+      <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
       <Route path={"/wallets"}><Workspace><Wallets /></Workspace></Route>
       <Route path={"/connections"}><Workspace><Connections /></Workspace></Route>
       <Route path={"/settings"}><Workspace><Settings /></Workspace></Route>

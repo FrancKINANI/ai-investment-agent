@@ -5,11 +5,12 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, Si
 import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
-import { Activity, Bot, Cable, Landmark, LogOut, Moon, PanelLeft, Settings2, Sun, WalletCards } from "lucide-react";
+import { Activity, Bot, Cable, Landmark, LogOut, MessageSquareText, Moon, PanelLeft, Settings2, Sun, WalletCards } from "lucide-react";
 import { useLocation } from "wouter";
 
 const menuItems = [
   { icon: Bot, label: "Command", path: "/" },
+  { icon: MessageSquareText, label: "Chat", path: "/chat" },
   { icon: WalletCards, label: "Wallets & mandates", path: "/wallets" },
   { icon: Cable, label: "Connections", path: "/connections" },
   { icon: Settings2, label: "Agent & policy", path: "/settings" },

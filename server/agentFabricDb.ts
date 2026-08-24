@@ -67,10 +67,10 @@ export async function listConversations(userId: number) {
   return db.select().from(agentConversations).where(eq(agentConversations.userId, userId)).orderBy(desc(agentConversations.updatedAt)).limit(20);
 }
 
-export async function createAgentMessage(userId: number, values: { messageId: string; threadId: string; actor: "owner" | "supervisor" | "agent" | "system"; agentId?: string; content: string; evidence: string[] }) {
+export async function createAgentMessage(userId: number, values: { messageId: string; threadId: string; actor: "owner" | "supervisor" | "agent" | "system"; agentId?: string; content: string; confidence?: number; evidence: string[] }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(agentMessages).values({ userId, ...values, agentId: values.agentId ?? null });
+  await db.insert(agentMessages).values({ userId, ...values, agentId: values.agentId ?? null, confidence: values.confidence ?? null });
   await db.update(agentConversations).set({ updatedAt: new Date() }).where(and(eq(agentConversations.userId, userId), eq(agentConversations.threadId, values.threadId)));
   const result = await db.select().from(agentMessages).where(eq(agentMessages.messageId, values.messageId)).limit(1);
   return result[0];
