@@ -160,12 +160,117 @@ export const agentProposals = mysqlTable("agentProposals", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Configurable protected core roles and bounded optional subagents; no credentials or execution scopes are stored here. */
+export const agentNodes = mysqlTable("agentNodes", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  agentId: varchar("agentId", { length: 64 }).notNull().unique(),
+  roleKey: varchar("roleKey", { length: 64 }).notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  parentAgentId: varchar("parentAgentId", { length: 64 }),
+  protectedRole: boolean("protectedRole").default(false).notNull(),
+  provider: mysqlEnum("provider", ["openai", "anthropic", "google", "custom"]).notNull(),
+  model: varchar("model", { length: 160 }).notNull(),
+  toolScopes: json("toolScopes").$type<string[]>().notNull(),
+  state: mysqlEnum("state", ["active", "paused", "retired", "review"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Owner-visible supervisor conversations. System prompts and credentials are never persisted. */
+export const agentConversations = mysqlTable("agentConversations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  threadId: varchar("threadId", { length: 64 }).notNull().unique(),
+  title: varchar("title", { length: 180 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const agentMessages = mysqlTable("agentMessages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  messageId: varchar("messageId", { length: 64 }).notNull().unique(),
+  threadId: varchar("threadId", { length: 64 }).notNull(),
+  actor: mysqlEnum("actor", ["owner", "supervisor", "agent", "system"]).notNull(),
+  agentId: varchar("agentId", { length: 64 }),
+  content: text("content").notNull(),
+  evidence: json("evidence").$type<string[]>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Compact evolution entries explain the agent graph without exposing raw hidden reasoning. */
+export const agentEvolutionEvents = mysqlTable("agentEvolutionEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+  threadId: varchar("threadId", { length: 64 }),
+  agentId: varchar("agentId", { length: 64 }),
+  state: mysqlEnum("state", ["delegated", "working", "completed", "blocked", "created", "retired"]).notNull(),
+  summary: text("summary").notNull(),
+  evidence: json("evidence").$type<string[]>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Owner-defined research universe. Initial discovery is limited to watchlist items. */
+export const watchlists = mysqlTable("watchlists", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  watchlistId: varchar("watchlistId", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 120 }).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  criteria: json("criteria").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const watchlistItems = mysqlTable("watchlistItems", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  itemId: varchar("itemId", { length: 64 }).notNull().unique(),
+  watchlistId: varchar("watchlistId", { length: 64 }).notNull(),
+  label: varchar("label", { length: 120 }).notNull(),
+  address: varchar("address", { length: 64 }),
+  symbol: varchar("symbol", { length: 32 }),
+  chain: varchar("chain", { length: 32 }),
+  status: mysqlEnum("status", ["watching", "candidate", "review", "blocked"]).default("watching").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Scheduler records stay disabled until the owner enables them on a deployed site. */
+export const discoverySchedules = mysqlTable("discoverySchedules", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  scheduleId: varchar("scheduleId", { length: 64 }).notNull().unique(),
+  cadence: mysqlEnum("cadence", ["daily", "six_hour"]).notNull(),
+  enabled: boolean("enabled").default(false).notNull(),
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+  lastRunAt: timestamp("lastRunAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const discoveryFindings = mysqlTable("discoveryFindings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  findingId: varchar("findingId", { length: 64 }).notNull().unique(),
+  scheduleId: varchar("scheduleId", { length: 64 }),
+  watchlistItemId: varchar("watchlistItemId", { length: 64 }),
+  score: int("score").notNull(),
+  confidence: mysqlEnum("confidence", ["low", "medium", "high"]).notNull(),
+  status: mysqlEnum("status", ["watching", "candidate", "review", "blocked"]).notNull(),
+  summary: text("summary").notNull(),
+  evidence: json("evidence").$type<string[]>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 /** Immutable operator-originated actions. This is distinct from the AI awareness journal. */
 export const operatorActions = mysqlTable("operatorActions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   actionId: varchar("actionId", { length: 64 }).notNull().unique(),
-  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "mandate_created", "mandate_mode_changed", "venue_configured", "proposal_created", "proposal_approved", "proposal_rejected", "simulation_settled"]).notNull(),
+  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "mandate_created", "mandate_mode_changed", "venue_configured", "proposal_created", "proposal_approved", "proposal_rejected", "simulation_settled", "agent_configured", "subagent_created", "subagent_retired", "chat_message", "watchlist_created", "watchlist_updated", "discovery_schedule_configured", "discovery_completed"]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
   detail: text("detail").notNull(),
@@ -185,4 +290,12 @@ export type InvestmentPolicy = typeof investmentPolicies.$inferSelect;
 export type WalletMandate = typeof walletMandates.$inferSelect;
 export type VenueConnection = typeof venueConnections.$inferSelect;
 export type AgentProposal = typeof agentProposals.$inferSelect;
+export type AgentNode = typeof agentNodes.$inferSelect;
+export type AgentConversation = typeof agentConversations.$inferSelect;
+export type AgentMessage = typeof agentMessages.$inferSelect;
+export type AgentEvolutionEvent = typeof agentEvolutionEvents.$inferSelect;
+export type Watchlist = typeof watchlists.$inferSelect;
+export type WatchlistItem = typeof watchlistItems.$inferSelect;
+export type DiscoverySchedule = typeof discoverySchedules.$inferSelect;
+export type DiscoveryFinding = typeof discoveryFindings.$inferSelect;
 export type OperatorAction = typeof operatorActions.$inferSelect;

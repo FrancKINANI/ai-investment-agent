@@ -30,6 +30,7 @@ Ledgerline is private personal infrastructure for supervising specialised invest
 | [Autonomy and execution contract](docs/AUTONOMY_AND_EXECUTION_CONTRACT.md) | Dual-mode mandates, wallet roles, venue adapters, safeguards, and the gates required before any live connection. |
 | [Autonomous OS information architecture](docs/AUTONOMY_OPERATING_SYSTEM_IA.md) | Command, wallets, connections, settings, activity-log design, and event model. |
 | [Autonomy validation](docs/AUTONOMY_VALIDATION.md) | Automated, desktop, mobile, and deferred owner-session validation evidence. |
+| [TradingAgents workspace](docs/TRADING_AGENTS_WORKSPACE.md) | Protected role hierarchy, model routing, multi-turn supervisor chat, watchlists, blue dual-theme behavior, and deployment-gated scheduled discovery. |
 | [Product and operating model](docs/PRODUCT_AND_OPERATING_MODEL.md) | Product scope, operating principles, user journeys, and MVP boundaries. |
 | [Architecture](docs/ARCHITECTURE.md) | System structure, data model, APIs, agent topology, and execution boundary. |
 | [Security and data](docs/SECURITY_AND_DATA.md) | Security invariants, scope model, data provenance, caching, and reliability behavior. |

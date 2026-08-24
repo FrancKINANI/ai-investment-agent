@@ -69,3 +69,23 @@
 - [x] Validate the autonomous command, configuration, simulated mandate, proposal-lifecycle, responsive UI, and execution-blocking boundaries; the owner-session browser pass is explicitly documented as deferred.
 - [x] Validate `/wallets` and `/settings` on a mobile viewport and record the results in the autonomy validation documentation.
 - [x] Re-run final responsive UI verification across all autonomous OS routes (`/`, `/wallets`, `/connections`, `/settings`, `/activity`) before marking the full autonomy validation checklist complete.
+- [x] Define protected TradingAgents core roles, supervisor subagent controls, recursive subagent boundaries, and model-routing permissions.
+- [x] Replace the green visual system with a blue, accessible dark and light theme switcher.
+- [x] Build a persistent chat-first supervisor workspace with visible agent activity and evolution history.
+- [x] Make each agent’s model route configurable and show protected versus removable roles clearly.
+- [x] Add persistent owner watchlists with policy-aware candidate status and discovery scope.
+- [x] Add scheduled, simulation-only discovery runs with auditable findings, explicit public-data provenance, and no live-execution authority.
+- [x] Support a daily deep-discovery default and optional six-hour signal scanner, both inactive until deployment and explicit owner activation.
+- [x] Implement owner-scoped scheduled-discovery persistence and controls for cadence, enabled state, and scheduler task identifier.
+- [x] Add an idempotent deployment-gated `/api/scheduled/` discovery callback that writes simulation-only findings and audit events.
+- [x] Add tests for inactive schedule defaults, create/update/pause controls, callback authorization, and discovery audit output.
+- [x] Complete blue dark/light theming across all autonomous OS routes and validate both themes on every workspace.
+- [x] Make supervisor chat truly multi-turn by passing prior thread context into the supervisor runtime and persisting/rendering it end to end.
+- [x] Replace synthetic agent-evolution placeholders with real per-role outputs or clearly bounded deterministic summaries generated from actual agent runs.
+- [x] Add full per-agent provider and model route editing for existing protected and optional agents.
+- [x] Implement policy-aware watchlist evaluation, candidate-state updates, and configurable discovery scope criteria.
+- [x] Add automated and visual validation for theme switching, chat persistence, model-route edits, and watchlist state behavior.
+- [x] Add owner controls to edit provider and model routes for existing optional subagents and cover the mutation contract.
+- [x] Add automated coverage for persisted light/dark theme toggle behavior and validate the theme treatments across key routes.
+- [x] Validate both rendered blue theme treatments across command, settings, wallets, connections, and activity routes, with the production toggle behavior covered by a rendered DOM test.
+- [x] Add UI-level coverage that exercises the rendered theme toggle and persisted preference flow.
