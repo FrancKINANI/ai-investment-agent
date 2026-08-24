@@ -1,10 +1,11 @@
 export type OwnerShortcuts = { navigation: "b" | "m"; chat: "c" | "j"; activity: "a" | "l" };
-export type OwnerPreferences = { displayName: string; density: "comfortable" | "compact"; shortcuts: OwnerShortcuts };
+export type OwnerPreferences = { displayName: string; density: "comfortable" | "compact"; shortcuts: OwnerShortcuts; prefetchOnIntent: boolean };
 
 export const defaultOwnerPreferences: OwnerPreferences = {
   displayName: "",
   density: "comfortable",
   shortcuts: { navigation: "b", chat: "c", activity: "a" },
+  prefetchOnIntent: true,
 };
 
 export const ownerPreferencesKey = (ownerId?: string) => `ledgerline.owner-preferences.${ownerId ?? "anonymous"}`;
