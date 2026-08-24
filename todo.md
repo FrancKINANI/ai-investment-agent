@@ -89,3 +89,10 @@
 - [x] Add automated coverage for persisted light/dark theme toggle behavior and validate the theme treatments across key routes.
 - [x] Validate both rendered blue theme treatments across command, settings, wallets, connections, and activity routes, with the production toggle behavior covered by a rendered DOM test.
 - [x] Add UI-level coverage that exercises the rendered theme toggle and persisted preference flow.
+- [x] Render Bull Researcher and Bear Researcher chat outputs with explicit role metadata, distinct semantic bubbles, and non-color labels.
+- [x] Validate the debate treatment across blue dark/light themes and mobile chat layout.
+- [x] Validate the Bull/Bear debate treatment in the command workspace’s light theme.
+- [x] Validate the Bull/Bear debate treatment at a mobile viewport for readable labels and non-color cues.
+- [x] Use the shipped theme toggle to enter light mode and explicitly verify Bull/Bear labels, arrows, and bubbles in the command workspace.
+- [x] Document the 390 px Bull/Bear chat check, including label visibility, arrow cues, wrapping, and readability.
+- [x] Re-check current runtime logs for the earlier module-export error before releasing the debate interface refinement.
