@@ -4,9 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const setLocation = vi.hoisted(() => vi.fn());
+const historyEntries = vi.hoisted(() => ({ entries: [] as Array<{ actionId: string; subject: string; detail: string; kind: string; status: string; createdAt: Date }> }));
 
-vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { name: "Owner" }, isAuthenticated: true, loading: false, logout: vi.fn() }) }));
+vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { name: "Owner", openId: "owner-test" }, isAuthenticated: true, loading: false, logout: vi.fn() }) }));
 vi.mock("wouter", () => ({ useLocation: () => ["/", setLocation] }));
+vi.mock("@/lib/trpc", () => ({ trpc: { history: { list: { useQuery: () => ({ data: historyEntries.entries, refetch: vi.fn() }) } } } }));
 
 import DashboardLayout from "./DashboardLayout";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -17,6 +19,7 @@ let root: Root;
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   localStorage.clear();
+  historyEntries.entries = [];
   document.documentElement.className = "";
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   setLocation.mockClear();
@@ -34,18 +37,36 @@ describe("DashboardLayout operating controls", () => {
   it("hides the navigation rail completely from the visible topbar trigger", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
     const sidebar = host.querySelector<HTMLElement>('[data-slot="sidebar"]');
-    const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Toggle workspace navigation"]');
+    const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Hide navigation"]');
     expect(sidebar?.dataset.state).toBe("expanded");
     await act(async () => trigger?.click());
     expect(sidebar?.dataset.state).toBe("collapsed");
     expect(sidebar?.dataset.collapsible).toBe("offcanvas");
   });
 
-  it("routes the single bottom-left profile control to the Agent & Policy workspace", async () => {
+  it("opens the single bottom-left profile menu and routes it to the Agent & Policy workspace", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
-    const profileButtons = host.querySelectorAll<HTMLButtonElement>('[aria-label="Open profile and agent settings"]');
-    expect(profileButtons).toHaveLength(1);
-    await act(async () => profileButtons[0]?.click());
+    const profileButton = host.querySelector<HTMLButtonElement>('[aria-label="Open owner profile menu"]');
+    expect(profileButton).not.toBeNull();
+    await act(async () => profileButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const profileItem = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((item) => item.textContent?.includes("Profile details"));
+    expect(profileItem).toBeDefined();
+    await act(async () => profileItem?.click());
+    const profilePanel = host.querySelector<HTMLElement>('[role="dialog"][aria-label="Owner profile"]');
+    expect(profilePanel).not.toBeNull();
+    const settingsButton = Array.from(profilePanel?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.textContent?.includes("Open Agent & Policy"));
+    expect(settingsButton).toBeDefined();
+    await act(async () => settingsButton?.click());
     expect(setLocation).toHaveBeenNthCalledWith(1, "/settings");
+  });
+
+  it("shows an unread activity badge only for persisted events newer than the owner’s last visit", async () => {
+    const createdAt = new Date("2026-08-24T12:00:00.000Z");
+    historyEntries.entries = [{ actionId: "audit-1", subject: "Saved IPS", detail: "Policy revision persisted", kind: "policy_saved", status: "success", createdAt }];
+    localStorage.setItem("ledgerline.activity.last-seen.owner-test", String(createdAt.getTime() - 1));
+    await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
+    const badge = host.querySelector<HTMLElement>(".os-unread-badge");
+    expect(badge?.textContent).toBe("1");
+    expect(badge?.getAttribute("aria-label")).toBe("1 unread activity updates");
   });
 });

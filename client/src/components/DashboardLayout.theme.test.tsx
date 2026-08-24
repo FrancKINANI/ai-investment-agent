@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { name: "Owner" }, isAuthenticated: true, loading: false, logout: vi.fn() }) }));
 vi.mock("wouter", () => ({ useLocation: () => ["/", vi.fn()] }));
+vi.mock("@/lib/trpc", () => ({ trpc: { history: { list: { useQuery: () => ({ data: [], refetch: vi.fn() }) } } } }));
 
 import DashboardLayout from "./DashboardLayout";
 import { ThemeProvider } from "@/contexts/ThemeContext";
