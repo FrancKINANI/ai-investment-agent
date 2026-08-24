@@ -29,10 +29,12 @@ afterEach(async () => {
 });
 
 describe("DashboardLayout theme control", () => {
-  it("uses the shipped navigation toggle to persist the owner-selected light mode", async () => {
+  it("uses the owner profile menu to persist the owner-selected light mode", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
-    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="Switch to light theme"]');
-    expect(toggle).not.toBeNull();
+    const profileButton = host.querySelector<HTMLButtonElement>('button[aria-label="Open owner profile menu"]');
+    await act(async () => profileButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const toggle = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((item) => item.textContent?.includes("Use light mode"));
+    expect(toggle).toBeDefined();
     await act(async () => toggle?.click());
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(localStorage.getItem("theme")).toBe("light");
