@@ -138,3 +138,9 @@
 - [x] Remove the duplicate embedded Command Center chat/evolution surface in favor of the dedicated Chat workspace.
 - [x] Remove dashboard controls duplicated by the bottom-left owner profile settings menu.
 - [x] Validate the simplified Command and dashboard shell at desktop/mobile sizes and save a checkpoint.
+- [x] Diagnose and complete the unfinished global dashboard shell behavior flagged by the visual editor.
+- [x] Add focused validation for the completed shell behavior and save a checkpoint.
+- [x] Replace the informational Profile details card with a complete editable owner profile preferences panel.
+- [x] Verify profile edits, reset behavior, and responsive presentation before saving the repair checkpoint.
+- [x] Repair the dedicated Chat composer layout and interaction hierarchy flagged by the visual editor.
+- [x] Validate the Profile details panel and Chat composer together before the repair checkpoint.
