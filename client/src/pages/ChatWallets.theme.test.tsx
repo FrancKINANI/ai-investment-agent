@@ -20,6 +20,7 @@ vi.mock("@/lib/trpc", () => ({
       createSimulationMandate: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       setMandateMode: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
+    history: { list: { useQuery: () => ({ data: [], refetch: vi.fn() }) } },
   },
 }));
 

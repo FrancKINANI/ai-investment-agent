@@ -121,3 +121,11 @@
 - [x] Remove duplicated profile/settings navigation so the bottom-left owner control is the single profile-and-settings destination.
 - [x] Repair or remove the remaining non-responsive dashboard shell button flagged by the visual editor.
 - [x] Verify the simplified shell interaction on desktop and mobile and save a checkpoint.
+- [x] Add an owner-scoped unread activity badge in the global sidebar without fabricating unseen events.
+- [x] Add a compact bottom-left profile flyout menu for profile, Agent & Policy, theme, and sign-out actions.
+- [x] Add visible keyboard shortcuts and a descriptive mobile navigation state label for the sidebar control.
+- [x] Make Command, Chat, and Activity workspaces use the full available screen height while retaining responsive content boundaries.
+- [x] Apply the Chilanka typeface consistently across the Ledgerline project with suitable readable fallbacks.
+- [x] Add interaction tests, verify desktop/mobile behavior, and save a checkpoint for the shell enhancement.
+- [x] Add and test an explicit compact owner profile panel action in the bottom-left flyout.
+- [x] Save a checkpoint after completing the owner profile panel action.
