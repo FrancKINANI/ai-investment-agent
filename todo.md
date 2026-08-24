@@ -40,3 +40,9 @@
 - [x] Fix the authenticated empty-IPS query so it returns an explicit nullable value rather than undefined.
 - [x] Add regression coverage for authenticated owners with no saved IPS.
 - [ ] Complete browser validation for IPS save, paper simulation, scope audit, public-token view audit, and durable review records under the authenticated owner session.
+- [x] Create a documentation index and repository-facing README for the Ledgerline project.
+- [x] Write product, architecture, security, data-provenance, and operator-workflow documentation.
+- [x] Write engineering setup, local development, testing, runbook, and getting-started documentation.
+- [x] Review documentation accuracy against the source code and sync the documentation package to the connected GitHub repository.
+- [ ] Commit the README and documentation package, then synchronize it to the `user_github` remote.
+- [ ] Record the GitHub branch and commit used for the documentation sync.
