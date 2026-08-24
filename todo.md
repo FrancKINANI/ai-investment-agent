@@ -165,3 +165,11 @@
 - [x] Validate Command and Chat composer consistency across desktop/mobile and save a checkpoint.
 - [x] Apply the same ChatGPT-style desktop composer treatment to the dedicated Chat workspace.
 - [x] Validate the unified Command and Chat composer system before checkpointing.
+- [x] Audit all active green visual treatments and distinguish semantic safety/status colors from unintended legacy accents.
+- [x] Replace unintended green accents with the Ledgerline blue/cyan dual-theme token system.
+- [x] Verify the color correction in light and dark themes, then save a checkpoint.
+- [x] Adjust the Command wallet-mandate strip so it fits the desktop workspace cleanly without compressed or wasted space.
+- [x] Validate the Command mandate layout with the color correction before checkpointing.
+- [x] Inspect the stale DashboardLayout navigation target and determine the intended removable surface.
+- [x] Remove the requested navigation surface while preserving an accessible route to Command, Chat, and Activity on mobile.
+- [x] Revalidate the dashboard shell and save a checkpoint with the visual corrections.
