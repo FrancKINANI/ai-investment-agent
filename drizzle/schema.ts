@@ -97,6 +97,36 @@ export const outcomeRecords = mysqlTable("outcomeRecords", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Owner-defined Investment Policy Statement. Limits use basis points; execution remains simulation-only in this phase. */
+export const investmentPolicies = mysqlTable("investmentPolicies", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  version: int("version").default(1).notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  maxConcentrationBps: int("maxConcentrationBps").notNull(),
+  minReserveBps: int("minReserveBps").notNull(),
+  maxTransactionBps: int("maxTransactionBps").notNull(),
+  dailyMandateBps: int("dailyMandateBps").notNull(),
+  allowedAssets: json("allowedAssets").$type<string[]>().notNull(),
+  executionMode: mysqlEnum("executionMode", ["simulation", "read_only"]).default("simulation").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable operator-originated actions. This is distinct from the AI awareness journal. */
+export const operatorActions = mysqlTable("operatorActions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  actionId: varchar("actionId", { length: 64 }).notNull().unique(),
+  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed"]).notNull(),
+  status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
+  subject: varchar("subject", { length: 160 }).notNull(),
+  detail: text("detail").notNull(),
+  payload: json("payload").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type AgentProfile = typeof agentProfiles.$inferSelect;
@@ -105,3 +135,5 @@ export type AwarenessRecord = typeof awarenessRecords.$inferSelect;
 export type StrategyLineage = typeof strategyLineages.$inferSelect;
 export type StrategyEvaluation = typeof strategyEvaluations.$inferSelect;
 export type OutcomeRecord = typeof outcomeRecords.$inferSelect;
+export type InvestmentPolicy = typeof investmentPolicies.$inferSelect;
+export type OperatorAction = typeof operatorActions.$inferSelect;

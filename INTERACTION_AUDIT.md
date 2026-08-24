@@ -25,3 +25,9 @@ The final promotion action was tested and moved the strategy to **decision**. Th
 Agent selection was tested by switching from Sentinel to Atlas. The selected-role explanation and scope registry changed to Atlas while continuing to show that `execution.request` is denied. The server-side catalog refresh was also tested; it completed with a confirmation that provider families were re-read without browser-side provider credentials.
 
 The strategy-variation control was tested and registered `STRAT-ETH-YIELD v0.4` as a research-only lineage branch. The evidence-ledger **Full trace** control was also tested; it preserves the complete visible journal and explicitly explains that each entry exposes its awareness layer and evidence summary.
+
+## v0.3 data-backed control plane verification
+
+The anonymous public-data workflow was tested with the WETH ERC-20 contract `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`. The viewer returned live token metadata, holder count, price, DEX liquidity, 24-hour volume, change, market-cap figures, source attribution, and a fetch timestamp from Blockscout and DexScreener. No sample metric was presented before a successful response.
+
+The workspace navigation was tested by selecting **On-chain viewer**. The page scrolled to the viewer and the persistent control-plane breadcrumb changed from **Control plane** to **On-chain viewer**.
