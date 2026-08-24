@@ -112,3 +112,7 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 .project-config.json
+
+# Local workspace controls and platform diagnostics are not part of public source.
+todo.md
+client/public/__manus__/
