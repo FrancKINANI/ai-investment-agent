@@ -47,7 +47,7 @@ export default function Wallets() {
       const role = wallet.tone as "trading" | "investment";
       const mandate = mandatesQuery.data?.find((entry) => entry.walletRole === role);
       return <article className={`wallet-role ${wallet.tone}`} key={wallet.name}>
-        <header><div className="wallet-glyph"><Icon size={19} /></div><span>ROLE</span><b>{mandate?.mode ?? "Not configured"}</b></header>
+        <header><div className="wallet-glyph"><Icon size={19} /></div><span>ROLE</span><b className={`mandate-state ${mandate ? "active" : "idle"}`}>{mandate?.mode ?? "Not configured"}</b></header>
         <h2>{wallet.name}</h2><p>{wallet.description}</p>
         <dl><div><dt>Mode</dt><dd>{mandate?.mode ?? "Simulation default"}</dd></div><div><dt>Venue</dt><dd>{mandate?.venue ?? "None"}</dd></div><div><dt>Mandate</dt><dd>{mandate ? mandate.status : "Not armed"}</dd></div></dl>
         {mandate ? <Button variant="outline" disabled={modeMutation.isPending} onClick={() => void togglePause(mandate.mandateId, mandate.mode)}>{mandate.mode === "paused" ? "Resume simulation" : "Pause mandate"} <PauseCircle size={14} /></Button> : <Button variant="outline" disabled={!isAuthenticated || busyRole === role} onClick={() => void createMandate(role)}>{busyRole === role ? "Creating" : "Create simulation mandate"} <ArrowRight size={14} /></Button>}

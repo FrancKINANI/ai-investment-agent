@@ -156,3 +156,8 @@
 - [x] Diagnose the signed-in invalid React hook call and tRPC provider failure using dependency and runtime evidence.
 - [x] Correct the React/provider resolution conflict without regressing existing shell or agent functionality.
 - [x] Validate signed-in runtime recovery, regression tests, type check, production build, and save a checkpoint.
+- [x] Restore valid Connections markup after the malformed inline style edits from the visual editor.
+- [x] Apply token-based light/dark styling to Connections state badges, cards, warnings, and affected dashboard controls.
+- [x] Validate Connections and dashboard controls in both themes, run regression checks, and save a checkpoint.
+- [x] Apply token-based light/dark styling to Wallets mandate state badges and policy callout surfaces.
+- [x] Revalidate Connections, Wallets, and shared controls after the full theme correction before checkpointing.

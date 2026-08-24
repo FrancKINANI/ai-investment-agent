@@ -28,6 +28,10 @@ describe("active blue theme audit", () => {
       ["Connections", ".connection-card .scope-chips span", "color:var(--ll-blue)"],
       ["Agent & Policy", ".settings-card header svg", "color:var(--ll-blue)"],
       ["Activity", ".workspace-page .activity-search", "color:var(--ll-blue)"],
+      ["Connections active state", ".connections-page .connection-state.active", "color:var(--ll-blue)"],
+      ["Connections idle state", ".connections-page .connection-state.idle", "color:var(--ll-muted)"],
+      ["Wallets active state", ".workspace-page .mandate-state.active", "color:var(--ll-blue)"],
+      ["Wallets idle state", ".workspace-page .mandate-state.idle", "color:var(--ll-muted)"],
     ] as const;
 
     routeBindings.forEach(([route, selector, tokenBinding]) => {
