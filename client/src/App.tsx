@@ -11,12 +11,14 @@ import CommandCenter from "./pages/CommandCenter";
 import Connections from "./pages/Connections";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
+import Welcome from "./pages/Welcome";
 import Wallets from "./pages/Wallets";
 
 function Router() {
   const Workspace = ({ children }: { children: React.ReactNode }) => <DashboardLayout>{children}</DashboardLayout>;
   return (
     <Switch>
+      <Route path={"/welcome"} component={Welcome} />
       <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
       <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
       <Route path={"/wallets"}><Workspace><Wallets /></Workspace></Route>
