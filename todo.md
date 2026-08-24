@@ -115,3 +115,6 @@
 - [x] Add route-level active-style assertions proving the blue-token coverage for all six audited workspaces.
 - [x] Strengthen the blue-theme audit with explicit per-route selector-to-token bindings for all active workspaces.
 - [x] Assert that every audited route selector block itself contains its intended blue-token binding.
+- [x] Inspect and repair the non-responsive DashboardLayout navigation, theme control, and profile/settings affordances flagged by the visual editor.
+- [x] Correct the command chat composer and send-button alignment, including centered button content.
+- [x] Validate the repaired desktop and mobile shell/composer layouts and save a focused checkpoint.
