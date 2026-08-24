@@ -31,22 +31,21 @@ afterEach(async () => {
 });
 
 describe("DashboardLayout operating controls", () => {
-  it("collapses the navigation rail from the visible topbar trigger", async () => {
+  it("hides the navigation rail completely from the visible topbar trigger", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
     const sidebar = host.querySelector<HTMLElement>('[data-slot="sidebar"]');
     const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Toggle workspace navigation"]');
     expect(sidebar?.dataset.state).toBe("expanded");
     await act(async () => trigger?.click());
     expect(sidebar?.dataset.state).toBe("collapsed");
+    expect(sidebar?.dataset.collapsible).toBe("offcanvas");
   });
 
-  it("routes both profile affordances to the Agent & Policy workspace", async () => {
+  it("routes the single bottom-left profile control to the Agent & Policy workspace", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
     const profileButtons = host.querySelectorAll<HTMLButtonElement>('[aria-label="Open profile and agent settings"]');
-    expect(profileButtons).toHaveLength(2);
+    expect(profileButtons).toHaveLength(1);
     await act(async () => profileButtons[0]?.click());
-    await act(async () => profileButtons[1]?.click());
     expect(setLocation).toHaveBeenNthCalledWith(1, "/settings");
-    expect(setLocation).toHaveBeenNthCalledWith(2, "/settings");
   });
 });

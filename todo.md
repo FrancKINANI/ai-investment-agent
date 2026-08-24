@@ -118,3 +118,6 @@
 - [x] Inspect and repair the non-responsive DashboardLayout navigation, theme control, and profile/settings affordances flagged by the visual editor.
 - [x] Correct the command chat composer and send-button alignment, including centered button content.
 - [x] Validate the repaired desktop and mobile shell/composer layouts and save a focused checkpoint.
+- [x] Remove duplicated profile/settings navigation so the bottom-left owner control is the single profile-and-settings destination.
+- [x] Repair or remove the remaining non-responsive dashboard shell button flagged by the visual editor.
+- [x] Verify the simplified shell interaction on desktop and mobile and save a checkpoint.
