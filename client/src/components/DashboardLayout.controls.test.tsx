@@ -18,6 +18,11 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  (globalThis as typeof globalThis & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
   localStorage.clear();
   historyEntries.entries = [];
   document.documentElement.className = "";
@@ -73,5 +78,27 @@ describe("DashboardLayout operating controls", () => {
     expect(badge?.getAttribute("aria-label")).toBe("1 unread activity updates");
     await act(async () => window.dispatchEvent(new CustomEvent("ledgerline:activity-read", { detail: { ownerId: "owner-test", seenAt: createdAt.getTime() } })));
     expect(host.querySelector(".os-unread-badge")).toBeNull();
+  });
+
+  it("renders bottom tabs and routes Chat from the mobile navigation surface", async () => {
+    await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
+    const chatTab = Array.from(host.querySelectorAll<HTMLButtonElement>(".os-mobile-tabs button")).find((button) => button.textContent?.includes("Chat"));
+    expect(chatTab).toBeDefined();
+    await act(async () => chatTab?.click());
+    expect(setLocation).toHaveBeenCalledWith("/chat");
+  });
+
+  it("opens mobile navigation from a deliberate left-edge swipe", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
+    await act(async () => Promise.resolve());
+    const workspace = host.querySelector<HTMLElement>(".os-mobile-workspace");
+    expect(workspace).not.toBeNull();
+    const start = new Event("touchstart", { bubbles: true });
+    Object.defineProperty(start, "touches", { value: [{ clientX: 10, clientY: 200 }] });
+    const end = new Event("touchend", { bubbles: true });
+    Object.defineProperty(end, "changedTouches", { value: [{ clientX: 100, clientY: 206 }] });
+    await act(async () => { workspace?.dispatchEvent(start); workspace?.dispatchEvent(end); });
+    expect(host.querySelector('[aria-label="Close navigation"]')).not.toBeNull();
   });
 });

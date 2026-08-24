@@ -55,6 +55,11 @@ describe("Chat and Wallets theme rendering", () => {
     if (_name === "Chat") {
       expect(host.querySelector('form[aria-label="Supervisor message composer"] .chatgpt-input-shell')).not.toBeNull();
       expect(host.querySelector('button[aria-label="Send research brief"]')).not.toBeNull();
+      const composer = host.querySelector<HTMLTextAreaElement>("#supervisor-brief");
+      expect(composer).not.toBeNull();
+      Object.defineProperty(composer, "scrollHeight", { configurable: true, value: 132 });
+      await act(async () => { if (composer) { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(composer, "A longer research brief that needs more than one line."); composer.dispatchEvent(new Event("input", { bubbles: true })); } });
+      expect(composer?.style.height).toBe("132px");
     }
 
     const profileButton = host.querySelector<HTMLButtonElement>('button[aria-label="Open owner profile menu"]');
