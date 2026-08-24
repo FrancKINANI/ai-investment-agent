@@ -1,175 +1,148 @@
 /*
- * Ledgerline Command Center — selected design: warm editorial brutalism with Swiss information design.
- * This page is intentionally simulation-first: no live execution, wallet, exchange, or secret handling.
+ * Ledgerline Agent Fabric — AI-native/Web3-oriented command center.
+ * The interface exposes model and tool choices while preserving a hard policy-to-execution boundary.
  */
 import { useMemo, useState } from "react";
 import {
   Activity,
-  ArrowDownRight,
   ArrowUpRight,
-  BookOpenCheck,
+  Bot,
+  BrainCircuit,
   Check,
   ChevronRight,
-  CircleHelp,
-  Clock3,
+  CircleDotDashed,
+  Command,
+  Cpu,
+  Database,
   FileCheck2,
   FlaskConical,
-  LayoutDashboard,
+  Globe2,
+  Hexagon,
+  Layers3,
   LockKeyhole,
-  Menu,
+  Network,
   Pause,
   Play,
+  Radio,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
-  SlidersHorizontal,
-  TriangleAlert,
-  WalletCards,
-  X,
+  Sparkles,
+  Wallet,
+  XCircle,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 const logoUrl = "/manus-storage/ledger-logo_5877e9f6.png";
-const signalUrl = "/manus-storage/portfolio-signal_58945abd.png";
-const journalUrl = "/manus-storage/audit-journal_25274e25.png";
 
-const initialDecisions = [
-  { time: "09:42:18", action: "Rebalance proposal", asset: "ETH", status: "Passed", detail: "Within 18% sleeve cap" },
-  { time: "09:37:04", action: "Yield venue check", asset: "USDC", status: "Review", detail: "Protocol health score changed" },
-  { time: "08:55:31", action: "Risk scan", asset: "Portfolio", status: "Passed", detail: "No concentration breach" },
-  { time: "Yesterday", action: "Paper fill", asset: "BTC", status: "Passed", detail: "Simulated at $64,120" },
+type AgentState = "active" | "review" | "paused";
+
+const baseAgents: Array<{ id: string; name: string; role: string; provider: string; model: string; state: AgentState; icon: typeof BrainCircuit; scopes: string[] }> = [
+  { id: "research", name: "Atlas", role: "Research synthesis", provider: "OpenAI", model: "gpt-5-mini", state: "active", icon: BrainCircuit, scopes: ["market.read", "proposal.write"] },
+  { id: "onchain", name: "Nexus", role: "On-chain observer", provider: "Google", model: "gemini-3-flash-preview", state: "active", icon: Hexagon, scopes: ["chain.read", "portfolio.read"] },
+  { id: "risk", name: "Sentinel", role: "Risk adjudication", provider: "Anthropic", model: "claude-sonnet-4-6", state: "review", icon: ShieldCheck, scopes: ["portfolio.read", "policy.veto"] },
+  { id: "supervisor", name: "Orion", role: "Trajectory supervisor", provider: "Provider-agnostic", model: "rules + review", state: "active", icon: CircleDotDashed, scopes: ["evidence.read", "proposal.hold"] },
 ];
 
-const policyRows = [
-  { rule: "Single asset exposure", current: "18.0%", limit: "25.0%", state: "Within" },
-  { rule: "Single protocol exposure", current: "12.4%", limit: "20.0%", state: "Within" },
-  { rule: "Stablecoin reserve", current: "42.0%", limit: "≥ 30.0%", state: "Within" },
-  { rule: "Daily turnover", current: "0.0%", limit: "≤ 8.0%", state: "Within" },
+const initialEvents = [
+  { time: "10:24:18", title: "Sentinel held a candidate", detail: "Protocol-health variance requires an evidence review.", tone: "review" },
+  { time: "10:23:04", title: "Atlas refreshed thesis map", detail: "3 source clusters normalized into a paper proposal.", tone: "pass" },
+  { time: "10:21:55", title: "Nexus observed chain state", detail: "Read-only observation complete. No wallet authority present.", tone: "pass" },
 ];
 
-function Metric({ label, value, note, tone = "ink" }: { label: string; value: string; note: string; tone?: "ink" | "green" | "amber" }) {
-  return (
-    <div className="metric-block">
-      <div className="datum-label">{label}</div>
-      <div className={`metric-value tone-${tone}`}>{value}</div>
-      <div className="metric-note">{note}</div>
-    </div>
-  );
+function StateTag({ state }: { state: AgentState }) {
+  return <span className={`agent-state state-${state}`}><span />{state}</span>;
 }
 
-function StatusPill({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    Passed: "status-pill status-passed",
-    Within: "status-pill status-passed",
-    Review: "status-pill status-review",
-    Blocked: "status-pill status-blocked",
-  };
-  return <span className={styles[status] ?? "status-pill"}>{status}</span>;
+function Node({ label, sublabel, active = false, icon: Icon }: { label: string; sublabel: string; active?: boolean; icon: typeof Bot }) {
+  return <div className={`loop-node ${active ? "loop-node-active" : ""}`}><div className="loop-icon"><Icon size={16} /></div><div><strong>{label}</strong><span>{sublabel}</span></div></div>;
 }
 
 export default function Home() {
-  const [activeView, setActiveView] = useState("Overview");
+  const catalogQuery = trpc.agentRuntime.catalog.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const [activeSection, setActiveSection] = useState("Mission control");
+  const [selectedAgent, setSelectedAgent] = useState("risk");
   const [paused, setPaused] = useState(false);
-  const [simulationCount, setSimulationCount] = useState(14);
-  const [decisions, setDecisions] = useState(initialDecisions);
-  const [mobileNav, setMobileNav] = useState(false);
+  const [runCount, setRunCount] = useState(28);
+  const [events, setEvents] = useState(initialEvents);
 
-  const lastRun = useMemo(() => `SIM-${String(simulationCount).padStart(4, "0")}`, [simulationCount]);
+  const agents = useMemo(() => baseAgents.map((agent) => agent.id === selectedAgent ? { ...agent, selected: true } : { ...agent, selected: false }), [selectedAgent]);
+  const modelFamilies = catalogQuery.data?.providers ?? [
+    { id: "openai", label: "OpenAI", models: ["gpt-5-mini", "gpt-5"] },
+    { id: "anthropic", label: "Anthropic", models: ["claude-sonnet-4-6"] },
+    { id: "google", label: "Google", models: ["gemini-3-flash-preview"] },
+    { id: "custom", label: "MCP / custom", models: ["bring-your-own-agent"] },
+  ];
 
-  const runSimulation = () => {
+  const runCycle = () => {
     if (paused) {
-      toast.error("Simulation paused", { description: "Resume the paper agent before running a new cycle." });
+      toast.error("Runtime paused", { description: "Resume the agent fabric before a paper cycle can start." });
       return;
     }
-    const next = simulationCount + 1;
-    setSimulationCount(next);
-    setDecisions((items) => [
-      { time: "Just now", action: "Paper cycle complete", asset: "Portfolio", status: "Passed", detail: `Run ${`SIM-${String(next).padStart(4, "0")}`} · 4 checks passed` },
-      ...items,
-    ]);
-    toast.success("Paper cycle complete", { description: `All policy checks passed in SIM-${String(next).padStart(4, "0")}.` });
+    const next = runCount + 1;
+    setRunCount(next);
+    setEvents((items) => [{ time: "Now", title: `Supervised paper cycle AVO-${String(next).padStart(3, "0")}`, detail: "Observe → hypothesize → simulate → evaluate completed. Execution capability remained sealed.", tone: "pass" }, ...items]);
+    toast.success("Paper cycle completed", { description: `AVO-${String(next).padStart(3, "0")} produced an inspectable simulation record.` });
   };
 
-  const togglePause = () => {
-    setPaused((value) => !value);
-    toast.message(paused ? "Paper agent resumed" : "Paper agent paused", { description: paused ? "Simulation cycles can run again." : "No cycles will execute until resumed." });
+  const requestExecution = () => {
+    setEvents((items) => [{ time: "Now", title: "Execution request rejected", detail: "The simulation-first runtime never grants execution.request to an AI agent.", tone: "block" }, ...items]);
+    toast.error("Hard block enforced", { description: "Live execution is not an available capability in this workspace." });
   };
 
   const navItems = [
-    { label: "Overview", icon: LayoutDashboard },
-    { label: "Portfolio", icon: WalletCards },
-    { label: "Policy", icon: ShieldCheck },
-    { label: "Decision journal", icon: BookOpenCheck },
+    { label: "Mission control", icon: Command },
+    { label: "Agent mesh", icon: Network },
+    { label: "Tool scopes", icon: Layers3 },
+    { label: "Evidence ledger", icon: FileCheck2 },
   ];
 
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
-        <div className="brand-lockup">
-          <div className="brand-mark"><img src={logoUrl} alt="Ledgerline mark" /></div>
-          <div>
-            <div className="brand-name">ledgerline</div>
-            <div className="brand-caption">personal investment OS</div>
-          </div>
-          <button className="mobile-close" aria-label="Close navigation" onClick={() => setMobileNav(false)}><X size={17} /></button>
-        </div>
-        <div className="sidebar-rule" />
-        <div className="datum-label nav-kicker">Workspace</div>
-        <nav className="nav-list" aria-label="Primary navigation">
-          {navItems.map(({ label, icon: Icon }) => (
-            <button key={label} className={`nav-item ${activeView === label ? "nav-active" : ""}`} onClick={() => { setActiveView(label); setMobileNav(false); }}>
-              <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{activeView === label && <ChevronRight className="nav-chevron" size={15} />}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-lower">
-          <div className="mandate-card">
-            <div className="mandate-icon"><LockKeyhole size={16} /></div>
-            <div>
-              <div className="mandate-title">Live execution</div>
-              <div className="mandate-copy">Disabled by design in MVP</div>
-            </div>
-          </div>
-          <button className="utility-link" onClick={() => toast.message("Settings are planned for the next phase.")}><SlidersHorizontal size={15} /> Workspace settings</button>
-          <div className="owner-chip"><div className="owner-avatar">A</div><div><div className="owner-name">Owner mode</div><div className="owner-meta">local simulation</div></div><CircleHelp size={14} className="owner-help" /></div>
-        </div>
+    <div className="fabric-shell">
+      <aside className="fabric-sidebar">
+        <div className="fabric-brand"><div className="fabric-mark"><img src={logoUrl} alt="Ledgerline" /></div><div><strong>ledgerline</strong><span>agent fabric</span></div></div>
+        <div className="network-status"><span className="status-ring"><Radio size={12} /></span><div><span>runtime online</span><strong>SIMULATION / EVM</strong></div></div>
+        <div className="sidebar-label">Control surface</div>
+        <nav className="fabric-nav">{navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => setActiveSection(label)} className={activeSection === label ? "fabric-nav-active" : ""}><Icon size={16} /><span>{label}</span>{activeSection === label && <ChevronRight size={15} />}</button>)}</nav>
+        <div className="sidebar-spacer" />
+        <div className="sealed-block"><LockKeyhole size={15} /><div><strong>Execution sealed</strong><span>No wallet signature path</span></div></div>
+        <button className="sidebar-foot" onClick={() => toast.message("Configuration is currently local and simulation-only.")}><Sparkles size={15} /> Runtime configuration</button>
       </aside>
 
-      <main className="main-canvas">
-        <header className="topbar">
-          <button className="mobile-menu" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
-          <div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><strong>{activeView}</strong></div>
-          <div className="topbar-actions"><span className="sync-label"><span className="sync-dot" /> Paper engine synced</span><Button variant="outline" size="sm" onClick={() => toast.message("Data source is simulated", { description: "Live market feeds are intentionally deferred." })}><RefreshCw size={14} /> Refresh</Button></div>
-        </header>
+      <main className="fabric-main">
+        <header className="fabric-topbar"><div className="trail"><span>ledgerline</span><ChevronRight size={13} /><strong>{activeSection}</strong></div><div className="topbar-badges"><span className="chain-badge"><Globe2 size={13} /> EVM / read-only</span><span className="proof-badge"><span /> policy hash verified</span><Button variant="outline" size="sm" onClick={() => catalogQuery.refetch()}><RefreshCw size={13} /> Sync catalog</Button></div></header>
 
-        <div className="content-wrap">
-          <section className="hero-band">
-            <div className="hero-copy">
-              <div className="eyebrow"><span className="eyebrow-line" /> Simulation workspace · {lastRun}</div>
-              <h1>Stay inside<br /><em>the lines.</em></h1>
-              <p>Ledgerline turns your investment policy into a visible operating system. Review the state, run a paper cycle, and keep every decision inspectable.</p>
-              <div className="hero-actions"><Button className="primary-action" onClick={runSimulation}><Play size={15} fill="currentColor" /> Run paper cycle</Button><Button className="quiet-action" variant="ghost" onClick={() => setActiveView("Policy")}><FileCheck2 size={15} /> Review policy</Button></div>
-            </div>
-            <div className="hero-art"><img src={signalUrl} alt="Abstract portfolio signal illustration" /><div className="hero-stamp"><span>v0.1</span><span>SIMULATION ONLY</span></div></div>
+        <div className="fabric-content">
+          <section className="fabric-hero">
+            <div className="orbit-backdrop"><span className="orbit o1" /><span className="orbit o2" /><span className="orbit o3" /><span className="orbit-dot d1" /><span className="orbit-dot d2" /><span className="orbit-dot d3" /></div>
+            <div className="hero-signal"><div className="hero-kicker"><Zap size={13} /> PROVIDER-AGNOSTIC AGENT RUNTIME · AVO-{String(runCount).padStart(3, "0")}</div><h1>Intelligence that<br /><em>stays provable.</em></h1><p>Choose the strongest current model for each specialist role. The fabric preserves memory, evaluates evidence, and lets a deterministic policy layer veto every candidate.</p><div className="hero-buttons"><Button className="run-button" onClick={runCycle}><Play size={15} fill="currentColor" /> Run supervised paper cycle</Button><Button variant="ghost" className="evidence-button" onClick={() => setActiveSection("Evidence ledger")}><FileCheck2 size={15} /> Inspect evidence</Button></div></div>
+            <div className="hero-metrics"><div><span>Agent roles</span><strong>04</strong><small>specialized</small></div><div><span>Tool authority</span><strong>00</strong><small>execution scopes</small></div><div><span>Model families</span><strong>{String(modelFamilies.length).padStart(2, "0")}</strong><small>routable</small></div></div>
           </section>
 
-          <div className="status-strip"><div className="status-primary"><span className="status-pulse" />{paused ? "Paper agent paused" : "Paper agent operational"}</div><div className="status-separator" /><div className="status-secondary">Last evaluation <strong>2 minutes ago</strong></div><div className="status-secondary">Policy <strong>IPS-001 · active</strong></div><button className={`pause-button ${paused ? "is-paused" : ""}`} onClick={togglePause}>{paused ? <Play size={14} /> : <Pause size={14} />}{paused ? "Resume" : "Pause"}</button></div>
+          <section className="runtime-strip"><div><span className={`runtime-dot ${paused ? "runtime-paused" : ""}`} />{paused ? "Operator pause active" : "Supervisor monitoring trajectory"}</div><span className="strip-sep" /><div>Persistent state <strong>evidence-led</strong></div><span className="strip-sep" /><div>Execution <strong className="blocked-copy">hard-disabled</strong></div><button onClick={() => setPaused((value) => !value)}>{paused ? <Play size={13} /> : <Pause size={13} />}{paused ? "Resume fabric" : "Pause fabric"}</button></section>
 
-          <section className="metric-row"><Metric label="Paper NAV" value="$100,842" note="+$842 since inception · +0.84%" tone="green" /><Metric label="Reserve ratio" value="42.0%" note="Stablecoin sleeve · target ≥ 30%" /><Metric label="Risk budget used" value="18.6%" note="Low utilization · ceiling 65%" tone="green" /><Metric label="Open reviews" value="01" note="Protocol health score changed" tone="amber" /></section>
+          <div className="fabric-grid">
+            <section className="fabric-panel mesh-panel"><div className="panel-cap"><div><span>Multi-agent topology</span><h2>Supervised reasoning loop</h2></div><div className="avo-label">AVO PATTERN <ArrowUpRight size={13} /></div></div><div className="reasoning-loop"><Node label="Observe" sublabel="chain + market" active icon={Activity} /><div className="loop-link" /><Node label="Hypothesize" sublabel="specialists" active icon={BrainCircuit} /><div className="loop-link" /><Node label="Simulate" sublabel="paper only" icon={FlaskConical} /><div className="loop-link" /><Node label="Evaluate" sublabel="policy gate" active icon={ShieldCheck} /></div><div className="supervisor-line"><CircleDotDashed size={16} /><span><strong>Orion</strong> monitors stagnation, divergent evidence, and repeated failure modes.</span><span className="supervisor-state">active</span></div></section>
 
-          <div className="workspace-grid">
-            <section className="panel portfolio-panel"><div className="panel-heading"><div><div className="datum-label">Allocation map</div><h2>Portfolio posture</h2></div><Button variant="ghost" size="sm" onClick={() => setActiveView("Portfolio")}>View portfolio <ArrowUpRight size={14} /></Button></div><div className="allocation-layout"><div className="donut-wrap"><div className="donut"><div className="donut-center"><strong>100%</strong><span>allocated</span></div></div><div className="donut-legend"><div><span className="legend-dot green" />Stablecoins <strong>42%</strong></div><div><span className="legend-dot charcoal" />ETH <strong>18%</strong></div><div><span className="legend-dot amber" />BTC <strong>16%</strong></div><div><span className="legend-dot pale" />Cash buffer <strong>24%</strong></div></div></div><div className="chart-area"><div className="chart-meta"><span>Paper NAV · 30 days</span><strong>$100,842</strong></div><div className="sparkline"><span className="spark-bar b1" /><span className="spark-bar b2" /><span className="spark-bar b3" /><span className="spark-bar b4" /><span className="spark-bar b5" /><span className="spark-bar b6" /><span className="spark-bar b7" /><span className="spark-bar b8" /><span className="spark-bar b9" /><span className="spark-bar b10" /><span className="spark-bar b11" /><span className="spark-bar b12" /></div><div className="chart-axis"><span>30d ago</span><span>15d</span><span>Today</span></div><div className="chart-note"><Activity size={14} /> Simulated marks only. No live prices connected.</div></div></div></section>
-
-            <section className="panel health-panel"><div className="panel-heading"><div><div className="datum-label">Control plane</div><h2>System health</h2></div><span className="health-badge"><span /> All clear</span></div><div className="health-list"><div className="health-item"><div className="health-icon ok"><ShieldCheck size={17} /></div><div><strong>Policy engine</strong><span>4 / 4 checks passing</span></div><Check className="health-check" size={16} /></div><div className="health-item"><div className="health-icon ok"><FlaskConical size={17} /></div><div><strong>Simulation sandbox</strong><span>Last run {lastRun}</span></div><Check className="health-check" size={16} /></div><div className="health-item"><div className="health-icon review"><TriangleAlert size={17} /></div><div><strong>Data freshness</strong><span>One source needs review</span></div><ChevronRight className="health-chevron" size={16} /></div></div><div className="health-footer"><Clock3 size={14} /> Next scheduled review <strong>Tomorrow · 09:00</strong></div></section>
+            <section className="fabric-panel policy-panel"><div className="panel-cap"><div><span>Non-negotiable boundary</span><h2>Policy before intelligence</h2></div><ShieldAlert className="policy-icon" size={20} /></div><div className="policy-stack"><div><span className="policy-number">01</span><p>Agents may observe, reason, and write proposals.</p><Check size={15} /></div><div><span className="policy-number">02</span><p>Risk and policy checks may hold or block a candidate.</p><Check size={15} /></div><div className="policy-hard"><span className="policy-number">03</span><p>AI agents cannot receive an <code>execution.request</code> scope.</p><XCircle size={16} /></div></div><button className="block-test" onClick={requestExecution}>Test execution boundary <LockKeyhole size={14} /></button></section>
           </div>
 
-          <section className="panel journal-panel"><div className="panel-heading"><div><div className="datum-label">Immutable-style local journal</div><h2>Recent decisions</h2></div><Button variant="ghost" size="sm" onClick={() => setActiveView("Decision journal")}>Open journal <ArrowUpRight size={14} /></Button></div><div className="journal-content"><div className="journal-art"><img src={journalUrl} alt="Audit journal illustration" /></div><div className="decision-table"><div className="table-head"><span>Time</span><span>Decision</span><span>Asset</span><span>Result</span><span>Evidence</span></div>{decisions.slice(0, 4).map((item, index) => <div className="decision-row" key={`${item.time}-${index}`}><span className="mono">{item.time}</span><strong>{item.action}</strong><span className="asset-tag">{item.asset}</span><StatusPill status={item.status} /><span className="evidence">{item.detail}</span></div>)}</div></div></section>
+          <section className="fabric-panel agent-panel"><div className="panel-cap"><div><span>Role routing</span><h2>Agent mesh</h2></div><div className="catalog-status"><span className={catalogQuery.isFetching ? "catalog-pulse" : "catalog-pulse catalog-ready"} />{catalogQuery.isFetching ? "syncing current catalog" : "current model catalog available"}</div></div><div className="agent-grid">{agents.map((agent) => { const Icon = agent.icon; return <button key={agent.id} className={`agent-card ${agent.selected ? "agent-selected" : ""}`} onClick={() => setSelectedAgent(agent.id)}><div className="agent-card-top"><div className="agent-identity"><div className="agent-icon"><Icon size={18} /></div><div><strong>{agent.name}</strong><span>{agent.role}</span></div></div><StateTag state={agent.state} /></div><div className="agent-model"><span>{agent.provider}</span><strong>{agent.model}</strong></div><div className="scope-row">{agent.scopes.map((scope) => <span key={scope}>{scope}</span>)}</div></button>; })}</div></section>
 
-          <section className="policy-callout"><div className="policy-symbol"><ShieldCheck size={20} /></div><div><div className="datum-label">Policy gate · IPS-001</div><h3>Every proposed action must clear the constitution.</h3><p>Hard limits are deterministic. The reasoning layer can recommend; it cannot override the policy engine or the owner’s pause control.</p></div><Button variant="outline" onClick={() => setActiveView("Policy")}>Inspect limits <ChevronRight size={15} /></Button></section>
+          <div className="fabric-grid lower-grid">
+            <section className="fabric-panel provider-panel"><div className="panel-cap"><div><span>Model plane</span><h2>Current provider families</h2></div><Cpu size={19} className="muted-icon" /></div><div className="provider-list">{modelFamilies.map((family) => <div className="provider-row" key={family.id}><div className={`provider-glyph glyph-${family.id}`}><Bot size={15} /></div><div><strong>{family.label}</strong><span>{family.models.slice(0, 2).join(" · ")}</span></div><span className="provider-route">routable <ChevronRight size={14} /></span></div>)}</div><div className="provider-note"><Database size={14} /> Model selection is a role-level routing decision. Secrets never enter the browser.</div></section>
 
-          <footer className="page-footer"><span>LEDGERLINE / PERSONAL INVESTMENT OS</span><span>Build 0.1.0 · Local state · No live execution</span></footer>
+            <section className="fabric-panel event-panel"><div className="panel-cap"><div><span>Evidence ledger</span><h2>Latest runtime events</h2></div><Button variant="ghost" size="sm" onClick={() => setActiveSection("Evidence ledger")}>Full trace <ArrowUpRight size={13} /></Button></div><div className="event-list">{events.slice(0, 4).map((event, index) => <div className="event-row" key={`${event.title}-${index}`}><span className={`event-dot event-${event.tone}`} /><span className="event-time">{event.time}</span><div><strong>{event.title}</strong><p>{event.detail}</p></div></div>)}</div></section>
+          </div>
+
+          <section className="fabric-panel account-panel"><div className="panel-cap"><div><span>Web3 account context · simulated</span><h2>Read-only mandate envelope</h2></div><span className="account-proof"><span /> no signing authority</span></div><div className="account-grid"><div className="account-identity"><div className="account-avatar"><Wallet size={19} /></div><div><strong>Research subaccount</strong><span>0x7D3A···19F2 · simulated identity</span></div></div><div className="account-stat"><span>Network</span><strong>Ethereum / EVM</strong><small>read-only chain adapter</small></div><div className="account-stat"><span>Authority</span><strong>Observe + propose</strong><small>execution.request omitted</small></div><div className="account-stat"><span>Paper context</span><strong>$100,842 NAV</strong><small>42% stablecoin reserve</small></div></div></section>
+
+          <section className="web3-band"><div className="web3-symbol"><Wallet size={20} /></div><div><span>Web3 readiness, without premature custody</span><h3>Read the chain. Simulate the intent. Keep authority revocable.</h3><p>Future MCP or exchange adapters belong behind dedicated, permissioned tool boundaries. No Binance, wallet, or exchange connector is active in this workspace.</p></div><Button variant="outline" onClick={() => toast.message("No external connector is configured", { description: "A future MCP adapter must be user-authorized, capability-scoped, and revocable." })}>View connector posture <ChevronRight size={15} /></Button></section>
+
+          <footer className="fabric-footer"><span>LEDGERLINE AGENT FABRIC / BUILD 0.2.0</span><span>SIMULATION-FIRST · POLICY-ENFORCED · EXECUTION-SEALED</span></footer>
         </div>
       </main>
     </div>
