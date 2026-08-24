@@ -44,7 +44,7 @@ describe("DashboardLayout operating controls", () => {
     expect(sidebar?.dataset.collapsible).toBe("offcanvas");
   });
 
-  it("opens the single bottom-left profile menu and routes it to the Agent & Policy workspace", async () => {
+  it("opens the editable bottom-left profile settings panel and saves an owner display preference", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
     const profileButton = host.querySelector<HTMLButtonElement>('[aria-label="Open owner profile menu"]');
     expect(profileButton).not.toBeNull();
@@ -52,12 +52,15 @@ describe("DashboardLayout operating controls", () => {
     const profileItem = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((item) => item.textContent?.includes("Profile details"));
     expect(profileItem).toBeDefined();
     await act(async () => profileItem?.click());
-    const profilePanel = host.querySelector<HTMLElement>('[role="dialog"][aria-label="Owner profile"]');
+    const profilePanel = host.querySelector<HTMLElement>('[role="dialog"][aria-label="Owner profile settings"]');
     expect(profilePanel).not.toBeNull();
-    const settingsButton = Array.from(profilePanel?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.textContent?.includes("Open Agent & Policy"));
-    expect(settingsButton).toBeDefined();
-    await act(async () => settingsButton?.click());
-    expect(setLocation).toHaveBeenNthCalledWith(1, "/settings");
+    const displayName = profilePanel?.querySelector<HTMLInputElement>('input[aria-label="Profile display name"]');
+    expect(displayName).not.toBeNull();
+    await act(async () => { if (displayName) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(displayName, "Ledger Operator"); displayName.dispatchEvent(new Event("input", { bubbles: true })); } });
+    const saveButton = Array.from(profilePanel?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.textContent?.includes("Save changes"));
+    expect(saveButton).toBeDefined();
+    await act(async () => saveButton?.click());
+    expect(JSON.parse(localStorage.getItem("ledgerline.owner-preferences.owner-test") ?? "{}").displayName).toBe("Ledger Operator");
   });
 
   it("shows an unread activity badge only for persisted events newer than the owner’s last visit", async () => {
