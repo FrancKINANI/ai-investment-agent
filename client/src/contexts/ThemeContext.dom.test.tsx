@@ -8,8 +8,8 @@ let host: HTMLDivElement;
 let root: Root;
 
 function ThemeToggleHarness() {
-  const { theme, toggleTheme } = useTheme();
-  return <button type="button" onClick={toggleTheme}>{theme}</button>;
+  const { theme, themePreference, toggleTheme, setThemePreference } = useTheme();
+  return <><button type="button" onClick={toggleTheme}>{theme}</button><button type="button" onClick={() => setThemePreference?.("system")}>system</button><span>{themePreference}</span></>;
 }
 
 beforeEach(() => {
@@ -36,5 +36,13 @@ describe("rendered theme toggle", () => {
     expect(button?.textContent).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(localStorage.getItem("theme")).toBe("light");
+  });
+
+  it("persists a system-following preference without turning it into an arbitrary manual choice", async () => {
+    await act(async () => root.render(<ThemeProvider defaultTheme="light" switchable><ThemeToggleHarness /></ThemeProvider>));
+    const buttons = host.querySelectorAll("button");
+    await act(async () => buttons[1]?.click());
+    expect(localStorage.getItem("theme")).toBe("system");
+    expect(host.textContent).toContain("system");
   });
 });

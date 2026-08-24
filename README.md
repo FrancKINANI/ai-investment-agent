@@ -95,6 +95,7 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 | Security reviewers | [Security and data](docs/architecture/security-and-data.md) | Storage, privacy, and execution boundaries. |
 | Maintainers | [Engineering and operations](docs/maintainers/engineering-and-operations.md) | Tests, releases, tokens, and maintenance conventions. |
 | Deployers | [Environment configuration](docs/maintainers/environment-configuration.md) | Required configuration names and public/private treatment. |
+| Community maintainers | [Demo dataset policy](docs/maintainers/demo-dataset-policy.md) | Rules for fixtures, screenshots, seeds, and safe synthetic examples. |
 | Open-source maintainers | [Open-source release guide](docs/maintainers/open-source-release.md) | Repository hygiene and release posture. |
 | Product contributors | [Roadmap](docs/product/roadmap.md) | Directional development milestones. |
 
@@ -115,4 +116,3 @@ Ledgerline is licensed under the [MIT License](LICENSE). The GitHub repository c
 ## Roadmap
 
 The project prioritizes stronger evidence provenance, paper-simulation review, accessible operator ergonomics, and restricted future integrations. Any live capability would require a separate security, product, operational, and legal decision; it is not enabled by this repository.
-

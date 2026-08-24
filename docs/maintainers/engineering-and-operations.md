@@ -24,3 +24,6 @@ Only show a skeleton for an actual loading request. Use an empty state only afte
 
 Verify light and dark themes, desktop and mobile layouts, keyboard focus, loading/empty/error states, and the simulation-only wording. Confirm no secret-handling or real-execution pathway was introduced. Save a checkpoint after validation; publish only through the project management interface.
 
+## Client performance
+
+Keep route-level workspace modules lazy-loaded so the public welcome screen and a selected workspace do not load every dashboard page upfront. Inspect production build output after substantial dependency changes; prefer narrowly scoped dynamic imports before adding manual vendor chunk rules. A larger bundle warning is a review signal, not a reason to weaken the React or tRPC module-deduplication safeguards.

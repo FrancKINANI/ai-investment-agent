@@ -1,5 +1,6 @@
 import React from "react";
-import { ArrowRight, BookOpen, Bot, CheckCircle2, ChevronRight, Github, Landmark, MessageSquareText, ShieldCheck, Star, WalletCards } from "lucide-react";
+import { ArrowRight, BookOpen, Bot, CheckCircle2, ChevronRight, Github, Landmark, MessageSquareText, MonitorCog, Moon, ShieldCheck, Star, Sun, WalletCards } from "lucide-react";
+import { useTheme, type ThemePreference } from "@/contexts/ThemeContext";
 
 const repositoryUrl = "https://github.com/FrancKINANI/ai-investment-agent-mvp";
 
@@ -11,10 +12,12 @@ const documentation = [
 ];
 
 export default function Welcome() {
+  const { themePreference, setThemePreference } = useTheme();
+  const chooseTheme = (preference: ThemePreference) => setThemePreference?.(preference);
   return <div className="welcome-page">
     <header className="welcome-nav">
       <a className="welcome-brand" href="/welcome" aria-label="Ledgerline welcome"><span><Landmark size={17} /></span><strong>ledgerline</strong><small>simulation-first investment operations</small></a>
-      <div><a href={`${repositoryUrl}/tree/main/docs`} target="_blank" rel="noreferrer"><BookOpen size={15} /> Documentation</a><a className="welcome-star" href={repositoryUrl} target="_blank" rel="noreferrer"><Star size={15} /> Star on GitHub</a></div>
+      <div className="welcome-nav-actions"><a href={`${repositoryUrl}/tree/main/docs`} target="_blank" rel="noreferrer"><BookOpen size={15} /> Documentation</a><div className="welcome-theme-controls" role="group" aria-label="Welcome theme preview"><button type="button" aria-label="Use light theme" aria-pressed={themePreference === "light"} title="Use light theme" onClick={() => chooseTheme("light")}><Sun size={15} /></button><button type="button" aria-label="Use dark theme" aria-pressed={themePreference === "dark"} title="Use dark theme" onClick={() => chooseTheme("dark")}><Moon size={15} /></button><button type="button" aria-label="Follow system theme" aria-pressed={themePreference === "system"} title="Follow system theme" onClick={() => chooseTheme("system")}><MonitorCog size={15} /></button></div><a className="welcome-star" href={repositoryUrl} target="_blank" rel="noreferrer"><Star size={15} /> Star on GitHub</a></div>
     </header>
 
     <main>

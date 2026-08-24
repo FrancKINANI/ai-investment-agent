@@ -13,6 +13,10 @@ Ledgerline welcomes improvements to simulation-first research workflows, accessi
 
 Do not commit secrets, API keys, database URLs, owner data, logs, generated builds, screenshots, seed phrases, wallet keys, venue credentials, or private prompt material. Do not fabricate balances, market data, trades, reviews, or connected venues. A visual change must preserve loading, empty, error, keyboard, dark-theme, and reduced-motion behavior where applicable.
 
+## Demo and fixture data
+
+Read the [demo dataset policy](docs/maintainers/demo-dataset-policy.md) before proposing a fixture, screenshot, story, seed, or example flow. Ledgerline examples must make their synthetic nature obvious, omit customer and account data, and never create a misleading impression of live execution, market truth, connected venues, or actual investment performance.
+
 ## Scope boundaries
 
 The project may support public-evidence research, policy checks, paper proposals, simulations, and owner-scoped activity. It must not request or store signing authority, custody material, withdrawal permissions, live venue credentials, or a real order path. Proposals and examples remain explicitly simulation-only.
