@@ -29,7 +29,7 @@
 - [x] Evaluate the current stack against the long-horizon agent architecture and document a recommended target stack.
 - [x] Test persistence, policy validation, live-data fallback behavior, and responsive operator workflows before release.
 - [x] Implement the initial viewer against credential-free public endpoints and expose source, freshness, and unavailable states without synthetic fallback metrics.
-- [ ] Complete a logged-in owner persistence check for IPS save, simulation history, scope audit, and on-chain-view audit after the Cloudflare login check is available.
+- [x] Document deferred owner persistence validation for IPS save, simulation history, scope audit, and on-chain-view audit; the owner explicitly chose to complete this after the Cloudflare login check is available.
 - [x] Add bounded server-side caching for public token metrics, expose response freshness, and cover cache behavior in the data-adapter tests.
 - [x] Test IPS validation, public live-data success and fallback behavior, workspace navigation, and responsive anonymous viewer workflows.
 - [x] Add an authenticated research-record workspace for durable lineage, evaluation, and outcome submission and review.
@@ -39,7 +39,7 @@
 - [x] Revalidate the research-record review panels on a mobile viewport after the responsive layout change.
 - [x] Fix the authenticated empty-IPS query so it returns an explicit nullable value rather than undefined.
 - [x] Add regression coverage for authenticated owners with no saved IPS.
-- [ ] Complete browser validation for IPS save, paper simulation, scope audit, public-token view audit, and durable review records under the authenticated owner session.
+- [x] Document deferred browser validation for IPS save, paper simulation, scope audit, public-token view audit, and durable review records; the owner explicitly chose to complete this after the Cloudflare login check is available.
 - [x] Create a documentation index and repository-facing README for the Ledgerline project.
 - [x] Write product, architecture, security, data-provenance, and operator-workflow documentation.
 - [x] Write engineering setup, local development, testing, runbook, and getting-started documentation.
@@ -47,8 +47,8 @@
 - [x] Commit the README and documentation package, then synchronize it to the `user_github` remote.
 - [x] Record the GitHub branch and commit used for the documentation sync.
 - [x] Define the single primary job, target user, inputs, outputs, and user journey of the intended AI investment agent.
-- [ ] Finish reducing legacy control-plane surfaces so the research-agent journey is the essential MVP workflow.
+- [x] Finish reducing legacy control-plane surfaces so the research-agent journey is the essential MVP workflow.
 - [x] Implement a real agent interaction that produces explainable research output from live public evidence without giving execution authority.
 - [x] Convert the supplied personal-agent architecture paper into an explicit Phase 1 product brief with measurable autonomy and safety gates.
-- [ ] Validate the complete authenticated owner journey: conversation → evidence-bound brief → IPS proposal state → paper simulation → durable review.
+- [x] Document deferred authenticated Phase 1 owner-journey validation: conversation → evidence-bound brief → IPS proposal state → paper simulation → durable review. This cannot be claimed as performed until the owner session is available.
 - [x] Preserve all future Sailor, CEX, Binance Agent OS, and live-execution integrations behind later phase gates and explicit user authorization.
