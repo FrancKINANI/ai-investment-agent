@@ -6,8 +6,8 @@ const appSource = readFileSync(fileURLToPath(new URL("./App.tsx", import.meta.ur
 
 describe("initial client load", () => {
   it("keeps workspace pages behind route-level lazy imports", () => {
-    ["Activity", "Chat", "CommandCenter", "Connections", "Settings", "Wallets", "Welcome", "DashboardLayout"].forEach((moduleName) => {
-      expect(appSource).toContain(`const ${moduleName} = lazy(() => import(`);
+    [["Activity", "activity"], ["Chat", "chat"], ["Changelog", "changelog"], ["CommandCenter", "command"], ["Connections", "connections"], ["Settings", "settings"], ["Wallets", "wallets"], ["Welcome", "welcome"], ["DashboardLayout", "dashboardLayout"]].forEach(([moduleName, loaderName]) => {
+      expect(appSource).toContain(`const ${moduleName} = lazy(pageLoaders.${loaderName});`);
     });
     expect(appSource).toContain("<Suspense fallback=");
   });

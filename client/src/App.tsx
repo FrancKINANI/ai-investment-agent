@@ -2,24 +2,28 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
+import RouteLoadingBar from "./components/RouteLoadingBar";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { pageLoaders } from "./lib/routePrefetch";
 
-const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
-const Activity = lazy(() => import("./pages/Activity"));
-const Chat = lazy(() => import("./pages/Chat"));
-const CommandCenter = lazy(() => import("./pages/CommandCenter"));
-const Connections = lazy(() => import("./pages/Connections"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Wallets = lazy(() => import("./pages/Wallets"));
-const Welcome = lazy(() => import("./pages/Welcome"));
+const DashboardLayout = lazy(pageLoaders.dashboardLayout);
+const Activity = lazy(pageLoaders.activity);
+const Chat = lazy(pageLoaders.chat);
+const Changelog = lazy(pageLoaders.changelog);
+const CommandCenter = lazy(pageLoaders.command);
+const Connections = lazy(pageLoaders.connections);
+const NotFound = lazy(pageLoaders.notFound);
+const Settings = lazy(pageLoaders.settings);
+const Wallets = lazy(pageLoaders.wallets);
+const Welcome = lazy(pageLoaders.welcome);
 
 function Router() {
   const Workspace = ({ children }: { children: React.ReactNode }) => <DashboardLayout>{children}</DashboardLayout>;
   return (
-    <Suspense fallback={<div className="os-loading">Loading Ledgerline…</div>}><Switch>
+    <Suspense fallback={<><RouteLoadingBar /><div className="os-loading">Loading Ledgerline…</div></>}><Switch>
       <Route path={"/welcome"} component={Welcome} />
+      <Route path={"/changelog"} component={Changelog} />
       <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
       <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
       <Route path={"/wallets"}><Workspace><Wallets /></Workspace></Route>

@@ -98,6 +98,7 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 | Community maintainers | [Demo dataset policy](docs/maintainers/demo-dataset-policy.md) | Rules for fixtures, screenshots, seeds, and safe synthetic examples. |
 | Open-source maintainers | [Open-source release guide](docs/maintainers/open-source-release.md) | Repository hygiene and release posture. |
 | Product contributors | [Roadmap](docs/product/roadmap.md) | Directional development milestones. |
+| Everyone | [Changelog](docs/product/changelog.md) | Public record of meaningful product, performance, and safety improvements. |
 
 ## Contributing
 
