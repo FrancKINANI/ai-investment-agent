@@ -179,3 +179,8 @@
 - [x] Extend visual/theme regression coverage, verify desktop and mobile themes, and save a checkpoint.
 - [x] Directly inspect the Command workspace in persisted dark theme and confirm the revised foreground, surface, and control contrast remains readable.
 - [x] Directly inspect persisted dark-theme Chat and Connections workspaces; confirm the visible shell, cards, and status treatments remain blue/cyan with readable text.
+- [x] Identify active route selectors and isolate unreachable legacy stylesheet blocks for safe deletion.
+- [x] Remove unreachable legacy CSS and retain only the active Ledgerline blue/cyan system.
+- [x] Add a dark-theme contrast token audit covering Command, Chat, Wallets, Connections, Settings, and Activity.
+- [x] Refine entrance timing and add subtle, reduced-motion-safe button hover feedback.
+- [x] Run route-wide visual and regression validation, then save a checkpoint.
