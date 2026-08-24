@@ -1,13 +1,14 @@
 # Ledgerline
 
-> **A simulation-first, policy-governed personal investment operations control plane.**
+> **A conversation-first, policy-governed personal crypto/on-chain research and paper-simulation agent.**
 
-Ledgerline is a private Web3-aware operator console for observing public on-chain token data, defining an Investment Policy Statement (IPS), recording paper simulations, and maintaining an auditable research lifecycle. It is deliberately designed so that **AI systems can analyse and propose but cannot trade, sign, connect a wallet, or override deterministic policy controls**.
+Ledgerline is private personal infrastructure for asking a concrete question about an Ethereum token, reviewing a source-bound AI research brief, checking the idea against an Investment Policy Statement (IPS), and—where the IPS permits—initiating a paper simulation. The dashboard, audit trail, and lineage records support that agent workflow; they are not the product’s primary purpose. **AI systems can analyse and propose but cannot trade, sign, connect a wallet, or override deterministic policy controls.**
 
 ## Current status
 
 | Capability | Status | Notes |
 | --- | --- | --- |
+| Conversation-first token research agent | Available | Authenticated owner submits an Ethereum contract and a diligence question; model response is constrained to supplied public evidence and strict structured output. |
 | Read-only Ethereum token viewer | Available | Public Blockscout and DexScreener data, sourced server-side with bounded caching. |
 | IPS editor | Available | Stores concentration, reserve, transaction, daily mandate, and approved-contract limits per owner. |
 | Paper simulations | Available | Creates a durable, policy-bound simulation run; no execution adapter exists. |
@@ -21,12 +22,15 @@ Ledgerline is a private Web3-aware operator console for observing public on-chai
 | Document | Purpose |
 | --- | --- |
 | [Getting started](docs/GETTING_STARTED.md) | Local setup, first run, and the first safe workflows. |
+| [Phase 1 product brief](docs/PHASE1_PRODUCT_BRIEF.md) | The target user, research-agent job, owner journey, authority model, and measurable Phase 1 gates. |
 | [Product and operating model](docs/PRODUCT_AND_OPERATING_MODEL.md) | Product scope, operating principles, user journeys, and MVP boundaries. |
 | [Architecture](docs/ARCHITECTURE.md) | System structure, data model, APIs, agent topology, and execution boundary. |
 | [Security and data](docs/SECURITY_AND_DATA.md) | Security invariants, scope model, data provenance, caching, and reliability behavior. |
 | [Operator guide](docs/OPERATOR_GUIDE.md) | How to use the IPS, public viewer, paper simulations, and research records. |
 | [Engineering and operations](docs/ENGINEERING_AND_OPERATIONS.md) | Codebase map, test strategy, migrations, diagnostics, and release runbook. |
 | [Roadmap](docs/ROADMAP.md) | Phased next steps and criteria for safely expanding capability. |
+| [Phase 1 UI validation](docs/PHASE1_UI_VALIDATION.md) | Desktop and mobile anonymous-state validation; owner-flow validation remains deferred. |
+| [GitHub sync record](docs/GITHUB_SYNC.md) | Previous documentation synchronization traceability. |
 
 ## Quick start
 

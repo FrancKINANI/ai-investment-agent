@@ -1,0 +1,1 @@
+ALTER TABLE `operatorActions` MODIFY COLUMN `kind` enum('policy_updated','simulation_started','simulation_blocked','onchain_viewed','scope_checked','outcome_recorded','promotion_changed','research_completed') NOT NULL;

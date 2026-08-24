@@ -119,7 +119,7 @@ export const operatorActions = mysqlTable("operatorActions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   actionId: varchar("actionId", { length: 64 }).notNull().unique(),
-  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed"]).notNull(),
+  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed"]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
   detail: text("detail").notNull(),

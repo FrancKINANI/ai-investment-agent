@@ -102,7 +102,7 @@ export async function saveInvestmentPolicy(userId: number, values: PolicyValues)
 
 export type OperatorActionInput = {
   actionId: string;
-  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed";
+  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed";
   status: "success" | "review" | "blocked";
   subject: string;
   detail: string;

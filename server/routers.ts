@@ -9,6 +9,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { createAgentRun, createAwarenessRecord, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, getInvestmentPolicy, listAgentProfiles, listAgentRuns, listAwarenessRecords, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, saveInvestmentPolicy } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
+import { researchRequestSchema, runTokenResearch } from "./research";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -18,7 +19,7 @@ const proposalSchema = z.object({
 });
 
 const actionSchema = z.object({
-  kind: z.enum(["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed"]),
+  kind: z.enum(["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed"]),
   status: z.enum(["success", "review", "blocked"]),
   subject: z.string().trim().min(1).max(160),
   detail: z.string().trim().min(1).max(2000),
@@ -97,6 +98,49 @@ export const appRouter = router({
         payload: { version: policy?.version, allowedAssets: normalized.allowedAssets, executionMode: "simulation" },
       });
       return policy;
+    }),
+  }),
+  research: router({
+    analyzeToken: protectedProcedure.input(researchRequestSchema).mutation(async ({ ctx, input }) => {
+      const savedPolicy = await getInvestmentPolicy(ctx.user.id);
+      const policy = savedPolicy ? {
+        name: savedPolicy.name,
+        version: savedPolicy.version,
+        allowedAssets: savedPolicy.allowedAssets,
+      } : null;
+      const research = await runTokenResearch(input, policy);
+      const runId = nanoid();
+      const runStatus = research.advancement.status === "allowed" ? "passed" : research.advancement.status;
+      const evidence = [
+        `token:${research.evidence.asset.address}`,
+        `source:${research.evidence.provenance.sources.explorer}`,
+        `source:${research.evidence.provenance.sources.market}`,
+        `freshness:${research.evidence.provenance.freshness}`,
+        "execution-sealed",
+      ];
+      await createAgentRun(ctx.user.id, {
+        runId,
+        status: runStatus,
+        policyResult: research.policy.result,
+        summary: research.report.headline,
+        evidence,
+      });
+      await createOperatorAction(ctx.user.id, {
+        actionId: nanoid(),
+        kind: "research_completed",
+        status: research.advancement.status === "allowed" ? "success" : research.advancement.status,
+        subject: `Research report: ${research.evidence.asset.symbol}`,
+        detail: "The owner requested an evidence-bound, simulation-only token research report.",
+        payload: { runId, question: input.question, policy: research.policy, advancement: research.advancement, evidence: research.evidence, report: research.report },
+      });
+      await createAwarenessRecord(ctx.user.id, {
+        layer: "justification",
+        subject: `Research report: ${research.evidence.asset.symbol}`,
+        runId,
+        evidence,
+        summary: `${research.report.headline} ${research.advancement.reason}`,
+      });
+      return { runId, ...research };
     }),
   }),
   history: router({

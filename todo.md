@@ -46,3 +46,9 @@
 - [x] Review documentation accuracy against the source code and sync the documentation package to the connected GitHub repository.
 - [x] Commit the README and documentation package, then synchronize it to the `user_github` remote.
 - [x] Record the GitHub branch and commit used for the documentation sync.
+- [x] Define the single primary job, target user, inputs, outputs, and user journey of the intended AI investment agent.
+- [ ] Finish reducing legacy control-plane surfaces so the research-agent journey is the essential MVP workflow.
+- [x] Implement a real agent interaction that produces explainable research output from live public evidence without giving execution authority.
+- [x] Convert the supplied personal-agent architecture paper into an explicit Phase 1 product brief with measurable autonomy and safety gates.
+- [ ] Validate the complete authenticated owner journey: conversation → evidence-bound brief → IPS proposal state → paper simulation → durable review.
+- [x] Preserve all future Sailor, CEX, Binance Agent OS, and live-execution integrations behind later phase gates and explicit user authorization.

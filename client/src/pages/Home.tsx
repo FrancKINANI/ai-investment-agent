@@ -17,10 +17,13 @@ import {
   Landmark,
   Layers3,
   LockKeyhole,
+  MessageSquareText,
   Play,
   Plus,
   RefreshCw,
+  Send,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -60,10 +63,12 @@ export default function Home() {
   const [assetDraft, setAssetDraft] = useState("");
   const [addressDraft, setAddressDraft] = useState("");
   const [viewAddress, setViewAddress] = useState("");
+  const [researchAddress, setResearchAddress] = useState("");
+  const [researchQuestion, setResearchQuestion] = useState("Analyse the live on-chain market evidence, identify the central risks, and state what requires further diligence.");
   const [lineageDraft, setLineageDraft] = useState<LineageDraft>(emptyLineage);
   const [evaluationDraft, setEvaluationDraft] = useState<EvaluationDraft>(emptyEvaluation);
   const [outcomeDraft, setOutcomeDraft] = useState<OutcomeDraft>(emptyOutcome);
-  const [activeSection, setActiveSection] = useState("Control plane");
+  const [activeSection, setActiveSection] = useState("Research agent");
   const lastRecordedMetric = useRef<string | null>(null);
 
   const policyQuery = trpc.policy.current.useQuery(undefined, { enabled: isAuthenticated, retry: false, refetchOnWindowFocus: false });
@@ -78,6 +83,7 @@ export default function Home() {
   const lineageMutation = trpc.audit.createLineage.useMutation({ onSuccess: () => lineagesQuery.refetch() });
   const evaluationMutation = trpc.audit.createEvaluation.useMutation({ onSuccess: () => evaluationsQuery.refetch() });
   const outcomeMutation = trpc.audit.createOutcome.useMutation({ onSuccess: () => outcomesQuery.refetch() });
+  const researchMutation = trpc.research.analyzeToken.useMutation({ onSuccess: () => { historyQuery.refetch(); runsQuery.refetch(); } });
   const tokenQuery = trpc.onchain.ethereumToken.useQuery({ address: viewAddress }, { enabled: isEthereumAddress(viewAddress), retry: false, refetchOnWindowFocus: false });
 
   useEffect(() => {
@@ -159,6 +165,20 @@ export default function Home() {
     else setViewAddress(asset);
   };
 
+  const startResearch = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAuthenticated) return startLogin();
+    const address = researchAddress.trim();
+    if (!isEthereumAddress(address)) return toast.error("Enter a valid Ethereum token contract address.");
+    if (researchQuestion.trim().length < 8) return toast.error("Ask a specific research question of at least eight characters.");
+    try {
+      await researchMutation.mutateAsync({ address, question: researchQuestion.trim() });
+      toast.success("Research report ready", { description: "The report is tied to live source metadata and remains simulation-only." });
+    } catch (error) {
+      toast.error("Research could not be completed", { description: error instanceof Error ? error.message : "The evidence-bound report could not be generated. Please retry." });
+    }
+  };
+
   const startSimulation = async () => {
     if (!isAuthenticated) return startLogin();
     if (!policyReady) {
@@ -211,20 +231,32 @@ export default function Home() {
 
   return <div className="data-shell">
     <aside className="data-sidebar">
-      <div className="data-brand"><div className="data-mark"><img src={logoUrl} alt="Ledgerline" /></div><div><strong>ledgerline</strong><span>control plane · v0.3</span></div></div>
+      <div className="data-brand"><div className="data-mark"><img src={logoUrl} alt="Ledgerline" /></div><div><strong>ledgerline</strong><span>personal investment agent · phase 1</span></div></div>
       <div className="runtime-stamp"><span><Activity size={13} /></span><div><small>OPERATING MODE</small><strong>SIMULATION ONLY</strong></div></div>
-      <div className="data-side-label">Workspaces</div>
-      <nav className="data-nav"><SectionNav label="Control plane" target="control-plane" onNavigate={setActiveSection} /><SectionNav label="IPS constitution" target="ips-editor" onNavigate={setActiveSection} /><SectionNav label="On-chain viewer" target="onchain-viewer" onNavigate={setActiveSection} /><SectionNav label="Research records" target="research-records" onNavigate={setActiveSection} /><SectionNav label="Operator history" target="operator-history" onNavigate={setActiveSection} /></nav>
+      <div className="data-side-label">Your agent</div>
+      <nav className="data-nav"><SectionNav label="Research agent" target="research-agent" onNavigate={setActiveSection} /><SectionNav label="IPS constitution" target="ips-editor" onNavigate={setActiveSection} /><SectionNav label="Evidence viewer" target="onchain-viewer" onNavigate={setActiveSection} /><SectionNav label="Research ledger" target="research-records" onNavigate={setActiveSection} /><SectionNav label="Operator history" target="operator-history" onNavigate={setActiveSection} /></nav>
       <div className="sidebar-spacer" />
       <div className="sidebar-seal"><LockKeyhole size={15} /><div><strong>Execution sealed</strong><span>No custody · no signing path</span></div></div>
       <div className="profile-strip"><div><span>{isAuthenticated ? user?.name ?? "Operator" : "Private workspace"}</span><small>{isAuthenticated ? "authenticated operator" : "sign in to persist controls"}</small></div>{isAuthenticated ? <Button variant="ghost" size="sm" onClick={() => document.getElementById("operator-history")?.scrollIntoView({ behavior: "smooth" })}>History</Button> : <Button size="sm" onClick={startLogin}>Sign in</Button>}</div>
     </aside>
 
     <main className="data-main">
-      <header className="data-topbar"><div><span>ledgerline</span><ChevronRight size={13} /><strong>{activeSection}</strong></div><div><span className="top-scope"><Globe2 size={13} /> EVM public read-only</span><span className="top-scope"><ShieldCheck size={13} /> policy-first</span>{isAuthenticated ? <span className="top-user">{user?.name ?? "Operator"}</span> : <Button size="sm" onClick={startLogin}>Authenticate to save</Button>}</div></header>
+      <header className="data-topbar"><div><span>ledgerline</span><ChevronRight size={13} /><strong>{activeSection}</strong></div><div><span className="top-scope"><Globe2 size={13} /> EVM public read-only</span><span className="top-scope"><ShieldCheck size={13} /> IPS governed</span>{isAuthenticated ? <span className="top-user">{user?.name ?? "Operator"}</span> : <Button size="sm" onClick={startLogin}>Sign in to research</Button>}</div></header>
 
       <div className="data-content">
-        <section id="control-plane" className="control-hero"><div className="grid-wash" /><div className="control-copy"><span><Activity size={13} /> DATA-BACKED OPERATOR CONTROL PLANE</span><h1>Observe live data.<br /><em>Keep the mandate human.</em></h1><p>Public market and chain metrics are queried server-side. Policies and operator actions become durable records only after authentication. No live execution path exists.</p><div className="control-actions"><Button className="primary-mint" onClick={startSimulation}><Play size={14} fill="currentColor" /> Start policy-bound simulation</Button><Button variant="outline" onClick={checkScopes}><ShieldCheck size={14} /> Audit read-only scopes</Button></div></div><div className="control-statboard"><div><span>POLICY</span><strong>{policyReady ? `v${policyQuery.data?.version}` : "Not set"}</strong></div><div><span>SIMULATIONS</span><strong>{isAuthenticated ? runCount : "—"}</strong></div><div><span>DATA MODE</span><strong>Public</strong></div><div><span>EXECUTION</span><strong className="blocked">Sealed</strong></div></div></section>
+        <section id="research-agent" className="agent-workspace">
+          <div className="agent-intro"><span><Sparkles size={14} /> PHASE 1 · RESEARCH &amp; PAPER PROPOSALS</span><h1>Your investment agent starts with a <em>question.</em></h1><p>Ask Ledgerline to inspect an Ethereum token using live public chain and market evidence. It will explain what the evidence supports, surface uncertainty, check the IPS, and only ever propose a paper-simulation next step.</p></div>
+          <div className="agent-guardrail"><LockKeyhole size={17} /><div><strong>Execution is sealed.</strong><span>No wallet connection, private key, exchange credential, signature, or transaction request exists in this phase.</span></div></div>
+          {!isAuthenticated && <div className="agent-signin"><MessageSquareText size={19} /><div><strong>Sign in to begin a private research trail.</strong><span>Your reports, policy checks, and simulations remain owner-scoped and auditable.</span></div><Button className="primary-mint" onClick={startLogin}>Sign in to research</Button></div>}
+          <form className="agent-composer" onSubmit={startResearch}>
+            <div className="composer-kicker"><span>Ask the research agent</span><small>Live sources only · no hidden demo metrics</small></div>
+            <label>Ethereum token contract<input value={researchAddress} onChange={(event) => setResearchAddress(event.target.value)} placeholder="0x… ERC-20 contract" disabled={!isAuthenticated || researchMutation.isPending} /></label>
+            <label>Your research question<textarea value={researchQuestion} onChange={(event) => setResearchQuestion(event.target.value)} disabled={!isAuthenticated || researchMutation.isPending} /></label>
+            <div className="composer-footer"><span><ShieldCheck size={14} /> {policyReady ? `IPS ${policyQuery.data?.name} v${policyQuery.data?.version} will gate the proposal.` : "No IPS saved: research can run, but any proposal stays under review."}</span><Button className="primary-mint" type="submit" disabled={!isAuthenticated || researchMutation.isPending}>{researchMutation.isPending ? <RefreshCw size={14} className="spin" /> : <Send size={14} />} {researchMutation.isPending ? "Reading evidence…" : "Generate research brief"}</Button></div>
+          </form>
+          {researchMutation.error && <div className="agent-error"><CircleAlert size={16} /><span>{researchMutation.error.message}</span></div>}
+          {researchMutation.data ? <ResearchBrief result={researchMutation.data} onStartSimulation={startSimulation} /> : <div className="agent-empty"><MessageSquareText size={22} /><div><strong>A disciplined analyst—not an execution bot.</strong><span>Start with one token contract and a concrete question. The response will be source-bound, policy-checked, and saved to your private review trail.</span></div><div className="agent-empty-stats"><span>POLICY <b>{policyReady ? `v${policyQuery.data?.version}` : "Required for paper advance"}</b></span><span>SIMULATIONS <b>{isAuthenticated ? runCount : "Private"}</b></span><span>EXECUTION <b>Sealed</b></span></div></div>}
+        </section>
 
         <section className="source-band"><div><Database size={16} /><div><strong>Live-data provenance</strong><span>Blockscout public API for ERC-20 metadata and explorer figures · DexScreener public API for DEX metrics</span></div></div><span><Check size={13} /> No provider keys configured</span></section>
 
@@ -239,13 +271,35 @@ export default function Home() {
         <ResearchRecordReview isAuthenticated={isAuthenticated} lineages={lineagesQuery.data ?? []} evaluations={evaluationsQuery.data ?? []} outcomes={outcomesQuery.data ?? []} />
 
         <section id="operator-history" className="workspace-section"><div className="section-heading"><div><span>Immutable review trail</span><h2>Operator action history</h2><p>Policy saves, simulations, data views, and scope audits are persisted for the authenticated owner. No event is seeded into this view.</p></div><div className="heading-state"><History size={15} /> {isAuthenticated ? `${historyQuery.data?.length ?? 0} saved records` : "Sign in to view"}</div></div>{isAuthenticated ? <div className="history-panel">{historyQuery.isLoading ? <div className="history-empty">Loading durable operator records…</div> : (historyQuery.data?.length ?? 0) === 0 ? <div className="history-empty"><FileCheck2 size={20} /><strong>No operator actions saved yet.</strong><span>Save an IPS, query a token, run a scope audit, or start a simulation to create the first durable record.</span></div> : historyQuery.data?.map((item) => <div className="history-row" key={item.actionId}><span className={`history-dot status-${item.status}`} /><time>{new Date(item.createdAt).toLocaleString()}</time><div><strong>{item.subject}</strong><p>{item.detail}</p></div><span className="history-kind">{item.kind.replaceAll("_", " ")}</span></div>)}</div> : <div className="history-empty guarded"><LockKeyhole size={20} /><strong>Your history remains private.</strong><span>Authenticate to create and review the operator-owned audit trail.</span><Button onClick={startLogin}>Authenticate</Button></div>}</section>
-        <footer className="data-footer"><span>LEDGERLINE / DATA-BACKED CONTROL PLANE</span><span>PUBLIC READ-ONLY DATA · PERSISTENT OWNER RECORDS · EXECUTION SEALED</span></footer>
+        <footer className="data-footer"><span>LEDGERLINE / PERSONAL RESEARCH AGENT</span><span>PUBLIC EVIDENCE · OWNER-SCOPED REVIEW TRAIL · EXECUTION SEALED</span></footer>
       </div>
     </main>
   </div>;
 }
 
 function SearchIcon() { return <Gauge size={14} />; }
+
+type ResearchBriefResult = {
+  runId: string;
+  report: { headline: string; marketObservation: string; thesis: string; risks: string[]; catalysts: string[]; unknowns: string[]; researchNextStep: string };
+  evidence: { asset: { address: string; name: string; symbol: string; holders: number | null; explorerPriceUsd: number | null; marketCap: number | null }; market: { priceUsd: number | null; liquidityUsd: number | null; volume24h: number | null; priceChange24h: number | null; dex: string; pairAddress: string } | null; provenance: { sources: { explorer: string; market: string }; fetchedAt: number; freshness: string; authority: string } };
+  policy: { result: "pass" | "review" | "block"; reasons: string[] };
+  advancement: { status: "allowed" | "review" | "blocked"; reason: string };
+};
+
+export function ResearchBrief({ result, onStartSimulation }: { result: ResearchBriefResult; onStartSimulation: () => void }) {
+  const allowed = result.advancement.status === "allowed";
+  return <article className="agent-report">
+    <header className="report-heading"><div><span><Sparkles size={13} /> EVIDENCE-BOUND RESEARCH BRIEF</span><h2>{result.report.headline}</h2><p>{result.report.marketObservation}</p></div><div className={`proposal-state ${result.advancement.status}`}><strong>{allowed ? "Paper-simulation eligible" : result.advancement.status === "review" ? "Owner review required" : "Blocked"}</strong><span>{result.advancement.reason}</span></div></header>
+    <div className="report-evidence"><div><span>ASSET</span><strong>{result.evidence.asset.name} · {result.evidence.asset.symbol}</strong><small>{result.evidence.asset.address}</small></div><div><span>PRICE</span><strong>{money(result.evidence.market?.priceUsd ?? result.evidence.asset.explorerPriceUsd)}</strong><small>{result.evidence.market?.dex ?? "Explorer reference"}</small></div><div><span>LIQUIDITY</span><strong>{money(result.evidence.market?.liquidityUsd)}</strong><small>highest-liquidity pair</small></div><div><span>FRESHNESS</span><strong>{result.evidence.provenance.freshness}</strong><small>{new Date(result.evidence.provenance.fetchedAt).toLocaleTimeString()}</small></div></div>
+    <div className="report-body"><section><span>Research thesis</span><p>{result.report.thesis}</p><div className="report-next"><b>Next diligence step</b><p>{result.report.researchNextStep}</p></div></section><section className="report-lists"><ReportList title="Risks & red flags" items={result.report.risks} tone="risk" /><ReportList title="Potential catalysts to verify" items={result.report.catalysts} tone="catalyst" /><ReportList title="Unknowns the evidence does not resolve" items={result.report.unknowns} tone="unknown" /></section></div>
+    <footer className="report-footer"><div><ShieldCheck size={15} /><div><strong>IPS check: {result.policy.result}</strong><span>{result.policy.reasons.join(" ")}</span></div></div><div><Globe2 size={15} /><div><strong>{result.evidence.provenance.sources.explorer} · {result.evidence.provenance.sources.market}</strong><span>{result.evidence.provenance.authority}</span></div></div>{allowed ? <Button className="primary-mint" onClick={onStartSimulation}><Play size={14} fill="currentColor" /> Start paper simulation</Button> : <span className="sealed-outcome"><LockKeyhole size={14} /> Research cannot advance yet</span>}</footer>
+  </article>;
+}
+
+function ReportList({ title, items, tone }: { title: string; items: string[]; tone: "risk" | "catalyst" | "unknown" }) {
+  return <div className={`report-list ${tone}`}><strong>{title}</strong>{items.map((item, index) => <p key={`${tone}-${index}`}><span>{tone === "risk" ? "!" : tone === "catalyst" ? "+" : "?"}</span>{item}</p>)}</div>;
+}
 
 type LineageReview = { id: number; lineageId: string; name: string; stage: string; generation: number; createdAt: Date };
 type EvaluationReview = { id: number; lineageId: string; version: string; gateResult: string; coverage: number; complexityPenalty: number; createdAt: Date };
