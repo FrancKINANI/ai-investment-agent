@@ -148,3 +148,8 @@
 - [x] Replace the narrow Chat composer with a compact ChatGPT-style docked input and send control.
 - [x] Make the Profile details editor fully visible, scroll-safe, and reachable within a narrow mobile viewport.
 - [x] Add regression coverage and validate Chat, Wallets, and Profile details at narrow mobile widths before checkpointing.
+- [x] Match the Chat composer to the supplied clean ChatGPT-style input reference while preserving simulation-only messaging semantics.
+- [x] Add auto-growing chat textarea behavior with a bounded height for longer research briefs.
+- [x] Add a mobile swipe-from-edge gesture to open navigation without interfering with form fields or scroll gestures.
+- [x] Add a mobile bottom tab bar for Command, Chat, and Activity navigation.
+- [x] Add interaction coverage and validate the enhanced mobile Chat/shell experience before checkpointing.
