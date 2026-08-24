@@ -129,3 +129,9 @@
 - [x] Add interaction tests, verify desktop/mobile behavior, and save a checkpoint for the shell enhancement.
 - [x] Add and test an explicit compact owner profile panel action in the bottom-left flyout.
 - [x] Save a checkpoint after completing the owner profile panel action.
+- [x] Replace the constrained wide-desktop Chat layout with a true full-workspace conversation canvas.
+- [x] Replace the constrained wide-desktop Activity layout with a true full-workspace audit canvas.
+- [x] Add a Mark all as read action that clears the owner-scoped unread activity indicator without modifying audit events.
+- [x] Add configurable navigation shortcut preferences with visible effective-key hints.
+- [x] Add owner display-name and layout-density preferences to the settings workspace.
+- [x] Add regression coverage and verify wide-desktop plus mobile layouts before saving a checkpoint.

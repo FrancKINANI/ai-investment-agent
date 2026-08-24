@@ -1,14 +1,15 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { Bot, BrainCircuit, CircleStop, Clock3, LockKeyhole, Plus, Route, Settings2, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { defaultOwnerPreferences, primaryShortcutLabel, readOwnerPreferences, saveOwnerPreferences, type OwnerPreferences } from "@/lib/ownerPreferences";
+import { Bot, BrainCircuit, CircleStop, Clock3, Keyboard, LayoutPanelTop, LockKeyhole, Plus, Route, Settings2, ShieldCheck, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type SubagentForm = { parentAgentId: string; name: string; roleKey: string; provider: "openai" | "anthropic" | "google" | "custom"; model: string };
 
 export default function Settings() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const catalogQuery = trpc.agentRuntime.catalog.useQuery(undefined, { retry: false });
   const policyQuery = trpc.policy.current.useQuery(undefined, { enabled: isAuthenticated, retry: false });
   const agentsQuery = trpc.agentFabric.nodes.useQuery(undefined, { enabled: isAuthenticated, retry: false });
@@ -20,10 +21,18 @@ export default function Settings() {
   const activateScheduleMutation = trpc.discovery.activate.useMutation({ onSuccess: () => schedulesQuery.refetch() });
   const pauseScheduleMutation = trpc.discovery.pause.useMutation({ onSuccess: () => schedulesQuery.refetch() });
   const [subagent, setSubagent] = useState<SubagentForm>({ parentAgentId: "", name: "", roleKey: "", provider: "openai", model: "gpt-5-mini" });
+  const [ownerPreferences, setOwnerPreferences] = useState<OwnerPreferences>(defaultOwnerPreferences);
   const providers = catalogQuery.data?.providers ?? [];
   const protectedAgents = agentsQuery.data?.filter((agent) => agent.protectedRole) ?? [];
   const optionalAgents = agentsQuery.data?.filter((agent) => !agent.protectedRole && agent.state !== "retired") ?? [];
   const selectedProviderModels = useMemo(() => providers.find((provider) => provider.id === subagent.provider)?.models ?? ["gpt-5-mini"], [providers, subagent.provider]);
+
+  useEffect(() => setOwnerPreferences(readOwnerPreferences(user?.openId)), [user?.openId]);
+
+  const savePreferences = () => {
+    saveOwnerPreferences(user?.openId, ownerPreferences);
+    toast.success("Owner preferences saved", { description: "Display, density, and navigation shortcuts now apply to this owner’s browser." });
+  };
 
   const updateModel = async (agentId: string, provider: "openai" | "anthropic" | "google" | "custom", model: string) => {
     try { await updateModelMutation.mutateAsync({ agentId, provider, model }); toast.success("Model route updated", { description: "Tool scopes and execution boundaries did not change." }); }
@@ -55,5 +64,9 @@ export default function Settings() {
     <section className="settings-card policy-config"><header><ShieldCheck size={19} /><div><span>CONSTITUTION</span><h2>Investment policy</h2></div><b>{policyQuery.data ? `v${policyQuery.data.version}` : "Not set"}</b></header>{policyQuery.data ? <dl><div><dt>Approved contracts</dt><dd>{policyQuery.data.allowedAssets.length}</dd></div><div><dt>Max concentration</dt><dd>{(policyQuery.data.maxConcentrationBps / 100).toFixed(2)}%</dd></div><div><dt>Minimum reserve</dt><dd>{(policyQuery.data.minReserveBps / 100).toFixed(2)}%</dd></div></dl> : <p className="settings-empty">An owner IPS is required before a wallet mandate can advance from simulation.</p>}<footer><span><LockKeyhole size={13} /> Owner-controlled limits</span><Button variant="outline" onClick={() => document.location.assign("/")}>Open policy</Button></footer></section>
 
     <section className="settings-card emergency-config"><header><CircleStop size={19} /><div><span>EMERGENCY CONTROL</span><h2>Global pause</h2></div><b>Ready</b></header><p>Global pause remains owner-only. It cannot be removed by the supervisor, a protected role, or an optional subagent.</p><footer><span>Owner emergency authority</span><Button className="pause-button" onClick={() => toast.message("No real mandates are active. The safety pause is already effectively enforced.")}>Pause all mandates</Button></footer></section>
+
+    <section className="settings-card owner-preferences-card"><header><UserRound size={19} /><div><span>OWNER PROFILE</span><h2>Display and workspace density</h2></div><b>Local owner</b></header><p className="settings-explainer">These browser-local preferences personalize the operating shell. They never change account custody, agent scope, or execution authority.</p><div className="owner-preference-fields"><label>Display name<input aria-label="Owner display name" value={ownerPreferences.displayName} onChange={(event) => setOwnerPreferences((current) => ({ ...current, displayName: event.target.value }))} placeholder={user?.name ?? "Owner"} /></label><label>Layout density<select aria-label="Layout density" value={ownerPreferences.density} onChange={(event) => setOwnerPreferences((current) => ({ ...current, density: event.target.value as OwnerPreferences["density"] }))}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label></div><footer><span><LayoutPanelTop size={13} /> {ownerPreferences.density} spacing</span><Button variant="outline" onClick={savePreferences}>Save profile preferences</Button></footer></section>
+
+    <section className="settings-card shortcut-preferences-card"><header><Keyboard size={19} /><div><span>KEYBOARD SHORTCUTS</span><h2>Navigation and action hotkeys</h2></div><b>Modifier required</b></header><p className="settings-explainer">Shortcuts use Command on macOS or Control elsewhere, and do not fire while typing in a field.</p><div className="shortcut-preference-list"><label>Toggle navigation<select aria-label="Navigation shortcut" value={ownerPreferences.shortcuts.navigation} onChange={(event) => setOwnerPreferences((current) => ({ ...current, shortcuts: { ...current.shortcuts, navigation: event.target.value as OwnerPreferences["shortcuts"]["navigation"] } }))}><option value="b">{primaryShortcutLabel("b")}</option><option value="m">{primaryShortcutLabel("m")}</option></select></label><label>Open Chat<select aria-label="Chat shortcut" value={ownerPreferences.shortcuts.chat} onChange={(event) => setOwnerPreferences((current) => ({ ...current, shortcuts: { ...current.shortcuts, chat: event.target.value as OwnerPreferences["shortcuts"]["chat"] } }))}><option value="c">{primaryShortcutLabel("c")}</option><option value="j">{primaryShortcutLabel("j")}</option></select></label><label>Open Activity<select aria-label="Activity shortcut" value={ownerPreferences.shortcuts.activity} onChange={(event) => setOwnerPreferences((current) => ({ ...current, shortcuts: { ...current.shortcuts, activity: event.target.value as OwnerPreferences["shortcuts"]["activity"] } }))}><option value="a">{primaryShortcutLabel("a")}</option><option value="l">{primaryShortcutLabel("l")}</option></select></label></div><footer><span>{primaryShortcutLabel(ownerPreferences.shortcuts.navigation)} navigation · {primaryShortcutLabel(ownerPreferences.shortcuts.chat)} chat · {primaryShortcutLabel(ownerPreferences.shortcuts.activity)} activity</span><Button variant="outline" onClick={savePreferences}>Save shortcuts</Button></footer></section>
   </div></div>;
 }
