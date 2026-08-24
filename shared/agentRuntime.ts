@@ -2,9 +2,11 @@
  * Ledgerline agent contracts. These types deliberately separate model selection,
  * tool access, policy evaluation, and execution authority.
  */
-export type AgentRole = "research" | "onchain" | "risk" | "allocator" | "supervisor";
+export type AgentRole = "macro" | "onchain" | "variation" | "risk" | "evaluator" | "decision" | "supervisor";
 export type ToolScope = "market.read" | "portfolio.read" | "chain.read" | "proposal.write" | "execution.request";
 export type PolicyResult = "pass" | "review" | "block";
+export type AwarenessLayer = "action" | "justification" | "result" | "evolutionary";
+export type PromotionStage = "research" | "simulation" | "decision" | "retired";
 
 export type AgentProfile = {
   id: string;
@@ -29,12 +31,31 @@ export type ProposalDecision = {
 };
 
 export const agentRoles: Record<AgentRole, { label: string; defaultTools: ToolScope[] }> = {
-  research: { label: "Research agent", defaultTools: ["market.read", "proposal.write"] },
+  macro: { label: "Macro / regime agent", defaultTools: ["market.read", "proposal.write"] },
   onchain: { label: "On-chain observer", defaultTools: ["chain.read", "portfolio.read", "proposal.write"] },
-  risk: { label: "Risk sentinel", defaultTools: ["portfolio.read", "chain.read", "proposal.write"] },
-  allocator: { label: "Allocation planner", defaultTools: ["market.read", "portfolio.read", "proposal.write"] },
+  variation: { label: "Strategy variation agent", defaultTools: ["market.read", "portfolio.read", "proposal.write"] },
+  risk: { label: "Risk agent", defaultTools: ["portfolio.read", "chain.read", "proposal.write"] },
+  evaluator: { label: "Evaluator agent", defaultTools: ["portfolio.read", "proposal.write"] },
+  decision: { label: "Decision agent", defaultTools: ["market.read", "portfolio.read", "proposal.write"] },
   supervisor: { label: "Trajectory supervisor", defaultTools: ["portfolio.read", "proposal.write"] },
 };
+
+export type GateInput = {
+  policyResult: PolicyResult;
+  simulationPassed: boolean;
+  ownerPauseActive: boolean;
+  lineageCoverage: number;
+  complexityPenalty: number;
+};
+
+export function evaluatePromotionGate(input: GateInput) {
+  if (input.ownerPauseActive) return { state: "block" as const, reason: "Owner pause is active." };
+  if (input.policyResult === "block") return { state: "block" as const, reason: "Policy check failed." };
+  if (!input.simulationPassed) return { state: "review" as const, reason: "Simulation evidence is incomplete." };
+  if (input.lineageCoverage < 0.7) return { state: "review" as const, reason: "Market-regime coverage is below the minimum gate." };
+  if (input.complexityPenalty > 0.4) return { state: "review" as const, reason: "Complexity has risen without enough robustness evidence." };
+  return { state: "pass" as const, reason: "Eligible for decision-layer review; never live execution." };
+}
 
 export function decideProposal(input: ProposalInput): ProposalDecision {
   if (input.ownerPauseActive) {

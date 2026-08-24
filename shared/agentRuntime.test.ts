@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideProposal } from "./agentRuntime";
+import { decideProposal, evaluatePromotionGate } from "./agentRuntime";
 
 describe("Ledgerline execution boundary", () => {
   it("blocks an execution request even when policy passes", () => {
@@ -31,5 +31,12 @@ describe("Ledgerline execution boundary", () => {
     });
     expect(decision).toMatchObject({ status: "allowed" });
   });
-});
 
+  it("keeps a strategy in review when regime coverage is insufficient", () => {
+    expect(evaluatePromotionGate({ policyResult: "pass", simulationPassed: true, ownerPauseActive: false, lineageCoverage: 0.55, complexityPenalty: 0.1 }).state).toBe("review");
+  });
+
+  it("never promotes a strategy while an owner pause is active", () => {
+    expect(evaluatePromotionGate({ policyResult: "pass", simulationPassed: true, ownerPauseActive: true, lineageCoverage: 0.92, complexityPenalty: 0.1 }).state).toBe("block");
+  });
+});

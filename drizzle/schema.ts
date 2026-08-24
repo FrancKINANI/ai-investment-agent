@@ -41,7 +41,67 @@ export const agentRuns = mysqlTable("agentRuns", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** Four-layer operational awareness: action, justification, outcome, and evolution. */
+export const awarenessRecords = mysqlTable("awarenessRecords", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  layer: mysqlEnum("layer", ["action", "justification", "result", "evolutionary"]).notNull(),
+  subject: varchar("subject", { length: 160 }).notNull(),
+  runId: varchar("runId", { length: 64 }),
+  evidence: json("evidence").$type<string[]>().notNull(),
+  summary: text("summary").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** A versioned strategy family; promotion is deliberately limited to research/simulation/decision states. */
+export const strategyLineages = mysqlTable("strategyLineages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  lineageId: varchar("lineageId", { length: 64 }).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  stage: mysqlEnum("stage", ["research", "simulation", "decision", "retired"]).default("research").notNull(),
+  generation: int("generation").default(1).notNull(),
+  parentVersion: varchar("parentVersion", { length: 64 }),
+  scores: json("scores").$type<Record<string, number>>().notNull(),
+  rationale: text("rationale").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Hard-gate evaluations and supervised promotion evidence for a strategy version. */
+export const strategyEvaluations = mysqlTable("strategyEvaluations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  lineageId: varchar("lineageId", { length: 64 }).notNull(),
+  version: varchar("version", { length: 64 }).notNull(),
+  gateResult: mysqlEnum("gateResult", ["pass", "review", "block"]).notNull(),
+  simulationPassed: boolean("simulationPassed").default(false).notNull(),
+  coverage: int("coverage").default(0).notNull(),
+  complexityPenalty: int("complexityPenalty").default(0).notNull(),
+  rationale: text("rationale").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Outcome-aware counterpart to a paper run or lineage version; values are recorded in basis points. */
+export const outcomeRecords = mysqlTable("outcomeRecords", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  lineageId: varchar("lineageId", { length: 64 }).notNull(),
+  runId: varchar("runId", { length: 64 }),
+  expectedBps: int("expectedBps").notNull(),
+  realizedBps: int("realizedBps"),
+  attribution: json("attribution").$type<Record<string, number>>().notNull(),
+  deviation: mysqlEnum("deviation", ["on_track", "underperforming", "outperforming", "inconclusive"]).default("inconclusive").notNull(),
+  narrative: text("narrative").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type AgentProfile = typeof agentProfiles.$inferSelect;
 export type AgentRun = typeof agentRuns.$inferSelect;
+export type AwarenessRecord = typeof awarenessRecords.$inferSelect;
+export type StrategyLineage = typeof strategyLineages.$inferSelect;
+export type StrategyEvaluation = typeof strategyEvaluations.$inferSelect;
+export type OutcomeRecord = typeof outcomeRecords.$inferSelect;

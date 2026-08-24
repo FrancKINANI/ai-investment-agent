@@ -8,3 +8,16 @@
 - [x] Add deterministic tests for policy veto and provider-agnostic routing boundaries.
 - [x] Validate the desktop and mobile interface, save a checkpoint, and document the integration roadmap.
 - [x] Add a simulated read-only Web3 account context with chain, subaccount, authority, and scoped balance visibility.
+- [x] Translate the v0.2 paper into operational awareness, strategy-lineage, evaluation-gate, and promotion requirements.
+- [x] Add the expanded v0.2 agent topology: macro/regime, on-chain/fundamentals, strategy variation, risk, evaluator, decision, and supervisor roles.
+- [x] Implement action, justification, result, and evolutionary awareness views with simulated but clearly labelled evidence.
+- [x] Add strategy lineage, outcome tracking, hard evaluation gates, and a supervised promotion workflow that cannot enable live execution.
+- [x] Repair primary navigation, model catalog refresh, evidence inspection, pause/resume, agent selection, and paper-cycle controls so each delivers visible state change.
+- [x] Add interaction-focused tests and perform desktop/mobile workflow validation for every primary control.
+- [x] Add a concrete outcome tracker with expected versus realized results, attribution, and deviation classification.
+- [x] Implement a visible supervised promotion path from research through simulation and decision review, with no executable end state.
+- [x] Add frontend interaction tests for navigation, selection, paper cycles, pauses, scope checks, lineage, evidence, and catalog refresh.
+- [x] Revalidate the complete v0.2 workflow across desktop and mobile before saving the release checkpoint.
+- [x] Make a passing hard-gate state reachable so a simulated strategy can visibly advance from simulation to decision review without gaining execution authority.
+- [x] Add browser-level interaction coverage for primary controls and record the outcomes in the interaction audit.
+- [x] Save a final validated checkpoint for the completed v0.2 workflow release.
