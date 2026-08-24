@@ -53,7 +53,9 @@ describe("Chat and Wallets theme rendering", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(host.querySelector(selector)).not.toBeNull();
 
-    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="Switch to light theme"]');
+    const profileButton = host.querySelector<HTMLButtonElement>('button[aria-label="Open owner profile menu"]');
+    await act(async () => profileButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const toggle = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((item) => item.textContent?.includes("Use light mode"));
     await act(async () => toggle?.click());
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(host.querySelector(selector)).not.toBeNull();

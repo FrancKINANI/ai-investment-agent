@@ -135,3 +135,6 @@
 - [x] Add configurable navigation shortcut preferences with visible effective-key hints.
 - [x] Add owner display-name and layout-density preferences to the settings workspace.
 - [x] Add regression coverage and verify wide-desktop plus mobile layouts before saving a checkpoint.
+- [x] Remove the duplicate embedded Command Center chat/evolution surface in favor of the dedicated Chat workspace.
+- [x] Remove dashboard controls duplicated by the bottom-left owner profile settings menu.
+- [x] Validate the simplified Command and dashboard shell at desktop/mobile sizes and save a checkpoint.
