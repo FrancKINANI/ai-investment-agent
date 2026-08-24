@@ -68,5 +68,7 @@ describe("DashboardLayout operating controls", () => {
     const badge = host.querySelector<HTMLElement>(".os-unread-badge");
     expect(badge?.textContent).toBe("1");
     expect(badge?.getAttribute("aria-label")).toBe("1 unread activity updates");
+    await act(async () => window.dispatchEvent(new CustomEvent("ledgerline:activity-read", { detail: { ownerId: "owner-test", seenAt: createdAt.getTime() } })));
+    expect(host.querySelector(".os-unread-badge")).toBeNull();
   });
 });
