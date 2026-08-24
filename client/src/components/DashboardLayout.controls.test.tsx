@@ -80,11 +80,13 @@ describe("DashboardLayout operating controls", () => {
     expect(host.querySelector(".os-unread-badge")).toBeNull();
   });
 
-  it("renders bottom tabs and routes Chat from the mobile navigation surface", async () => {
+  it("removes redundant bottom tabs while preserving Chat navigation in the sidebar drawer", async () => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
-    const chatTab = Array.from(host.querySelectorAll<HTMLButtonElement>(".os-mobile-tabs button")).find((button) => button.textContent?.includes("Chat"));
-    expect(chatTab).toBeDefined();
-    await act(async () => chatTab?.click());
+    expect(host.querySelector(".os-mobile-tabs")).toBeNull();
+    const sidebarMenu = host.querySelector('[data-slot="sidebar-menu"]');
+    const chatNavigation = Array.from(sidebarMenu?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.textContent?.includes("Chat"));
+    expect(chatNavigation).toBeDefined();
+    await act(async () => chatNavigation?.click());
     expect(setLocation).toHaveBeenCalledWith("/chat");
   });
 

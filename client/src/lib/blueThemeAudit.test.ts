@@ -11,6 +11,13 @@ function ruleContaining(selector: string) {
   return end < 0 ? "" : stylesheet.slice(start, end + 1);
 }
 
+function latestRuleContaining(selector: string) {
+  const start = stylesheet.lastIndexOf(selector);
+  if (start < 0) return "";
+  const end = stylesheet.indexOf("}", start);
+  return end < 0 ? "" : stylesheet.slice(start, end + 1);
+}
+
 describe("active blue theme audit", () => {
   it("sets blue semantic fallbacks for both light and dark modes", () => {
     expect(stylesheet).toContain("--primary:#2768f5");
@@ -39,5 +46,11 @@ describe("active blue theme audit", () => {
       expect(rule, `${route} selector must have a local rule`).toContain(selector);
       expect(rule, `${route} selector must bind to the blue operating token`).toContain(tokenBinding);
     });
+  });
+
+  it("uses cyan for active readiness and success treatments while keeping Command mandates responsive", () => {
+    expect(latestRuleContaining(".os-topbar-status i")).toContain("background:var(--ll-cyan)");
+    expect(latestRuleContaining(".status-success")).toContain("background:var(--ll-cyan)");
+    expect(stylesheet).toContain(".command-page-next .mandate-strip { display:grid!important; grid-template-columns:minmax(0,1.35fr)");
   });
 });
