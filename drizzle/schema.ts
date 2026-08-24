@@ -114,12 +114,58 @@ export const investmentPolicies = mysqlTable("investmentPolicies", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** A wallet role and its owner-defined venue mandate. No key or secret is stored in this table. */
+export const walletMandates = mysqlTable("walletMandates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  mandateId: varchar("mandateId", { length: 64 }).notNull().unique(),
+  walletRole: mysqlEnum("walletRole", ["trading", "investment"]).notNull(),
+  venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
+  mode: mysqlEnum("mode", ["simulation", "armed", "real", "paused"]).default("simulation").notNull(),
+  status: mysqlEnum("status", ["active", "paused", "disconnected"]).default("active").notNull(),
+  allowedAssets: json("allowedAssets").$type<string[]>().notNull(),
+  maxOrderBps: int("maxOrderBps").notNull(),
+  dailyCapBps: int("dailyCapBps").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** A connection record represents adapter state only; credential material remains server-side in secrets. */
+export const venueConnections = mysqlTable("venueConnections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  connectionId: varchar("connectionId", { length: 64 }).notNull().unique(),
+  venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
+  state: mysqlEnum("state", ["disconnected", "simulation", "armed", "real"]).default("disconnected").notNull(),
+  capabilities: json("capabilities").$type<string[]>().notNull(),
+  credentialRef: varchar("credentialRef", { length: 160 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** A proposal can be reviewed, rejected, approved for simulation, or settled in a simulated adapter. */
+export const agentProposals = mysqlTable("agentProposals", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  proposalId: varchar("proposalId", { length: 64 }).notNull().unique(),
+  runId: varchar("runId", { length: 64 }),
+  walletRole: mysqlEnum("walletRole", ["trading", "investment"]).notNull(),
+  venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
+  status: mysqlEnum("status", ["review", "approved", "rejected", "simulated", "blocked"]).default("review").notNull(),
+  policyResult: mysqlEnum("policyResult", ["pass", "review", "block"]).notNull(),
+  title: varchar("title", { length: 180 }).notNull(),
+  rationale: text("rationale").notNull(),
+  action: json("action").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /** Immutable operator-originated actions. This is distinct from the AI awareness journal. */
 export const operatorActions = mysqlTable("operatorActions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   actionId: varchar("actionId", { length: 64 }).notNull().unique(),
-  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed"]).notNull(),
+  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "mandate_created", "mandate_mode_changed", "venue_configured", "proposal_created", "proposal_approved", "proposal_rejected", "simulation_settled"]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
   detail: text("detail").notNull(),
@@ -136,4 +182,7 @@ export type StrategyLineage = typeof strategyLineages.$inferSelect;
 export type StrategyEvaluation = typeof strategyEvaluations.$inferSelect;
 export type OutcomeRecord = typeof outcomeRecords.$inferSelect;
 export type InvestmentPolicy = typeof investmentPolicies.$inferSelect;
+export type WalletMandate = typeof walletMandates.$inferSelect;
+export type VenueConnection = typeof venueConnections.$inferSelect;
+export type AgentProposal = typeof agentProposals.$inferSelect;
 export type OperatorAction = typeof operatorActions.$inferSelect;

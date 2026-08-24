@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentRuns, awarenessRecords, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, awarenessRecords, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -102,7 +102,7 @@ export async function saveInvestmentPolicy(userId: number, values: PolicyValues)
 
 export type OperatorActionInput = {
   actionId: string;
-  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed";
+  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled";
   status: "success" | "review" | "blocked";
   subject: string;
   detail: string;
@@ -121,6 +121,72 @@ export async function listOperatorActions(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(operatorActions).where(eq(operatorActions.userId, userId)).orderBy(desc(operatorActions.createdAt)).limit(80);
+}
+
+export type WalletMandateValues = { mandateId: string; walletRole: "trading" | "investment"; venue: "binance" | "evm" | "polymarket"; mode: "simulation" | "armed" | "real" | "paused"; status: "active" | "paused" | "disconnected"; allowedAssets: string[]; maxOrderBps: number; dailyCapBps: number; };
+
+export async function createWalletMandate(userId: number, values: WalletMandateValues) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(walletMandates).values({ userId, ...values });
+  const saved = await db.select().from(walletMandates).where(eq(walletMandates.mandateId, values.mandateId)).limit(1);
+  return saved[0];
+}
+
+export async function listWalletMandates(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(walletMandates).where(eq(walletMandates.userId, userId)).orderBy(desc(walletMandates.updatedAt));
+}
+
+export async function updateWalletMandateMode(userId: number, mandateId: string, mode: "simulation" | "armed" | "real" | "paused") {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(walletMandates).set({ mode, status: mode === "paused" ? "paused" : "active", updatedAt: new Date() }).where(and(eq(walletMandates.userId, userId), eq(walletMandates.mandateId, mandateId)));
+  const saved = await db.select().from(walletMandates).where(and(eq(walletMandates.userId, userId), eq(walletMandates.mandateId, mandateId))).limit(1);
+  return saved[0] ?? null;
+}
+
+export async function createVenueConnection(userId: number, values: { connectionId: string; venue: "binance" | "evm" | "polymarket"; state: "disconnected" | "simulation" | "armed" | "real"; capabilities: string[]; credentialRef?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(venueConnections).values({ userId, ...values, credentialRef: values.credentialRef ?? null });
+  const saved = await db.select().from(venueConnections).where(eq(venueConnections.connectionId, values.connectionId)).limit(1);
+  return saved[0];
+}
+
+export async function listVenueConnections(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(venueConnections).where(eq(venueConnections.userId, userId)).orderBy(desc(venueConnections.updatedAt));
+}
+
+export async function createAgentProposal(userId: number, values: { proposalId: string; runId?: string; walletRole: "trading" | "investment"; venue: "binance" | "evm" | "polymarket"; status: "review" | "approved" | "rejected" | "simulated" | "blocked"; policyResult: "pass" | "review" | "block"; title: string; rationale: string; action: Record<string, unknown> }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(agentProposals).values({ userId, ...values, runId: values.runId ?? null });
+  const saved = await db.select().from(agentProposals).where(eq(agentProposals.proposalId, values.proposalId)).limit(1);
+  return saved[0];
+}
+
+export async function listAgentProposals(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(agentProposals).where(eq(agentProposals.userId, userId)).orderBy(desc(agentProposals.updatedAt)).limit(40);
+}
+
+export async function getAgentProposal(userId: number, proposalId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const saved = await db.select().from(agentProposals).where(and(eq(agentProposals.userId, userId), eq(agentProposals.proposalId, proposalId))).limit(1);
+  return saved[0] ?? null;
+}
+
+export async function updateAgentProposalStatus(userId: number, proposalId: string, status: "review" | "approved" | "rejected" | "simulated" | "blocked") {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(agentProposals).set({ status, updatedAt: new Date() }).where(and(eq(agentProposals.userId, userId), eq(agentProposals.proposalId, proposalId)));
+  return getAgentProposal(userId, proposalId);
 }
 
 export async function createAwarenessRecord(userId: number, record: {

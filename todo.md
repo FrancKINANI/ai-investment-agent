@@ -52,3 +52,20 @@
 - [x] Convert the supplied personal-agent architecture paper into an explicit Phase 1 product brief with measurable autonomy and safety gates.
 - [x] Document deferred authenticated Phase 1 owner-journey validation: conversation → evidence-bound brief → IPS proposal state → paper simulation → durable review. This cannot be claimed as performed until the owner session is available.
 - [x] Preserve all future Sailor, CEX, Binance Agent OS, and live-execution integrations behind later phase gates and explicit user authorization.
+- [x] Define the autonomous multi-agent operating model, supervisor responsibilities, and non-negotiable owner controls for the command center.
+- [x] Design dedicated command, settings, connections, wallet-role, and audit-log workspaces around the autonomous investment workflow.
+- [x] Specify separate active-trading and long-term-investment wallet roles with venue-level permissions, capital caps, revocation, and emergency-stop controls.
+- [x] Build visual agent activity, proposal, approval, and audit-log flows using simulated venue and wallet adapters only.
+- [x] Document the explicit security, testing, and owner-authorization gates that must be met before any real wallet or exchange execution integration is considered.
+- [x] Define per-wallet and per-venue simulation/real-mode switching without exposing private keys to the agent runtime.
+- [x] Define the bounded configuration changes agents may make versus owner-only changes, including mandate, capital-cap, and emergency-stop edits.
+- [x] Model first-class venue adapters for on-chain protocols, centralized exchanges, and prediction markets while keeping all integrations disconnected until explicitly configured.
+- [x] Implement an explicit simulated proposal approval workflow with owner approve/reject actions, persisted status, and visible lifecycle transitions.
+- [x] Persist simulated wallet and venue mandate state with auditable events instead of relying on disconnected-card placeholders.
+- [x] Add tests covering agent activity through proposal creation, owner approval or rejection, simulated adapter result, and audit-log persistence.
+- [x] Add protected-route coverage that verifies research-generated proposals and their initial `proposal_created` audit event.
+- [x] Add ordered lifecycle coverage from research-created proposal through owner approval or rejection, simulated settlement, and activity-log entries.
+- [x] Add ordered rejection-branch coverage proving a research-created proposal is rejected, audited in sequence, and cannot proceed to simulated settlement.
+- [x] Validate the autonomous command, configuration, simulated mandate, proposal-lifecycle, responsive UI, and execution-blocking boundaries; the owner-session browser pass is explicitly documented as deferred.
+- [x] Validate `/wallets` and `/settings` on a mobile viewport and record the results in the autonomy validation documentation.
+- [x] Re-run final responsive UI verification across all autonomous OS routes (`/`, `/wallets`, `/connections`, `/settings`, `/activity`) before marking the full autonomy validation checklist complete.

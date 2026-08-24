@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { decideProposal } from "@shared/agentRuntime";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createAgentRun, createAwarenessRecord, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, getInvestmentPolicy, listAgentProfiles, listAgentRuns, listAwarenessRecords, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, saveInvestmentPolicy } from "./db";
+import { createAgentProposal, createAgentRun, createAwarenessRecord, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getInvestmentPolicy, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
@@ -53,6 +54,17 @@ const outcomeSchema = z.object({
   deviation: z.enum(["on_track", "underperforming", "outperforming", "inconclusive"]),
   narrative: z.string().trim().min(5).max(4_000),
 });
+
+const venueSchema = z.enum(["binance", "evm", "polymarket"]);
+const walletRoleSchema = z.enum(["trading", "investment"]);
+const mandateCreateSchema = z.object({
+  walletRole: walletRoleSchema,
+  venue: venueSchema,
+  allowedAssets: z.array(z.string().trim().min(1).max(160)).min(1).max(50),
+  maxOrderBps: z.number().int().min(1).max(10_000),
+  dailyCapBps: z.number().int().min(1).max(10_000),
+});
+const connectionCreateSchema = z.object({ venue: venueSchema, capabilities: z.array(z.string().trim().min(1).max(80)).min(1).max(12) });
 
 export const appRouter = router({
   system: systemRouter,
@@ -140,7 +152,65 @@ export const appRouter = router({
         evidence,
         summary: `${research.report.headline} ${research.advancement.reason}`,
       });
-      return { runId, ...research };
+      const proposalStatus = research.policy.result === "pass" ? "review" as const : "blocked" as const;
+      const proposal = await createAgentProposal(ctx.user.id, {
+        proposalId: nanoid(), runId, walletRole: "trading", venue: "evm", status: proposalStatus, policyResult: research.policy.result,
+        title: research.report.headline, rationale: research.report.thesis,
+        action: { kind: "token_research_paper_proposal", address: research.evidence.asset.address, nextStep: research.report.researchNextStep, execution: "simulation-only" },
+      });
+      await createOperatorAction(ctx.user.id, {
+        actionId: nanoid(), kind: "proposal_created", status: proposalStatus === "review" ? "review" : "blocked", subject: `Paper proposal: ${research.evidence.asset.symbol}`,
+        detail: proposalStatus === "review" ? "A policy-passing research result entered the owner review queue for simulation only." : "The research result cannot enter the proposal queue because it did not pass the active policy.",
+        payload: { proposalId: proposal?.proposalId, runId, policyResult: research.policy.result, venue: "evm", walletRole: "trading" },
+      });
+      return { runId, proposalId: proposal?.proposalId, ...research };
+    }),
+  }),
+  autonomy: router({
+    mandates: protectedProcedure.query(({ ctx }) => listWalletMandates(ctx.user.id)),
+    connections: protectedProcedure.query(({ ctx }) => listVenueConnections(ctx.user.id)),
+    proposals: protectedProcedure.query(({ ctx }) => listAgentProposals(ctx.user.id)),
+    createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
+      const mandate = await createWalletMandate(ctx.user.id, { mandateId: nanoid(), ...input, mode: "simulation", status: "active" });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a simulation-only mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
+      return mandate;
+    }),
+    setMandateMode: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64), mode: z.enum(["simulation", "armed", "real", "paused"]) })).mutation(async ({ ctx, input }) => {
+      if (input.mode === "real") throw new TRPCError({ code: "FORBIDDEN", message: "Real mode is not available: no verified live adapter, owner arming ceremony, or execution gateway exists." });
+      const mandate = await updateWalletMandateMode(ctx.user.id, input.mandateId, input.mode);
+      if (!mandate) throw new TRPCError({ code: "NOT_FOUND", message: "Mandate not found." });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_mode_changed", status: input.mode === "paused" ? "review" : "success", subject: `${mandate.walletRole} wallet mandate mode`, detail: `Owner changed this mandate to ${input.mode}. Real mode remains unavailable.`, payload: { mandateId: mandate.mandateId, mode: input.mode, venue: mandate.venue } });
+      return mandate;
+    }),
+    createSimulationConnection: protectedProcedure.input(connectionCreateSchema).mutation(async ({ ctx, input }) => {
+      const connection = await createVenueConnection(ctx.user.id, { connectionId: nanoid(), ...input, state: "simulation" });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "venue_configured", status: "success", subject: `${input.venue} simulated adapter`, detail: "Owner enabled a simulated adapter. No external account, credential, or signed action was connected.", payload: { connectionId: connection?.connectionId, ...input, state: "simulation" } });
+      return connection;
+    }),
+    approveProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+      const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
+      if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
+      if (proposal.status !== "review" || proposal.policyResult !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a policy-passing proposal awaiting review can be approved for simulation." });
+      const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "approved");
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Simulation approved: ${proposal.title}`, detail: "Owner approved this proposal for simulated execution only.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, simulationOnly: true } });
+      return updated;
+    }),
+    rejectProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), reason: z.string().trim().min(2).max(500) })).mutation(async ({ ctx, input }) => {
+      const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
+      if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
+      if (proposal.status !== "review") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a proposal awaiting review can be rejected." });
+      const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "rejected");
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_rejected", status: "review", subject: `Simulation rejected: ${proposal.title}`, detail: input.reason, payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole } });
+      return updated;
+    }),
+    settleSimulation: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+      const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
+      if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
+      if (proposal.status !== "approved") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only an owner-approved proposal can be settled in the simulator." });
+      const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "simulated");
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "simulation_settled", status: "success", subject: `Simulation settled: ${proposal.title}`, detail: "The simulated venue adapter recorded a paper outcome. No external order or transaction occurred.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, simulationOnly: true } });
+      await createAwarenessRecord(ctx.user.id, { layer: "result", subject: `Simulation settled: ${proposal.title}`, runId: proposal.runId ?? undefined, evidence: ["simulated-adapter", `venue:${proposal.venue}`, `proposal:${proposal.proposalId}`], summary: "An approved proposal completed the simulated adapter lifecycle without an external action." });
+      return updated;
     }),
   }),
   history: router({
