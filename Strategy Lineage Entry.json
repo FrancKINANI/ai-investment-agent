@@ -1,0 +1,74 @@
+{
+  "strategy_id": "STRAT-2026-08-24-001",
+  "name": "ETH Stablecoin Yield Rotator",
+  "current_version": "1.2",
+  "status": "Simulation",
+  "created_at": "2026-08-20T10:00:00Z",
+  "last_updated": "2026-08-24T14:00:00Z",
+  "author": "Strategy Researcher",
+  "identity": {
+    "asset_universe": [],
+    "strategy_type": "Yield",
+    "time_horizon": "",
+    "execution_venues_allowed": ["On-chain"],
+    "related_decision_ids": []
+  },
+  "description": {
+    "core_logic": "",
+    "key_parameters": {},
+    "implementation_reference": ""
+  },
+  "lineage_history": [
+    {
+      "version": "1.0",
+      "date": "2026-08-20",
+      "change_summary": "Initial version",
+      "author": "Strategy Researcher",
+      "reason": "First candidate"
+    }
+  ],
+  "hard_gates_latest": {
+    "look_ahead_bias": { "result": "Pass", "details": "" },
+    "liquidity_tradability": { "result": "Pass", "details": "" },
+    "complexity": { "result": "Pass", "details": "" },
+    "ips_compliance": { "result": "Pass", "details": "" },
+    "multi_regime_robustness": { "result": "Pass", "details": "" },
+    "simulation_requirements": { "result": "Pass", "details": "" },
+    "overall_result": "Pass"
+  },
+  "scores_latest": {
+    "performance": { "value": null, "notes": "" },
+    "robustness": { "value": null, "notes": "" },
+    "complexity": { "value": null, "notes": "" },
+    "ips_compliance": { "value": null, "notes": "" },
+    "regime_coverage": { "value": null, "notes": "" }
+  },
+  "regime_performance": {
+    "tested_regimes": [],
+    "best_regime": "",
+    "worst_regime": "",
+    "failure_modes": []
+  },
+  "risks_and_limitations": {
+    "known_risks": [],
+    "fragilities": [],
+    "key_assumptions": []
+  },
+  "evolutionary_notes": {
+    "why_this_version": "",
+    "supervisor_or_postmortem_input": "",
+    "intended_next_variations": []
+  },
+  "lifecycle": {
+    "status_reason": "",
+    "promotion_path": "Research",
+    "retirement_or_rejection_reason": null,
+    "linked_postmortems": [],
+    "linked_decisions": []
+  },
+  "metadata": {
+    "tags": [],
+    "owner_review_required": false,
+    "last_owner_review": null
+  }
+}
