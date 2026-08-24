@@ -1,23 +1,24 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
+import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
-import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Activity from "./pages/Activity";
-import Chat from "./pages/Chat";
-import CommandCenter from "./pages/CommandCenter";
-import Connections from "./pages/Connections";
-import Home from "./pages/Home";
-import Settings from "./pages/Settings";
-import Welcome from "./pages/Welcome";
-import Wallets from "./pages/Wallets";
+
+const DashboardLayout = lazy(() => import("./components/DashboardLayout"));
+const Activity = lazy(() => import("./pages/Activity"));
+const Chat = lazy(() => import("./pages/Chat"));
+const CommandCenter = lazy(() => import("./pages/CommandCenter"));
+const Connections = lazy(() => import("./pages/Connections"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Wallets = lazy(() => import("./pages/Wallets"));
+const Welcome = lazy(() => import("./pages/Welcome"));
 
 function Router() {
   const Workspace = ({ children }: { children: React.ReactNode }) => <DashboardLayout>{children}</DashboardLayout>;
   return (
-    <Switch>
+    <Suspense fallback={<div className="os-loading">Loading Ledgerline…</div>}><Switch>
       <Route path={"/welcome"} component={Welcome} />
       <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
       <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
@@ -26,9 +27,8 @@ function Router() {
       <Route path={"/settings"}><Workspace><Settings /></Workspace></Route>
       <Route path={"/activity"}><Workspace><Activity /></Workspace></Route>
       <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
       <Route component={NotFound} />
-    </Switch>
+    </Switch></Suspense>
   );
 }
 
