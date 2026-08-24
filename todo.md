@@ -96,12 +96,22 @@
 - [x] Use the shipped theme toggle to enter light mode and explicitly verify Bull/Bear labels, arrows, and bubbles in the command workspace.
 - [x] Document the 390 px Bull/Bear chat check, including label visibility, arrow cues, wrapping, and readability.
 - [x] Re-check current runtime logs for the earlier module-export error before releasing the debate interface refinement.
-- [ ] Synchronize the connected GitHub repository and inventory the user-added Markdown utility files for agents.
-- [ ] Relocate and index agent utility Markdown documents within a coherent documentation and runtime-guidance structure.
-- [ ] Remove remaining legacy green visual accents and complete the blue dark/light theme consistency pass.
-- [ ] Add a dedicated full-screen Chat workspace focused on the supervisor conversation and agent debate timeline.
-- [ ] Add chat filtering for Bull, Bear, Supervisor, and all messages.
-- [ ] Add deterministic confidence scores to Bull/Bear debate notes with accessible textual strength labels.
-- [ ] Add a Fund Manager disagreement summary derived from the current Bull/Bear debate state.
-- [ ] Add a visible simulation-to-real mode control that explains and enforces the current execution-readiness gate without enabling real execution.
-- [ ] Validate the dedicated chat workspace, theme pass, debate analytics, and real-mode safety block across desktop and mobile.
+- [x] Synchronize the connected GitHub repository and inventory the user-added Markdown utility files for agents.
+- [x] Relocate and index agent utility Markdown documents within a coherent documentation and runtime-guidance structure.
+- [x] Remove remaining legacy green visual accents and complete the blue dark/light theme consistency pass.
+- [x] Add a dedicated full-screen Chat workspace focused on the supervisor conversation and agent debate timeline.
+- [x] Add chat filtering for Bull, Bear, Supervisor, and all messages.
+- [x] Add deterministic confidence scores to Bull/Bear debate notes with accessible textual strength labels.
+- [x] Add a Fund Manager disagreement summary derived from the current Bull/Bear debate state.
+- [x] Add a visible simulation-to-real mode control that explains and enforces the current execution-readiness gate without enabling real execution.
+- [x] Validate the dedicated chat workspace, theme pass, debate analytics, and real-mode safety block across desktop and mobile.
+- [x] Render a visible persisted evolution timeline in the dedicated Chat workspace alongside the conversation.
+- [x] Add accessible low/medium/high research-note completeness bands beside Bull/Bear numeric confidence scores.
+- [x] Complete a scoped active-route blue-token override audit for both themes while retaining only semantic danger and warning colors.
+- [x] Revalidate the refined Chat and Wallets interfaces across desktop/mobile and both theme modes.
+- [x] Replace remaining global fallback green tokens and complete the active-route blue-token audit for Command, Chat, Wallets, Connections, Settings, and Activity.
+- [x] Add explicit dual-theme rendering coverage for the refined Chat and Wallets workspaces and record the desktop/mobile validation boundary.
+- [x] Document and verify the active blue-token selector coverage for Command, Chat, Wallets, Connections, Agent & Policy, and Activity in both themes.
+- [x] Add route-level active-style assertions proving the blue-token coverage for all six audited workspaces.
+- [x] Strengthen the blue-theme audit with explicit per-route selector-to-token bindings for all active workspaces.
+- [x] Assert that every audited route selector block itself contains its intended blue-token binding.

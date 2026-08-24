@@ -195,6 +195,8 @@ export const agentMessages = mysqlTable("agentMessages", {
   actor: mysqlEnum("actor", ["owner", "supervisor", "agent", "system"]).notNull(),
   agentId: varchar("agentId", { length: 64 }),
   content: text("content").notNull(),
+  /** Research-note completeness score (0–100), never a performance or return forecast. */
+  confidence: int("confidence"),
   evidence: json("evidence").$type<string[]>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

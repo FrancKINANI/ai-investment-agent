@@ -1,0 +1,1 @@
+ALTER TABLE `agentMessages` ADD `confidence` int;

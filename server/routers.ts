@@ -13,7 +13,7 @@ import { createAgentProposal, createAgentRun, createAwarenessRecord, createOpera
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
-import { composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
+import { calculateResearchNoteConfidence, composeFundManagerDisagreementSummary, composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
 import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
 
@@ -157,6 +157,7 @@ export const appRouter = router({
     sendSupervisorMessage: protectedProcedure.input(chatMessageSchema).mutation(async ({ ctx, input }) => {
       const nodes = await ensureProtectedAgentNodes(ctx.user.id);
       const supervisor = nodes.find((node) => node.roleKey === "supervisor" && node.protectedRole) ?? nodes[0];
+      const fundManager = nodes.find((node) => node.roleKey === "fund_manager" && node.protectedRole);
       if (!supervisor) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Supervisor configuration could not be initialized." });
       const threadId = input.threadId ?? nanoid();
       if (!input.threadId) await createConversation(ctx.user.id, { threadId, title: input.message.slice(0, 120) });
@@ -167,16 +168,22 @@ export const appRouter = router({
       const delegatedAgents = defaultDelegation.map((roleKey) => nodes.find((node) => node.roleKey === roleKey)).filter((agent): agent is NonNullable<typeof agent> => Boolean(agent));
       for (const agent of delegatedAgents) await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "delegated", summary: `${agent.name} was delegated a bounded research perspective.`, evidence: ["supervisor-delegation", `model:${agent.model}`, "execution-sealed"] });
       const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, output: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history }) })));
-      const specialistReports: { role: string; name: string; output: string }[] = [];
+      const specialistReports: { role: string; name: string; output: string; confidence?: number }[] = [];
       for (const result of settled) {
         if (result.status === "fulfilled") {
           const { agent, output } = result.value;
-          specialistReports.push({ role: agent.roleKey, name: agent.name, output });
-          await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "agent", agentId: agent.agentId, content: output, evidence: ["specialist-working-note", `role:${agent.roleKey}`, `model:${agent.model}`, "execution-sealed"] });
+          const confidence = agent.roleKey === "bull" || agent.roleKey === "bear" ? calculateResearchNoteConfidence(output) : undefined;
+          specialistReports.push({ role: agent.roleKey, name: agent.name, output, confidence });
+          await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "agent", agentId: agent.agentId, content: output, confidence, evidence: ["specialist-working-note", `role:${agent.roleKey}`, `model:${agent.model}`, ...(confidence ? ["confidence:research-note-completeness"] : []), "execution-sealed"] });
           await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "completed", summary: `${agent.name} completed a bounded working note.`, evidence: ["specialist-working-note", `model:${agent.model}`, "execution-sealed"] });
         } else {
           await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, state: "blocked", summary: "A specialist note could not be completed; the supervisor will preserve this uncertainty.", evidence: ["specialist-call-failed", "execution-sealed"] });
         }
+      }
+      if (fundManager) {
+        const disagreementReview = composeFundManagerDisagreementSummary(specialistReports);
+        await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "agent", agentId: fundManager.agentId, content: disagreementReview, evidence: ["fund-manager-disagreement-review", "bull-bear-debate", "risk-and-ips-required", "execution-sealed"] });
+        await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: fundManager.agentId, state: "completed", summary: "Fund Manager recorded a bounded Bull/Bear disagreement review; no execution authority was granted.", evidence: ["fund-manager-disagreement-review", "execution-sealed"] });
       }
       const reply = await composeSupervisorReply({ model: supervisor.model || defaultAgentModel, message: input.message, agentNames: nodes.filter((node) => node.protectedRole).map((node) => node.name), history, specialistReports });
       await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "supervisor", agentId: supervisor.agentId, content: reply, evidence: ["supervisor-synthesis", `model:${supervisor.model}`, "no-live-execution"] });

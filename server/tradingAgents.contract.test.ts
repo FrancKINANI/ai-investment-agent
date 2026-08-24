@@ -10,7 +10,7 @@ const db = vi.hoisted(() => ({
 const fabric = vi.hoisted(() => ({
   ensureProtectedAgentNodes: vi.fn(), updateAgentModel: vi.fn(), createOptionalSubagent: vi.fn(), retireOptionalSubagent: vi.fn(), createConversation: vi.fn(), listConversations: vi.fn(), createAgentMessage: vi.fn(), listAgentMessages: vi.fn(), createEvolutionEvent: vi.fn(), listEvolutionEvents: vi.fn(), createWatchlist: vi.fn(), listWatchlists: vi.fn(), createWatchlistItem: vi.fn(), listWatchlistItems: vi.fn(), deleteWatchlistItem: vi.fn(), updateWatchlistCriteria: vi.fn(), updateWatchlistItemStatus: vi.fn(), createDiscoverySchedule: vi.fn(), getDiscoverySchedule: vi.fn(), pauseDiscoverySchedule: vi.fn(), listDiscoverySchedules: vi.fn(), listDiscoveryFindings: vi.fn(),
 }));
-const llm = vi.hoisted(() => ({ composeSpecialistOutput: vi.fn(), composeSupervisorReply: vi.fn() }));
+const llm = vi.hoisted(() => ({ composeSpecialistOutput: vi.fn(), composeSupervisorReply: vi.fn(), calculateResearchNoteConfidence: vi.fn(), composeFundManagerDisagreementSummary: vi.fn() }));
 
 vi.mock("./db", () => db);
 vi.mock("./agentFabricDb", () => fabric);
@@ -42,6 +42,8 @@ beforeEach(() => {
   db.createOperatorAction.mockResolvedValue({}); db.getInvestmentPolicy.mockResolvedValue({ version: 1, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
   llm.composeSpecialistOutput.mockResolvedValue("Observation: unknown\nConstraint: no live data\nNext research check: verify sources");
   llm.composeSupervisorReply.mockResolvedValue("Interpretation: bounded\nFabric synthesis: complete\nConstraints: simulation-only\nNext safe step: inspect sources");
+  llm.calculateResearchNoteConfidence.mockReturnValue(68);
+  llm.composeFundManagerDisagreementSummary.mockReturnValue("Fund Manager review: disagreement preserved; execution remains sealed.");
 });
 
 describe("TradingAgents operating contracts", () => {
