@@ -153,3 +153,6 @@
 - [x] Add a mobile swipe-from-edge gesture to open navigation without interfering with form fields or scroll gestures.
 - [x] Add a mobile bottom tab bar for Command, Chat, and Activity navigation.
 - [x] Add interaction coverage and validate the enhanced mobile Chat/shell experience before checkpointing.
+- [x] Diagnose the signed-in invalid React hook call and tRPC provider failure using dependency and runtime evidence.
+- [x] Correct the React/provider resolution conflict without regressing existing shell or agent functionality.
+- [x] Validate signed-in runtime recovery, regression tests, type check, production build, and save a checkpoint.
