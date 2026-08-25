@@ -25,6 +25,9 @@ export default function Wallets() {
   const [busyRole, setBusyRole] = useState<string | null>(null);
   const [walletConnected, setWalletConnected] = useState(false);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+  const sessionsQuery = trpc.wallet.sessions.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const connectMutation = trpc.wallet.connect.useMutation({ onSuccess: () => { sessionsQuery.refetch(); setWalletConnected(true); } });
+  const disconnectMutation = trpc.wallet.disconnect.useMutation({ onSuccess: () => { sessionsQuery.refetch(); } });
   const [currentMode, setCurrentMode] = useState<"simulation" | "paper" | "live">("simulation");
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState<"simulation" | "paper" | "live">("simulation");
@@ -52,22 +55,43 @@ export default function Wallets() {
   };
 
   const handleConnectWallet = async () => {
-    // ponytail: simulated wallet connection — real implementation uses WalletConnect / injected provider
+    // Stage 4 view-first: request accounts from the owner's own injected wallet.
+    // The server validates the address; nothing is generated client- or server-side.
     try {
-      // In production: use @walletconnect/modal + ethers/wagmi
-      const mockAddress = "0x" + Array.from({ length: 40 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
-      setConnectedAddress(mockAddress);
-      setWalletConnected(true);
-      toast.success("Wallet connected (simulation)");
-    } catch {
-      toast.error("Wallet connection failed.");
+      const eth = (window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<any> } }).ethereum;
+      if (!eth) {
+        toast.error("No injected wallet found. Install a browser wallet to connect (view-only).");
+        return;
+      }
+      const [address] = await eth.request({ method: "eth_requestAccounts" });
+      if (!address) {
+        toast.error("Wallet did not return an address.");
+        return;
+      }
+      const chainIdHex = await eth.request({ method: "eth_chainId" });
+      const session = await connectMutation.mutateAsync({ provider: "injected", chainId: parseInt(chainIdHex, 16), address });
+      setConnectedAddress(session.address);
+      toast.success("Wallet connected — view-only session. No signing authority granted.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Wallet connection failed.");
     }
   };
 
-  const handleDisconnectWallet = () => {
-    setConnectedAddress(null);
-    setWalletConnected(false);
-    toast.message("Wallet disconnected.");
+  const handleDisconnectWallet = async () => {
+    const active = sessionsQuery.data?.find((s) => s.state === "active");
+    if (!active) {
+      setConnectedAddress(null);
+      setWalletConnected(false);
+      return;
+    }
+    try {
+      await disconnectMutation.mutateAsync({ sessionId: active.sessionId });
+      setConnectedAddress(null);
+      setWalletConnected(false);
+      toast.message("Wallet session revoked.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not revoke the session.");
+    }
   };
 
   const requestModeChange = (mode: "simulation" | "paper" | "live") => {
