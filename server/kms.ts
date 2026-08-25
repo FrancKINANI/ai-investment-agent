@@ -23,8 +23,10 @@ const KEY_LENGTH = 32;
 function getMasterKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) {
-    // ponytail: development fallback — NOT for production
-    // In dev, derive a key from a fixed passphrase. In prod, this must be a real key.
+    // Fail closed: refuse to derive secrets from a known fallback in production.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("[KMS] ENCRYPTION_KEY is required in production. Refusing to use a development fallback key (fail closed).");
+    }
     console.warn("[KMS] No ENCRYPTION_KEY set. Using development fallback. DO NOT use in production.");
     return scryptSync("ledgerline-dev-fallback-key-do-not-use-in-prod", "ledgerline-salt", KEY_LENGTH);
   }
