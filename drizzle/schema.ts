@@ -268,11 +268,37 @@ export const discoveryFindings = mysqlTable("discoveryFindings", {
 });
 
 /** Immutable operator-originated actions. This is distinct from the AI awareness journal. */
+/** Owner-controlled real-mode authority state (Ledgerline v1.1). Defaults to disabled; fail closed. */
+export const authorityControls = mysqlTable("authorityControls", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  state: mysqlEnum("state", [
+    "disabled", "sandbox-only", "read-only-live",
+    "approval-required-live", "limited-live", "paused", "revoked",
+  ]).default("disabled").notNull(),
+  machineVersion: int("machineVersion").default(1).notNull(),
+  updatedBy: varchar("updatedBy", { length: 120 }),
+  reason: varchar("reason", { length: 800 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const operatorActions = mysqlTable("operatorActions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   actionId: varchar("actionId", { length: 64 }).notNull().unique(),
-  kind: mysqlEnum("kind", ["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "mandate_created", "mandate_mode_changed", "venue_configured", "proposal_created", "proposal_approved", "proposal_rejected", "simulation_settled", "agent_configured", "subagent_created", "subagent_retired", "chat_message", "watchlist_created", "watchlist_updated", "discovery_schedule_configured", "discovery_completed"]).notNull(),
+  kind: mysqlEnum("kind", [
+    "policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed",
+    "scope_checked", "outcome_recorded", "promotion_changed", "research_completed",
+    "mandate_created", "mandate_mode_changed", "venue_configured", "proposal_created",
+    "proposal_approved", "proposal_rejected", "simulation_settled", "agent_configured",
+    "subagent_created", "subagent_retired", "chat_message", "watchlist_created",
+    "watchlist_updated", "discovery_schedule_configured", "discovery_completed",
+    "platform_key_added", "platform_key_removed", "platform_key_disabled",
+    "wallet_connected", "wallet_disconnected", "mode_changed",
+    "authority_changed",
+    "alert_created", "alert_acknowledged",
+  ]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
   detail: text("detail").notNull(),
@@ -293,6 +319,42 @@ export const bindingChangeRequests = mysqlTable("bindingChangeRequests", {
   reviewerUserId: int("reviewerUserId"),
   reviewNote: text("reviewNote"),
   reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Security alerts: critical, warning, info. All alerts are structured, auditable, and linkable to the Decision Journal. */
+export const securityAlerts = mysqlTable("securityAlerts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  alertId: varchar("alertId", { length: 64 }).notNull().unique(),
+  level: mysqlEnum("level", ["critical", "warning", "info"]).notNull(),
+  category: varchar("category", { length: 80 }).notNull(),
+  title: varchar("title", { length: 160 }).notNull(),
+  detail: text("detail").notNull(),
+  actionRef: varchar("actionRef", { length: 64 }),
+  acknowledged: boolean("acknowledged").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Platform API key records. API key and secret are stored encrypted; the key prefix is kept for identification only. */
+export const platformApiKeys = mysqlTable("platformApiKeys", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  keyId: varchar("keyId", { length: 64 }).notNull().unique(),
+  platform: mysqlEnum("platform", ["binance", "okx", "coinbase", "kraken", "polymarket"]).notNull(),
+  label: varchar("label", { length: 120 }).notNull(),
+  keyPrefix: varchar("keyPrefix", { length: 16 }).notNull(),
+  apiKeyEncrypted: varchar("apiKeyEncrypted", { length: 512 }).notNull(),
+  secretEncrypted: varchar("secretEncrypted", { length: 512 }).notNull(),
+  permissions: json("permissions").$type<string[]>().notNull(),
+  hasWithdrawPermission: boolean("hasWithdrawPermission").default(false).notNull(),
+  state: mysqlEnum("state", ["active", "disabled", "testing"]).default("active").notNull(),
+  maxOrderUsd: int("maxOrderUsd"),
+  allocatedCapitalUsd: int("allocatedCapitalUsd"),
+  dailyTradeLimit: int("dailyTradeLimit"),
+  lastTestedAt: timestamp("lastTestedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -319,3 +381,6 @@ export type DiscoverySchedule = typeof discoverySchedules.$inferSelect;
 export type DiscoveryFinding = typeof discoveryFindings.$inferSelect;
 export type OperatorAction = typeof operatorActions.$inferSelect;
 export type BindingChangeRequest = typeof bindingChangeRequests.$inferSelect;
+export type SecurityAlert = typeof securityAlerts.$inferSelect;
+export type PlatformApiKey = typeof platformApiKeys.$inferSelect;
+export type AuthorityControl = typeof authorityControls.$inferSelect;

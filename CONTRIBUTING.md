@@ -6,8 +6,10 @@ Ledgerline welcomes improvements to simulation-first research workflows, accessi
 
 1. Follow the environment configuration guide and set values only in your local environment or deployment host.
 2. Install dependencies with `pnpm install` and start the project with `pnpm dev`.
+   - Or use Docker: `cp .env.example .env && make dev`
 3. Keep the change focused. Add or update Vitest coverage for behavior changes.
 4. Run `pnpm test`, `pnpm check`, and `pnpm build` before opening a pull request.
+   - Or use Docker: `make test && make typecheck`
 
 ## Contribution rules
 
@@ -19,7 +21,7 @@ Read the [demo dataset policy](docs/maintainers/demo-dataset-policy.md) before p
 
 ## Scope boundaries
 
-The project may support public-evidence research, policy checks, paper proposals, simulations, and owner-scoped activity. It must not request or store signing authority, custody material, withdrawal permissions, live venue credentials, or a real order path. Proposals and examples remain explicitly simulation-only.
+The project may support public-evidence research, policy checks, paper proposals, simulations, owner-scoped activity, wallet connection (WalletConnect v2), platform API key management (encrypted with AES-256-GCM), security alerts, agent execution (CEX via Binance API, on-chain via Sailor Protocol mandates), Docker deployment, CI/CD pipelines, and monitoring (Prometheus/Grafana). It must not request or store signing authority, custody material, live venue credentials, or a real order path without explicit owner consent via mandates. API keys must be restricted to trading-only permissions; withdrawal permissions trigger a critical alert. Proposals and examples remain explicitly simulation-only unless using the live execution path with active mandates.
 
 ## Pull requests
 
