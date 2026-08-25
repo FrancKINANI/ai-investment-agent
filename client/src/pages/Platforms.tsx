@@ -79,6 +79,8 @@ function LiveTradingSection({ binanceKeys }: { binanceKeys: BinKey[] }) {
       quantity: quantity ? Number(quantity) : undefined,
       quoteOrderQty: orderType === "MARKET" && !quantity ? Number(price) : undefined,
       price: orderType === "LIMIT" ? Number(price) : undefined,
+      // Stage 5: caller-supplied idempotency key; retries of this exact submission reuse it.
+      idempotencyKey: `web-${crypto.randomUUID()}`,
     });
   };
 
