@@ -14,6 +14,7 @@ const Chat = lazy(pageLoaders.chat);
 const Changelog = lazy(pageLoaders.changelog);
 const CommandCenter = lazy(pageLoaders.command);
 const Connections = lazy(pageLoaders.connections);
+const Mandates = lazy(pageLoaders.mandates);
 const NotFound = lazy(pageLoaders.notFound);
 const Platforms = lazy(pageLoaders.platforms);
 const Settings = lazy(pageLoaders.settings);
@@ -29,6 +30,7 @@ function Router() {
       <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
       <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
       <Route path={"/wallets"}><Workspace><Wallets /></Workspace></Route>
+      <Route path={"/mandates"}><Workspace><Mandates /></Workspace></Route>
       <Route path={"/platforms"}><Workspace><Platforms /></Workspace></Route>
       <Route path={"/connections"}><Workspace><Connections /></Workspace></Route>
       <Route path={"/alerts"}><Workspace><Alerts /></Workspace></Route>

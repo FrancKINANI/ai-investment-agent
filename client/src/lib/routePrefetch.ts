@@ -6,6 +6,7 @@ export const pageLoaders = {
   changelog: () => import("../pages/Changelog"),
   command: () => import("../pages/CommandCenter"),
   connections: () => import("../pages/Connections"),
+  mandates: () => import("../pages/Mandates"),
   notFound: () => import("../pages/NotFound"),
   platforms: () => import("../pages/Platforms"),
   settings: () => import("../pages/Settings"),
@@ -13,12 +14,13 @@ export const pageLoaders = {
   welcome: () => import("../pages/Welcome"),
 };
 
-export const prefetchablePaths = ["/", "/chat", "/wallets", "/platforms", "/connections", "/alerts", "/settings", "/activity", "/welcome", "/changelog"] as const;
+export const prefetchablePaths = ["/", "/chat", "/wallets", "/mandates", "/platforms", "/connections", "/alerts", "/settings", "/activity", "/welcome", "/changelog"] as const;
 
 const routeLoaders: Record<(typeof prefetchablePaths)[number], Array<() => Promise<unknown>>> = {
   "/": [pageLoaders.dashboardLayout, pageLoaders.command],
   "/chat": [pageLoaders.dashboardLayout, pageLoaders.chat],
   "/wallets": [pageLoaders.dashboardLayout, pageLoaders.wallets],
+  "/mandates": [pageLoaders.dashboardLayout, pageLoaders.mandates],
   "/platforms": [pageLoaders.dashboardLayout, pageLoaders.platforms],
   "/connections": [pageLoaders.dashboardLayout, pageLoaders.connections],
   "/alerts": [pageLoaders.dashboardLayout, pageLoaders.alerts],

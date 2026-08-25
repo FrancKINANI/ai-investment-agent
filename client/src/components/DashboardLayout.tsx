@@ -9,12 +9,13 @@ import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { prefetchRoute } from "@/lib/routePrefetch";
-import { Activity, Bell, Bot, Cable, ChevronRight, Keyboard, KeyRound, Landmark, LogOut, MessageSquareText, Moon, Settings2, ShieldAlert, Sun, UserRound, WalletCards, X } from "lucide-react";
+import { Activity, Bell, Bot, Cable, FileSignature, ChevronRight, Keyboard, KeyRound, Landmark, LogOut, MessageSquareText, Moon, Settings2, ShieldAlert, Sun, UserRound, WalletCards, X } from "lucide-react";
 import { useLocation } from "wouter";
 
 const menuItems = [
   { icon: MessageSquareText, label: "Chat", path: "/chat" },
-  { icon: WalletCards, label: "Wallets & mandates", path: "/wallets" },
+  { icon: WalletCards, label: "Wallets", path: "/wallets" },
+  { icon: FileSignature, label: "Sailor mandates", path: "/mandates" },
   { icon: KeyRound, label: "Platforms & keys", path: "/platforms" },
   { icon: Cable, label: "Connections", path: "/connections" },
   { icon: ShieldAlert, label: "Security alerts", path: "/alerts" },
