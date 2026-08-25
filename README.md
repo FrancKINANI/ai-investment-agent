@@ -31,7 +31,7 @@ Ledgerline deliberately expands **observability and review quality before author
 
 ## Architecture at a glance
 
-The application uses React and TypeScript for the operator interface, tRPC and Express for typed server contracts, Drizzle with a MySQL-compatible database for owner-scoped persistence, and server-side adapters for public evidence. Protected TradingAgents roles remain server-defined. Optional specialists carry a visible parent, model route, read-only scope, and audit trail.
+The application uses React and TypeScript for the operator interface, tRPC and Express for typed server contracts, Drizzle with a MySQL-compatible database for owner-scoped persistence, and server-side adapters for public evidence. Protected TradingAgents roles remain server-defined. Optional specialists carry a visible parent, model route, read-only scope, and audit trail. The PAIA v0.4 foundation adds a validated, versioned Capability Registry for safe research and paper-proposal bindings; it contains no active MCP servers or execution adapters.
 
 ```text
 Public evidence → bounded agent research → deterministic policy → owner approval → paper simulation → immutable activity
@@ -39,7 +39,7 @@ Public evidence → bounded agent research → deterministic policy → owner ap
                                                     └── no live execution path
 ```
 
-Read the [system overview](docs/architecture/system-overview.md) and [security and data boundaries](docs/architecture/security-and-data.md) for the current route, data, and authority model.
+Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), and [security and data boundaries](docs/architecture/security-and-data.md) for the current route, capability, data, and authority model.
 
 ## Quick start
 
@@ -92,6 +92,7 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 | New contributors | [Getting started](docs/guides/getting-started.md) | Setup, verification, and a safe first workflow. |
 | Operators | [Operator guide](docs/guides/operator-guide.md) | Day-to-day use of all workspaces. |
 | Developers | [System overview](docs/architecture/system-overview.md) | Routes, services, agents, and authority flow. |
+| Architecture contributors | [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md) | Capability registry, awareness mapping, phase gates, and execution exclusions. |
 | Security reviewers | [Security and data](docs/architecture/security-and-data.md) | Storage, privacy, and execution boundaries. |
 | Maintainers | [Engineering and operations](docs/maintainers/engineering-and-operations.md) | Tests, releases, tokens, and maintenance conventions. |
 | Deployers | [Environment configuration](docs/maintainers/environment-configuration.md) | Required configuration names and public/private treatment. |

@@ -16,6 +16,7 @@ import { researchRequestSchema, runTokenResearch } from "./research";
 import { calculateResearchNoteConfidence, composeFundManagerDisagreementSummary, composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
 import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
+import { getCapabilityRegistrySummary } from "@shared/capabilityRegistry";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -126,6 +127,7 @@ export const appRouter = router({
   }),
   agentFabric: router({
     nodes: protectedProcedure.query(({ ctx }) => ensureProtectedAgentNodes(ctx.user.id)),
+    capabilityRegistry: protectedProcedure.query(() => getCapabilityRegistrySummary()),
     conversations: protectedProcedure.query(({ ctx }) => listConversations(ctx.user.id)),
     messages: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64) })).query(({ ctx, input }) => listAgentMessages(ctx.user.id, input.threadId)),
     evolution: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64).optional() })).query(({ ctx, input }) => listEvolutionEvents(ctx.user.id, input.threadId)),
