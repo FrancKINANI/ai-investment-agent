@@ -26,6 +26,7 @@ describe("getEthereumTokenMetrics", () => {
     expect(result.market?.pairAddress).toBe("deep");
     expect(result.market?.priceUsd).toBe(2002);
     expect(result.scopes).toEqual(["chain.read", "market.read"]);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ signal: expect.any(AbortSignal) });
   });
 
   it("keeps chain metadata but marks market data unavailable when the DEX source fails", async () => {
@@ -49,5 +50,18 @@ describe("getEthereumTokenMetrics", () => {
     expect(first.freshness).toBe("live");
     expect(second.freshness).toBe("cached");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects malformed explorer payloads and treats malformed DEX payloads as unavailable", async () => {
+    const malformedExplorer = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ address_hash: weth }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal("fetch", malformedExplorer);
+    await expect(getEthereumTokenMetrics(weth)).rejects.toThrow("unexpected token response");
+
+    resetTokenMetricCache();
+    const malformedDex = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ address_hash: weth, name: "Wrapped Ether", symbol: "WETH", decimals: "18", holders_count: "9", exchange_rate: null, volume_24h: null, circulating_market_cap: null }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ pairs: "not-an-array" }), { status: 200 }));
+    vi.stubGlobal("fetch", malformedDex);
+    const result = await getEthereumTokenMetrics(weth);
+    expect(result.market).toBeNull();
+    expect(JSON.stringify(result)).not.toContain("sourceUrl");
   });
 });
