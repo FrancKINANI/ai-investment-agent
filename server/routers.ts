@@ -3,6 +3,10 @@ import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
+import { securityRouter } from "./securityRouter";
+import { authorityRouter } from "./authorityRouter";
+import { liveRouter } from "./liveRouter";
+import { walletRouter } from "./walletRouter";
 import { decideProposal, evaluatePromotionGate } from "@shared/agentRuntime";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
@@ -498,6 +502,10 @@ export const appRouter = router({
   onchain: router({
     ethereumToken: publicProcedure.input(z.object({ address: ethereumAddressSchema })).query(({ input }) => getEthereumTokenMetrics(input.address)),
   }),
+  security: securityRouter,
+  authority: authorityRouter,
+  live: liveRouter,
+  wallet: walletRouter,
 });
 
 export type AppRouter = typeof appRouter;

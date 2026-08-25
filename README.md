@@ -6,7 +6,7 @@
 
 Ledgerline helps an owner turn public evidence into a durable, inspectable research workflow. It brings together a bounded agent fabric, investment-policy controls, public token evidence, a dedicated debate workspace, paper-proposal review, and immutable owner activity—without confusing research with custody or execution.
 
-> **Safety boundary:** Ledgerline does not store wallet keys, venue credentials, seed phrases, signing authority, custody controls, live orders, or real execution capability. The real-mandate path remains server-blocked.
+> **Safety boundary:** Ledgerline never stores private keys, seed phrases, or signing authority. Wallet connection uses WalletConnect v2 (non-custodial). Platform API keys are encrypted with AES-256-GCM. Live execution requires explicit owner consent via active mandates with scope and value caps. All operations are audit-logged with security alerts.
 
 ## Screenshots
 
@@ -22,8 +22,10 @@ The current product views below show the owner workspace in its **simulation-onl
 | --- | --- | --- |
 | **Command** | Watchlists, public EVM evidence research, policy checks, paper proposals, and a recent activity snapshot. | Research can create a paper-review state; it cannot reach a venue. |
 | **Chat** | Dedicated Supervisor conversation with Bull, Bear, and Supervisor filters, disagreement summaries, and completeness bands. | Notes are research artifacts, not trade instructions or return forecasts. |
-| **Wallets** | Separate trading and investment mandate roles. | No private keys, wallet connection, signing, or custody. |
+| **Wallets** | Wallet connection (WalletConnect/injected), separate trading and investment mandate roles, mode management (Simulation → Paper → Live). | No private keys stored. Live mode requires explicit confirmation and is logged. |
+| **Platforms** | Exchange API key management (Binance, OKX, Coinbase, Kraken, Polymarket) with encrypted storage, permission warnings, per-platform limits, and test/disable/delete. | Withdrawal permissions trigger critical alerts. Secrets never shown after initial entry. |
 | **Connections** | Simulation adapter and venue-boundary records. | No account credentials or live venue control. |
+| **Alerts** | Security alerts with critical/warning/info levels, persistent badge, acknowledge/resolve, and structured audit logging. | Alerts are owner-scoped, timestamped, and linked to the Decision Journal. |
 | **Settings** | Protected model routes, optional read-only subagents, inactive discovery schedules, YAML configuration inspection, policy controls, and local owner preferences. | Changing a model or inspecting configuration never grants a new tool scope or financial authority. |
 | **Activity** | Owner-scoped immutable operating history and local read-state controls. | Activity does not fabricate balances, fills, connections, or agent actions. |
 
@@ -36,12 +38,93 @@ Ledgerline deliberately expands **observability and review quality before author
 The application uses React and TypeScript for the operator interface, tRPC and Express for typed server contracts, Drizzle with a MySQL-compatible database for owner-scoped persistence, and server-side adapters for public evidence. Protected TradingAgents roles remain server-defined. Optional specialists carry a visible parent, model route, read-only scope, and audit trail. The PAIA v0.4 foundation adds a validated, versioned Capability Registry for safe research and paper-proposal bindings; it contains no active MCP servers or execution adapters.
 
 ```text
-Public evidence → bounded agent research → deterministic policy → owner approval → paper simulation → immutable activity
+Public evidence → bounded agent research → deterministic policy → owner approval
                                                     │
-                                                    └── no live execution path
+                    ┌───────────────────────────────┼───────────────────────────────┐
+                    ▼                               ▼                               ▼
+            Paper simulation               CEX execution                   On-chain execution
+           (safe path)                (requires active mandate)         (requires Sailor mandate)
+                    │                               │                               │
+                    ▼                               ▼                               ▼
+            simulated settlement           Binance API → order           WalletConnect → owner signs
+                    │                               │                               │
+                    └───────────────────────────────┴───────────────────────────────┘
+                                                    │
+                                                    ▼
+                                            immutable activity + alerts
+
+Platform API keys → AES-256-GCM encrypted → permission warnings → per-platform limits → audit log
+Wallet connection → WalletConnect v2 → address display → mode management → confirmation dialog
+Security alerts → critical/warning/info → persistent badge → acknowledge/resolve → Decision Journal
 ```
 
 Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), [security and data boundaries](docs/architecture/security-and-data.md), and [future real-mode architecture](docs/architecture/future-real-mode-architecture.md) for the current route, capability, data, authority, and future-gate model.
+
+## Docker deployment
+
+Ledgerline includes Docker configuration for both development and production environments.
+
+### Development with Docker
+
+```bash
+# Copy environment file
+cp .env.example .env
+
+# Edit .env with your settings
+nano .env
+
+# Start development environment (MySQL + App)
+docker-compose up
+
+# Or in background
+docker-compose up -d
+```
+
+### Production with Docker
+
+```bash
+# Set production environment variables
+export JWT_SECRET=your-super-secret-key
+export ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+# Start production environment
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Docker commands
+
+```bash
+# Show all available commands
+make help
+
+# Common commands
+make dev          # Start development environment
+make prod         # Start production environment
+make stop         # Stop all containers
+make logs         # Show logs
+make db-push      # Push database schema
+make test         # Run tests in container
+make typecheck    # Run TypeScript checks
+```
+
+### Health check
+
+The server exposes a health check endpoint at `/healthz`:
+
+```bash
+curl http://localhost:3000/healthz
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "uptime": 123.456,
+  "environment": "production",
+  "version": "1.0.0"
+}
+```
 
 ## Quick start
 
@@ -76,7 +159,7 @@ pnpm build
 
 ### Configure the environment
 
-Follow the [environment configuration guide](docs/maintainers/environment-configuration.md). Server secrets such as `DATABASE_URL` and `JWT_SECRET` belong only in the deployment platform’s protected configuration store. Values with a `VITE_` prefix are browser-visible by design and must never contain credentials.
+Follow the [environment configuration guide](docs/maintainers/environment-configuration.md). Server secrets such as `DATABASE_URL` and `JWT_SECRET` belong only in the deployment platform's protected configuration store. Values with a `VITE_` prefix are browser-visible by design and must never contain credentials.
 
 ## First safe workflow
 
@@ -85,6 +168,9 @@ Follow the [environment configuration guide](docs/maintainers/environment-config
 3. Start a bounded research brief in **Chat**; use the Bull and Bear filters to inspect disagreement.
 4. Add a watchlist and use the Evidence Lab only with a public Ethereum contract address.
 5. Review paper-proposal states and the immutable **Activity** record. Owner approval can advance a proposal only to simulated settlement.
+6. Visit **Wallets** to connect a wallet and explore mode management (Simulation → Paper → Live).
+7. Visit **Platforms & API Keys** to add an exchange API key with trading-only permissions.
+8. Check **Security Alerts** for any alerts generated by your actions.
 
 Loading skeletons indicate a real pending request. Empty states indicate a completed request with no matching owner records. Treating those states separately is important: neither is evidence of a connection, balance, policy pass, or execution result.
 
