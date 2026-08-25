@@ -30,9 +30,23 @@ pnpm ledgerline capabilities list --agent risk_guardians
 pnpm ledgerline bindings show
 pnpm ledgerline bindings show risk_guardians
 pnpm ledgerline mcp list
+pnpm ledgerline doctor
 ```
 
-All commands print read-only JSON. The command intentionally refuses unsupported mutating verbs such as `mcp add`, `mcp enable`, `bind`, `unbind`, `flags enable`, `venues enable`, or any execution command.
+All commands print read-only JSON. `pnpm ledgerline doctor` summarizes YAML parsing, the simulation-only boundary, disabled authority flags, declarative MCP posture, static research sources, and protected bindings. It does not open a network connection, invoke an MCP server, mutate configuration, or grant authority. The command intentionally refuses unsupported mutating verbs such as `mcp add`, `mcp enable`, `bind`, `unbind`, `flags enable`, `venues enable`, or any execution command.
+
+## Binding-change approval workflow
+
+The Settings workflow keeps an intended binding separate from the active runtime manifest:
+
+| Step | Record | Effect |
+| --- | --- | --- |
+| 1. Validate | A staged candidate is checked against the registry, protected roles, safe scope, and simulation boundary. | Invalid drafts are blocked; valid drafts remain non-active. |
+| 2. Submit | The owner supplies a rationale of at least 12 characters and a `pending` request is stored. | An immutable activity event records provenance, rationale, and the candidate. |
+| 3. Review | An administrator records an approval or rejection with a review note of at least 8 characters. | The decision is journaled; no runtime capability is activated. |
+| 4. Apply later | A maintainer may prepare a separately reviewed manifest change. | This is outside Phase 0 and requires another validation cycle. |
+
+An approved request is evidence of governance review, **not** execution authority, an active MCP binding, a secret, a signer, a venue connection, or a live order permission.
 
 ## Safe evolution path
 
