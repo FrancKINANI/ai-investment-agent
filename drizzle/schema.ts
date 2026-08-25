@@ -398,8 +398,8 @@ export const executionLedger = mysqlTable("executionLedger", {
   /** Idempotency key supplied by the proposer; duplicates are rejected/returned as-is. */
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
   venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
-  /** Execution domain of this order: paper or sandbox. Live is a later, separately approved stage. */
-  executionMode: mysqlEnum("executionMode", ["paper", "sandbox"]).notNull(),
+  /** Execution domain of this order: paper, sandbox, or live (Stage 5, gated by the authority machine). */
+  executionMode: mysqlEnum("executionMode", ["paper", "sandbox", "live"]).notNull(),
   symbol: varchar("symbol", { length: 20 }).notNull(),
   side: mysqlEnum("side", ["BUY", "SELL"]).notNull(),
   orderType: mysqlEnum("orderType", ["MARKET", "LIMIT"]).notNull(),

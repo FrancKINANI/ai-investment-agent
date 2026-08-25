@@ -51,12 +51,10 @@ describe("executeLiveOrder authority gate (fail closed)", () => {
     await expect(executeLiveOrder(1, "key-1", null, order, 10_000)).rejects.toThrow(AuthorityBlockedError);
   });
 
-  it("proceeds past the authority gate in limited-live (mandate checks still apply)", async () => {
-    // Mandate is fine but the API key lookup will fail; the point is that the
-    // authority gate did not throw.
+  it("proceeds past the authority gate in limited-live (Stage 5 idempotency requirement surfaces next)", async () => {
     vi.mocked(getAuthorityState).mockResolvedValue("limited-live");
-    const { getPlatformApiKey } = await import("./db");
-    vi.mocked(getPlatformApiKey).mockResolvedValue(null as never);
-    await expect(executeLiveOrder(1, "key-1", mandate, order, 10_000)).rejects.toThrow(/API key not found/);
+    await expect(executeLiveOrder(1, "key-1", { ...mandate, mode: "real" }, order, 10_000)).rejects.toThrow(
+      /Live orders require a caller-supplied idempotencyKey/,
+    );
   });
 });

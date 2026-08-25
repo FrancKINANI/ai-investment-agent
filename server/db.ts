@@ -496,7 +496,7 @@ export async function appendLedgerEvent(userId: number, event: {
   orderId: string;
   idempotencyKey: string;
   venue: "binance" | "evm" | "polymarket";
-  executionMode: "paper" | "sandbox";
+  executionMode: "paper" | "sandbox" | "live";
   symbol: string;
   side: "BUY" | "SELL";
   orderType: "MARKET" | "LIMIT";
@@ -517,7 +517,7 @@ export async function upsertPaperOrderProjection(userId: number, order: {
   orderId: string;
   idempotencyKey: string;
   venue: "binance" | "evm" | "polymarket";
-  executionMode: "paper" | "sandbox";
+  executionMode: "paper" | "sandbox" | "live";
   symbol: string;
   side: "BUY" | "SELL";
   orderType: "MARKET" | "LIMIT";
@@ -571,4 +571,34 @@ export async function updatePlatformApiKeyMaterial(
     .set({ ...material, state: "testing", updatedAt: new Date() })
     .where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
   return getPlatformApiKey(userId, keyId);
+}
+
+/**
+ * Live-order idempotency lookup: returns the earliest recorded outcome for a
+ * caller-supplied idempotency key among live-mode ledger events, or null.
+ */
+export async function getLiveOrderByIdempotencyKey(
+  userId: number,
+  idempotencyKey: string,
+): Promise<{ orderId: number; status: string; outcome: Record<string, unknown> } | null> {
+  const db = await getDb();
+  if (!db) return null; // no DB ⇒ no recorded history; caller proceeds through normal gates
+  const rows = await db.select().from(executionLedger)
+    .where(and(eq(executionLedger.userId, userId), eq(executionLedger.idempotencyKey, idempotencyKey), eq(executionLedger.executionMode, "live")))
+    .orderBy(desc(executionLedger.seq))
+    .limit(10);
+  // Prefer the latest terminal/outcome-bearing event (filled/rejected) for this key.
+  for (const row of rows.reverse()) {
+    if (row.eventType === "submitted") continue;
+    const outcome = (row.payload?.outcome ?? {}) as Record<string, unknown>;
+    if (outcome.orderId != null) {
+      return { orderId: Number(outcome.orderId), status: String(outcome.status ?? row.eventType), outcome };
+    }
+  }
+  // A submission may be recorded without an outcome yet (crash window): treat as duplicate-in-flight.
+  const submitted = rows.find((r) => r.eventType === "submitted");
+  if (submitted) {
+    return { orderId: 0, status: "submitted-unknown-outcome", outcome: {} };
+  }
+  return null;
 }
