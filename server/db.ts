@@ -1,8 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentProposals, agentRuns, awarenessRecords, bindingChangeRequests, InsertUser, securityAlerts, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, authorityControls, awarenessRecords, bindingChangeRequests, InsertUser, securityAlerts, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createCapabilityProvenance } from "@shared/capabilityRegistry";
+import { nanoid } from "nanoid";
+import { AUTHORITY_STATE_MACHINE_VERSION, AuthorityState, evaluateAuthorityTransition } from "@shared/authorityState";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -103,7 +105,7 @@ export async function saveInvestmentPolicy(userId: number, values: PolicyValues)
 
 export type OperatorActionInput = {
   actionId: string;
-  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled" | "agent_configured" | "subagent_created" | "subagent_retired" | "chat_message" | "watchlist_created" | "watchlist_updated" | "discovery_schedule_configured" | "discovery_completed" | "platform_key_added" | "platform_key_removed" | "platform_key_disabled" | "wallet_connected" | "wallet_disconnected" | "mode_changed" | "alert_created" | "alert_acknowledged";
+  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled" | "agent_configured" | "subagent_created" | "subagent_retired" | "chat_message" | "watchlist_created" | "watchlist_updated" | "discovery_schedule_configured" | "discovery_completed" | "platform_key_added" | "platform_key_removed" | "platform_key_disabled" | "wallet_connected" | "wallet_disconnected" | "mode_changed" | "authority_changed" | "alert_created" | "alert_acknowledged";
   status: "success" | "review" | "blocked";
   subject: string;
   detail: string;
@@ -425,4 +427,53 @@ export async function deletePlatformApiKey(userId: number, keyId: string) {
   if (!existing) return null;
   await db.delete(platformApiKeys).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
   return existing;
+}
+
+// ─── Authority control (Ledgerline real-mode state machine) ────────────────
+
+export async function getAuthorityState(userId: number): Promise<AuthorityState> {
+  const db = await getDb();
+  // Fail closed: no record (or no database) means disabled.
+  if (!db) return "disabled";
+  const result = await db.select().from(authorityControls).where(eq(authorityControls.userId, userId)).limit(1);
+  return AuthorityState.parse(result[0]?.state ?? "disabled");
+}
+
+export type AuthorityChangeResult =
+  | { ok: true; from: AuthorityState; to: AuthorityState }
+  | { ok: false; reason: string };
+
+/**
+ * Owner-initiated authority transition. Validates the edge against the
+ * versioned state machine and writes an audit record. Never called by agents.
+ */
+export async function changeAuthorityState(
+  userId: number,
+  to: AuthorityState,
+  initiatedBy: string,
+  reason: string,
+): Promise<AuthorityChangeResult> {
+  const db = await getDb();
+  if (!db) return { ok: false, reason: "Database unavailable; refusing authority transition (fail closed)." };
+  const from = await getAuthorityState(userId);
+  const validation = evaluateAuthorityTransition({ from, to, initiatedBy, reason });
+  if (!validation.allowed) return { ok: false, reason: validation.reason };
+
+  await db
+    .insert(authorityControls)
+    .values({ userId, state: to, machineVersion: AUTHORITY_STATE_MACHINE_VERSION, updatedBy: initiatedBy, reason })
+    .onDuplicateKeyUpdate({
+      set: { state: to, machineVersion: AUTHORITY_STATE_MACHINE_VERSION, updatedBy: initiatedBy, reason, updatedAt: new Date() },
+    });
+
+  await createOperatorAction(userId, {
+    actionId: nanoid(),
+    kind: "authority_changed",
+    status: "success",
+    subject: `Authority ${from} → ${to}`,
+    detail: `Owner-initiated authority transition (${initiatedBy}): ${reason}`,
+    payload: { from, to, initiatedBy, machineVersion: AUTHORITY_STATE_MACHINE_VERSION },
+  });
+
+  return { ok: true, from, to };
 }
