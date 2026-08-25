@@ -49,6 +49,72 @@ Security alerts → critical/warning/info → persistent badge → acknowledge/r
 
 Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), [security and data boundaries](docs/architecture/security-and-data.md), and [future real-mode architecture](docs/architecture/future-real-mode-architecture.md) for the current route, capability, data, authority, and future-gate model.
 
+## Docker deployment
+
+Ledgerline includes Docker configuration for both development and production environments.
+
+### Development with Docker
+
+```bash
+# Copy environment file
+cp .env.example .env
+
+# Edit .env with your settings
+nano .env
+
+# Start development environment (MySQL + App)
+docker-compose up
+
+# Or in background
+docker-compose up -d
+```
+
+### Production with Docker
+
+```bash
+# Set production environment variables
+export JWT_SECRET=your-super-secret-key
+export ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+# Start production environment
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Docker commands
+
+```bash
+# Show all available commands
+make help
+
+# Common commands
+make dev          # Start development environment
+make prod         # Start production environment
+make stop         # Stop all containers
+make logs         # Show logs
+make db-push      # Push database schema
+make test         # Run tests in container
+make typecheck    # Run TypeScript checks
+```
+
+### Health check
+
+The server exposes a health check endpoint at `/healthz`:
+
+```bash
+curl http://localhost:3000/healthz
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "uptime": 123.456,
+  "environment": "production",
+  "version": "1.0.0"
+}
+```
+
 ## Quick start
 
 ### Prerequisites

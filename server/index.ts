@@ -10,6 +10,27 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // ─── Health Check Endpoint ─────────────────────────────────────────────
+  app.get("/healthz", (_req, res) => {
+    const health = {
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || "development",
+      version: process.env.npm_package_version || "0.0.0",
+    };
+    res.json(health);
+  });
+
+  // ─── Security Headers ──────────────────────────────────────────────────
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
+
   // Serve static files from dist/public in production
   const staticPath =
     process.env.NODE_ENV === "production"
@@ -27,6 +48,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    console.log(`Health check: http://localhost:${port}/healthz`);
   });
 }
 
