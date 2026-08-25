@@ -78,7 +78,7 @@ describe("negative: idempotency", () => {
 });
 
 describe("negative: authority and mandate gates", () => {
-  it.each(["disabled", "read-only-live", "paused", "revoked"] as const)(
+  it.each(["disabled", "paused", "revoked"] as const)(
     "rejects execution in authority state %s",
     (state) => {
       const d = decide({ authorityState: state });
@@ -86,7 +86,7 @@ describe("negative: authority and mandate gates", () => {
     },
   );
 
-  it.each(["sandbox-only", "approval-required-live", "limited-live"] as const)(
+  it.each(["sandbox-only", "read-only-live", "approval-required-live", "limited-live"] as const)(
     "permits paper execution in authority state %s (paper is strictly weaker than live)",
     (state) => {
       expect(decide({ authorityState: state }).action).toBe("execute");
