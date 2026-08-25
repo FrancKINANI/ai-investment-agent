@@ -1,10 +1,11 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentProposals, agentRuns, authorityControls, awarenessRecords, bindingChangeRequests, InsertUser, securityAlerts, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, authorityControls, awarenessRecords, bindingChangeRequests, executionLedger, InsertUser, securityAlerts, paperOrders, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { nanoid } from "nanoid";
 import { AUTHORITY_STATE_MACHINE_VERSION, AuthorityState, evaluateAuthorityTransition } from "@shared/authorityState";
+import type { LedgerEventType } from "@shared/paperExecution";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -476,4 +477,84 @@ export async function changeAuthorityState(
   });
 
   return { ok: true, from, to };
+}
+
+// ─── Paper execution: append-only ledger + projection ──────────────────────
+
+export async function getPaperOrderByIdempotencyKey(userId: number, idempotencyKey: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(paperOrders)
+    .where(and(eq(paperOrders.userId, userId), eq(paperOrders.idempotencyKey, idempotencyKey)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Append one immutable ledger event. Never updates existing events. */
+export async function appendLedgerEvent(userId: number, event: {
+  eventId?: string;
+  orderId: string;
+  idempotencyKey: string;
+  venue: "binance" | "evm" | "polymarket";
+  executionMode: "paper" | "sandbox";
+  symbol: string;
+  side: "BUY" | "SELL";
+  orderType: "MARKET" | "LIMIT";
+  quantity?: string | null;
+  price?: string | null;
+  quoteOrderQty?: string | null;
+  seq: number;
+  eventType: LedgerEventType;
+  payload: Record<string, unknown>;
+  mandateId?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing to write execution event (fail closed).");
+  await db.insert(executionLedger).values({ userId, ...event, eventId: event.eventId ?? nanoid() });
+}
+
+export async function upsertPaperOrderProjection(userId: number, order: {
+  orderId: string;
+  idempotencyKey: string;
+  venue: "binance" | "evm" | "polymarket";
+  executionMode: "paper" | "sandbox";
+  symbol: string;
+  side: "BUY" | "SELL";
+  orderType: "MARKET" | "LIMIT";
+  quantity?: string | null;
+  price?: string | null;
+  quoteOrderQty?: string | null;
+  status: "proposed" | "validated" | "submitted" | "filled" | "rejected" | "cancelled" | "reconciled";
+  reconciliationState?: "pending" | "matched" | "mismatched";
+  fillPrice?: string | null;
+  executedQty?: string | null;
+  mandateId?: string | null;
+  rejectReason?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing to update paper order projection (fail closed).");
+  await db.insert(paperOrders).values({ userId, ...order })
+    .onDuplicateKeyUpdate({ set: {
+      status: order.status,
+      reconciliationState: order.reconciliationState ?? "pending",
+      fillPrice: order.fillPrice ?? null,
+      executedQty: order.executedQty ?? null,
+      rejectReason: order.rejectReason ?? null,
+      updatedAt: new Date(),
+    } });
+}
+
+export async function listPaperOrders(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(paperOrders).where(eq(paperOrders.userId, userId)).orderBy(desc(paperOrders.createdAt)).limit(100);
+}
+
+/** Append-only history for one order. */
+export async function getOrderLedger(userId: number, orderId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(executionLedger)
+    .where(and(eq(executionLedger.userId, userId), eq(executionLedger.orderId, orderId)))
+    .orderBy(asc(executionLedger.seq));
 }
