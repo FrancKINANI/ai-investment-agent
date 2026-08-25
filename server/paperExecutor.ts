@@ -18,6 +18,7 @@ import {
   createOperatorAction,
   getDb,
 } from "./db";
+import { readBinanceTicker } from "./liveData";
 import { paperOrders } from "../drizzle/schema";
 import {
   PaperOrderInput,
@@ -43,9 +44,20 @@ export type SubmitPaperOrderResult =
   | { status: "rejected"; reason: string };
 
 export async function submitPaperOrder(args: SubmitPaperOrderArgs): Promise<SubmitPaperOrderResult> {
-  const { userId, input, mandate, referencePrice } = args;
+  const { userId, input, mandate } = args;
 
   const authorityState = await getAuthorityState(userId);
+
+  // Stage 2: prefer server-side verified price. Caller-supplied prices are only
+  // used when the venue read is unavailable (e.g. authority below read-only-live).
+  let referencePrice = args.referencePrice;
+  if (input.venue === "binance") {
+    const read = await readBinanceTicker({ symbol: input.symbol, authorityState });
+    if (read.ok) {
+      referencePrice = { price: read.data.price, timestampMs: read.fetchedAtMs };
+    }
+  }
+
   const existing = await getPaperOrderByIdempotencyKey(userId, input.idempotencyKey);
   const duplicate = existing ? { orderId: existing.orderId, status: existing.status } : null;
 

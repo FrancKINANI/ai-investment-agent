@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
-import { listWalletMandates } from "./db";
+import { listWalletMandates, getAuthorityState } from "./db";
+import { readBinanceTicker } from "./liveData";
 import {
   getLiveBalances,
   getLiveTicker,
@@ -55,6 +56,12 @@ export const liveRouter = router({
     } catch (error) {
       throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Failed to fetch ticker." });
     }
+  }),
+
+  /** Truthful live price: strict schema, freshness metadata, honest failure envelope. */
+  truthfulPrice: protectedProcedure.input(z.object({ symbol: z.string().trim().min(3).max(20) })).query(async ({ ctx, input }) => {
+    const authorityState = await getAuthorityState(ctx.user.id);
+    return readBinanceTicker({ symbol: input.symbol, authorityState });
   }),
 
   /** Get open orders. */
