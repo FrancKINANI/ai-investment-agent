@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentProposals, agentRuns, authorityControls, awarenessRecords, bindingChangeRequests, executionLedger, InsertUser, securityAlerts, paperOrders, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, authorityControls, liveOrderApprovals, awarenessRecords, bindingChangeRequests, executionLedger, InsertUser, securityAlerts, paperOrders, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { nanoid } from "nanoid";
@@ -601,4 +601,36 @@ export async function getLiveOrderByIdempotencyKey(
     return { orderId: 0, status: "submitted-unknown-outcome", outcome: {} };
   }
   return null;
+}
+
+// ─── Per-order owner approvals (Stage 5) ───────────────────────────────────
+
+export async function recordLiveOrderApproval(userId: number, args: {
+  orderHash: string;
+  idempotencyKey: string;
+  approvedBy: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing to record approval (fail closed).");
+  await db.insert(liveOrderApprovals).values({ userId, ...args });
+}
+
+/**
+ * Consume a fresh, unconsumed approval for the exact order hash. Returns null
+ * when no matching unconsumed approval exists within the freshness window.
+ */
+export async function consumeLiveOrderApproval(userId: number, orderHash: string, maxAgeMs = 10 * 60_000): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false; // fail closed
+  const rows = await db.select().from(liveOrderApprovals)
+    .where(and(eq(liveOrderApprovals.userId, userId), eq(liveOrderApprovals.orderHash, orderHash)))
+    .orderBy(desc(liveOrderApprovals.createdAt))
+    .limit(1);
+  const approval = rows[0];
+  if (!approval || approval.consumedAt) return false; // already used for its one execution
+  if (Date.now() - new Date(approval.createdAt).getTime() > maxAgeMs) return false; // stale approval
+  await db.update(liveOrderApprovals)
+    .set({ consumedAt: new Date() })
+    .where(eq(liveOrderApprovals.id, approval.id));
+  return true;
 }

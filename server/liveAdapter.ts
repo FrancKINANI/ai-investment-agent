@@ -23,7 +23,7 @@ import {
   type BinanceTimeInForce,
 } from "./binance";
 import { decryptSecret } from "./kms";
-import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert } from "./db";
+import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
 import { reconcileLiveExecution, liveOrderApprovalHash, type LegacyMandateMode } from "@shared/mandateAuthority";
 import { getLiveOrderByIdempotencyKey, appendLedgerEvent } from "./db";
@@ -269,6 +269,31 @@ export async function executeLiveOrder(
     });
 
     throw new Error(`Order blocked: ${mandateCheck.reason}`);
+  }
+
+  // 0b2. Per-order owner approval (Stage 5): mandatory in approval-required-live.
+  if (authorityState === "approval-required-live" && mandate) {
+    const orderHash = liveOrderApprovalHash({
+      symbol: order.symbol,
+      side: order.side,
+      quantity: order.quantity ?? null,
+      quoteOrderQty: order.quoteOrderQty ?? null,
+      price: order.price ?? null,
+      idempotencyKey: order.idempotencyKey!,
+    });
+    const approved = await consumeLiveOrderApproval(userId, orderHash);
+    if (!approved) {
+      const detail = `Order ${order.symbol} ${order.side} requires per-order owner approval (authority state: approval-required-live). Approve the exact order hash ${orderHash}; approval is single-use and expires in 10 minutes.`;
+      await createOperatorAction(userId, {
+        actionId: nanoid(),
+        kind: "simulation_blocked",
+        status: "blocked",
+        subject: `Live order awaiting owner approval: ${order.symbol} ${order.side}`,
+        detail,
+        payload: { order, orderHash },
+      });
+      throw new AuthorityBlockedError(authorityState, "place-order", detail);
+    }
   }
 
   // 0c. Live idempotency (Stage 5): a repeated key returns the original outcome, never re-submits.

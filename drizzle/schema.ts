@@ -424,7 +424,7 @@ export const paperOrders = mysqlTable("paperOrders", {
   orderId: varchar("orderId", { length: 64 }).notNull().unique(),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
   venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
-  executionMode: mysqlEnum("executionMode", ["paper", "sandbox"]).notNull(),
+  executionMode: mysqlEnum("executionMode", ["paper", "sandbox", "live"]).notNull(),
   symbol: varchar("symbol", { length: 20 }).notNull(),
   side: mysqlEnum("side", ["BUY", "SELL"]).notNull(),
   orderType: mysqlEnum("orderType", ["MARKET", "LIMIT"]).notNull(),
@@ -463,3 +463,16 @@ export const walletSessions = mysqlTable("walletSessions", {
 });
 
 export type WalletSessionRecord = typeof walletSessions.$inferSelect;
+
+/** Per-order owner approvals (Stage 5, approval-required-live). One exact-order hash per approval row. */
+export const liveOrderApprovals = mysqlTable("liveOrderApprovals", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  orderHash: varchar("orderHash", { length: 16 }).notNull(), // liveOrderApprovalHash output
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  approvedBy: varchar("approvedBy", { length: 120 }).notNull(),
+  consumedAt: timestamp("consumedAt"), // set when an order executes against this approval
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LiveOrderApproval = typeof liveOrderApprovals.$inferSelect;
