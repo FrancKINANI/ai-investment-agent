@@ -394,7 +394,17 @@ export const appRouter = router({
       return mandate;
     }),
     setMandateMode: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64), mode: z.enum(["simulation", "armed", "real", "paused"]) })).mutation(async ({ ctx, input }) => {
-      if (input.mode === "real") throw new TRPCError({ code: "FORBIDDEN", message: "Real mode is not available: no verified live adapter, owner arming ceremony, or execution gateway exists." });
+      if (input.mode === "real") {
+        await createOperatorAction(ctx.user.id, {
+          actionId: nanoid(),
+          kind: "scope_checked",
+          status: "blocked",
+          subject: "Blocked real-mode request",
+          detail: "Ledgerline blocked a request to enable real mode because no verified live adapter, owner arming ceremony, or execution gateway exists.",
+          payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "authority-boundary", executionBoundary: "simulation-only" },
+        });
+        throw new TRPCError({ code: "FORBIDDEN", message: "Real mode is not available: no verified live adapter, owner arming ceremony, or execution gateway exists." });
+      }
       const mandate = await updateWalletMandateMode(ctx.user.id, input.mandateId, input.mode);
       if (!mandate) throw new TRPCError({ code: "NOT_FOUND", message: "Mandate not found." });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_mode_changed", status: input.mode === "paused" ? "review" : "success", subject: `${mandate.walletRole} wallet mandate mode`, detail: `Owner changed this mandate to ${input.mode}. Real mode remains unavailable.`, payload: { mandateId: mandate.mandateId, mode: input.mode, venue: mandate.venue } });
