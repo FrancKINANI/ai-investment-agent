@@ -26,6 +26,7 @@ import { decryptSecret } from "./kms";
 import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
 import { reconcileLiveExecution, liveOrderApprovalHash, type LegacyMandateMode } from "@shared/mandateAuthority";
+import { ledgerSeq } from "@shared/paperExecution";
 import { readBinanceTicker } from "./liveData";
 import { getLiveOrderByIdempotencyKey, appendLedgerEvent } from "./db";
 
@@ -236,6 +237,34 @@ export async function executeLiveOrder(
     throw error;
   }
 
+  // 0a2. Live idempotency (Stage 5) — checked BEFORE approvals/freshness so a network retry
+  // of an already-submitted order never consumes a second owner approval.
+  if (!order.idempotencyKey) {
+    throw new AuthorityBlockedError(authorityState, "place-order", "Live orders require a caller-supplied idempotencyKey (Stage 5).");
+  }
+  const duplicate = await getLiveOrderByIdempotencyKey(userId, order.idempotencyKey);
+  if (duplicate) {
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "scope_checked",
+      status: "review",
+      subject: `Live order duplicate key suppressed: ${order.symbol} ${order.side}`,
+      detail: `Idempotency key already recorded (status: ${duplicate.status}). Original outcome returned; Binance was NOT called again.`,
+      payload: { order, duplicateStatus: duplicate.status },
+    });
+    const dupResult: LiveOrderResult = {
+      orderId: duplicate.orderId,
+      symbol: order.symbol,
+      side: order.side,
+      type: order.type,
+      status: duplicate.status,
+      price: String(duplicate.outcome.price ?? ""),
+      quantity: String(duplicate.outcome.origQty ?? ""),
+      executedQty: String(duplicate.outcome.executedQty ?? ""),
+    };
+    return { result: dupResult, mandateCheck: { allowed: true, reason: "Duplicate idempotency key; original outcome returned without re-submission.", mandateId: mandate?.mandateId, mode: mandate?.mode } };
+  }
+
   // 0b. Mandate ↔ authority reconciliation (Stage 5): both must agree.
   if (mandate) {
     const verdict = reconcileLiveExecution({
@@ -315,33 +344,6 @@ export async function executeLiveOrder(
     }
   }
 
-  // 0c. Live idempotency (Stage 5): a repeated key returns the original outcome, never re-submits.
-  if (!order.idempotencyKey) {
-    throw new AuthorityBlockedError(authorityState, "place-order", "Live orders require a caller-supplied idempotencyKey (Stage 5).");
-  }
-  const duplicate = await getLiveOrderByIdempotencyKey(userId, order.idempotencyKey);
-  if (duplicate) {
-    await createOperatorAction(userId, {
-      actionId: nanoid(),
-      kind: "scope_checked",
-      status: "review",
-      subject: `Live order duplicate key suppressed: ${order.symbol} ${order.side}`,
-      detail: `Idempotency key already recorded (status: ${duplicate.status}). Original outcome returned; Binance was NOT called again.`,
-      payload: { order, duplicateStatus: duplicate.status },
-    });
-    const dupResult: LiveOrderResult = {
-      orderId: duplicate.orderId,
-      symbol: order.symbol,
-      side: order.side,
-      type: order.type,
-      status: duplicate.status,
-      price: String(duplicate.outcome.price ?? ""),
-      quantity: String(duplicate.outcome.origQty ?? ""),
-      executedQty: String(duplicate.outcome.executedQty ?? ""),
-    };
-    return { result: dupResult, mandateCheck: { allowed: true, reason: "Duplicate idempotency key; original outcome returned without re-submission.", mandateId: mandate?.mandateId, mode: mandate?.mode } };
-  }
-
   // 2. Get API key
   const key = await getPlatformApiKey(userId, platformKeyId);
   if (!key) throw new Error("API key is required for live orders.");
@@ -360,7 +362,7 @@ export async function executeLiveOrder(
     quantity: order.quantity?.toString() ?? null,
     price: order.price?.toString() ?? null,
     quoteOrderQty: order.quoteOrderQty?.toString() ?? null,
-    seq: 2,
+    seq: ledgerSeq("submitted"),
     eventType: "submitted",
     payload: { clientOrderId, mandateId: mandateCheck.mandateId ?? null },
     mandateId: mandateCheck.mandateId ?? null,
@@ -401,7 +403,7 @@ export async function executeLiveOrder(
       symbol: order.symbol,
       side: order.side,
       orderType: order.type,
-      seq: 3,
+      seq: ledgerSeq("rejected"),
       eventType: "rejected",
       payload: { clientOrderId, outcome: { status: "REJECTED", reason: error instanceof Error ? error.message : "unknown" } },
       mandateId: mandateCheck.mandateId ?? null,
@@ -420,7 +422,7 @@ export async function executeLiveOrder(
     quantity: order.quantity?.toString() ?? null,
     price: order.price?.toString() ?? null,
     quoteOrderQty: order.quoteOrderQty?.toString() ?? null,
-    seq: 3,
+    seq: response.status === "REJECTED" ? ledgerSeq("rejected") : ledgerSeq("filled"),
     eventType: response.status === "REJECTED" ? "rejected" : "filled",
     payload: { clientOrderId, outcome: { orderId: response.orderId, status: response.status, price: response.price, origQty: response.origQty, executedQty: response.cummulativeQuoteQty } },
     mandateId: mandateCheck.mandateId ?? null,
