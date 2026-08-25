@@ -24,6 +24,7 @@ import {
   executeMandateTransaction,
   getMandate,
   type SailorMandate,
+  type MandateScope,
 } from "./sailorService";
 import { createOperatorAction, createSecurityAlert, listWalletMandates, getPlatformApiKey } from "./db";
 
@@ -190,7 +191,7 @@ export async function executeOnChainTx(
 
   // 2. Validate scope
   const requiredScope = mapActionToScope(proposal.action.kind);
-  if (requiredScope && !mandate.scopes.includes(requiredScope)) {
+  if (requiredScope && !(mandate.scopes as string[]).includes(requiredScope)) {
     await createSecurityAlert(userId, {
       alertId: nanoid(),
       level: "warning",
@@ -278,8 +279,8 @@ export async function executeAgentProposal(
 /**
  * Map an action kind to a Sailor mandate scope.
  */
-function mapActionToScope(kind: string): string | null {
-  const scopeMap: Record<string, string> = {
+function mapActionToScope(kind: string): MandateScope | null {
+  const scopeMap: Record<string, MandateScope> = {
     token_swap: "swap",
     swap: "swap",
     add_liquidity: "add_liquidity",
