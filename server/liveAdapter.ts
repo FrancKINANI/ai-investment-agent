@@ -26,6 +26,7 @@ import { decryptSecret } from "./kms";
 import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
 import { reconcileLiveExecution, liveOrderApprovalHash, type LegacyMandateMode } from "@shared/mandateAuthority";
+import { readBinanceTicker } from "./liveData";
 import { getLiveOrderByIdempotencyKey, appendLedgerEvent } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -291,6 +292,24 @@ export async function executeLiveOrder(
         subject: `Live order awaiting owner approval: ${order.symbol} ${order.side}`,
         detail,
         payload: { order, orderHash },
+      });
+      throw new AuthorityBlockedError(authorityState, "place-order", detail);
+    }
+  }
+
+  // 0b3. Pre-trade price freshness (Stage 2 discipline applied to live): market
+  // orders must reference a fresh venue price. Stale/unavailable ⇒ truthful rejection.
+  if (order.type === "MARKET") {
+    const ticker = await readBinanceTicker({ symbol: order.symbol, authorityState });
+    if (!ticker.ok) {
+      const detail = `Live market order refused: no fresh reference price (${ticker.errorKind}: ${ticker.message}).`;
+      await createOperatorAction(userId, {
+        actionId: nanoid(),
+        kind: "simulation_blocked",
+        status: "blocked",
+        subject: `Live order blocked on stale price: ${order.symbol} ${order.side}`,
+        detail,
+        payload: { order, errorKind: ticker.errorKind },
       });
       throw new AuthorityBlockedError(authorityState, "place-order", detail);
     }
