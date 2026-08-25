@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
-import { listWalletMandates, getAuthorityState } from "./db";
+import { listWalletMandates, getAuthorityState, recordLiveOrderApproval, listOperatorActions } from "./db";
+import { liveOrderApprovalHash } from "@shared/mandateAuthority";
 import { readBinanceTicker } from "./liveData";
 import {
   getLiveBalances,

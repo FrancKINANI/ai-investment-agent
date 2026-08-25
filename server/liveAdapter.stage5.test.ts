@@ -129,3 +129,39 @@ describe("Stage 5 negative tests — limited live execution", () => {
     expect(lastPayload.outcome.reason).toContain("Insufficient balance");
   });
 });
+
+describe("Stage 5.1 review fixes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setup("approval-required-live");
+  });
+
+  it("R1: a duplicate idempotency key short-circuits BEFORE consuming an approval or reading prices", async () => {
+    vi.mocked(getLiveOrderByIdempotencyKey).mockResolvedValue({
+      orderId: "ll-orig-1",
+      status: "FILLED",
+      outcome: { price: "50000", origQty: "0.002", executedQty: "100" },
+    } as never);
+    const result = await executeLiveOrder(1, "key-1", mandate, order, 10_000);
+    expect(result.result.orderId).toBe("ll-orig-1");
+    // The retry must not have consumed anything nor touched the venue:
+    expect(consumeLiveOrderApproval).not.toHaveBeenCalled();
+    expect(tickerRead).not.toHaveBeenCalled();
+    expect(binancePlaceOrder).not.toHaveBeenCalled();
+  });
+
+  it("R4: LIMIT orders skip the freshness gate (they carry their own price) but still require idempotency + approval", async () => {
+    const limitOrder: LiveOrderRequest = {
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      quantity: 0.002,
+      price: 49_000,
+      idempotencyKey: "live-key-0000002",
+    };
+    tickerRead.mockRejectedValue(new Error("network must not be touched for LIMIT"));
+    await expect(executeLiveOrder(1, "key-1", mandate, limitOrder, 10_000)).resolves.toBeTruthy();
+    expect(tickerRead).not.toHaveBeenCalled();
+    expect(binancePlaceOrder).toHaveBeenCalledTimes(1);
+  });
+});
