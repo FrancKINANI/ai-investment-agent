@@ -4,54 +4,88 @@ Ledgerline's core product rule is simple: **authority expands more slowly than o
 
 ## Prohibited capabilities
 
-The application must not accept, retain, reveal, or derive wallet seed phrases, private keys, venue API secrets, withdrawal credentials, signing authority, custody control, or live order routing. The real-mandate path remains server-blocked even if an interface control is visible.
+The application must not accept, retain, reveal, or derive wallet seed phrases, private keys, or custody control. The agent never holds private keys — all signing happens via WalletConnect or Sailor Protocol mandates.
 
 ## Permitted capabilities
 
-Ledgerline may read public evidence, persist owner-scoped policy and research records, create simulation-only proposal states, record immutable activity, render capability boundaries, manage encrypted platform API keys, and surface security alerts. Schedules remain inactive until a separate owner action on a deployed environment.
+Ledgerline may read public evidence, persist owner-scoped policy and research records, create simulation-only proposal states, record immutable activity, render capability boundaries, manage encrypted platform API keys, surface security alerts, connect wallets via WalletConnect v2, execute on-chain transactions via Sailor mandates, and trade on CEXs via encrypted API keys.
+
+## KMS — Key Management Service
+
+Platform API secrets are encrypted at rest using AES-256-GCM:
+
+- **Algorithm:** AES-256-GCM with random 12-byte IV and 16-byte auth tag
+- **Key derivation:** Master key from `ENCRYPTION_KEY` env var (64-char hex or passphrase → scrypt)
+- **Format:** base64(iv + authTag + ciphertext)
+- **Tamper detection:** Auth tag verification rejects corrupted data
+- **Dev fallback:** When `ENCRYPTION_KEY` is unset, a development key is used with a console warning
+
+Production deployments must set `ENCRYPTION_KEY` to a 64-character hex string or a strong passphrase. For cloud deployments, replace with a dedicated KMS (AWS KMS, GCP KMS, HashiCorp Vault).
+
+## WalletConnect v2 — On-chain Wallet Connection
+
+Wallet connection uses WalletConnect v2 for secure, non-custodial wallet linking:
+
+- **Session flow:** Owner scans QR code → wallet approves → session stored server-side
+- **Supported chains:** Ethereum, Polygon, Arbitrum, Optimism, Base
+- **Security:** Private keys never leave the wallet. The agent only receives the address and chain.
+- **Transaction signing:** Transaction requests go through WalletConnect → wallet signs → agent broadcasts
+- **Revocation:** Owner can disconnect any session immediately
+
+The agent can read balances and request transaction signatures, but cannot sign transactions itself.
+
+## Sailor Protocol — Non-custodial Mandates
+
+Sailor Protocol provides on-chain mandate contracts that define what the agent can do:
+
+- **Mandate scopes:** swap, add_liquidity, remove_liquidity, stake, claim, transfer
+- **Value caps:** Per-transaction and daily limits enforced on-chain
+- **Token/protocol allowlists:** Mandates can restrict which tokens and protocols are used
+- **Activation:** Owner signs the mandate contract with their wallet via WalletConnect
+- **Revocation:** Owner can revoke any mandate at any time. Revocation is immediate and on-chain.
+
+The agent can only execute transactions within the active mandate's scope and limits. Every execution attempt is validated against the mandate before submission.
 
 ## API key security
 
 Platform API keys are stored with the following protections:
 
-- **Encrypted secrets:** API secrets are encrypted at rest. The current implementation uses a base64 placeholder (marked with `ponytail:` comments); production deployments must use AES-256-GCM via a key management service.
+- **Encrypted secrets:** API secrets are encrypted with AES-256-GCM via the KMS module.
 - **Masked prefixes:** Only the first 4 and last 4 characters of the API key are stored for identification. The full key is never retrievable after initial entry.
-- **Permission warnings:** Keys with withdrawal permissions trigger a critical security alert. The alert is visible in the topbar badge, the Security Alerts page, and the Activity log.
-- **Per-platform limits:** Max order size, allocated capital, and daily trade limits are configurable per key and logged to the immutable Activity record.
-- **Owner-scoped:** All key operations are scoped to the authenticated owner. No cross-user data leakage is possible.
+- **Permission warnings:** Keys with withdrawal permissions trigger a critical security alert.
+- **Per-platform limits:** Max order size, allocated capital, and daily trade limits are configurable per key.
 
-## Security alerts
+## Agent execution pipeline
 
-Ledgerline generates structured security alerts for events that affect the operator's security posture:
+Agents (Bull, Bear, Supervisor, Trader) can execute through two paths:
 
-- **Critical:** Transaction failures, unexpected mandate revocation, permission violations, limit breaches, withdrawal permission enabled on an API key.
-- **Warning:** Unusual activity, overly broad permissions detected, connection issues, high latency.
-- **Info:** Mode changes, new mandate created, wallet connected, key added/removed, connection test passed.
+### CEX execution (Binance)
+1. Agent proposes a trade based on research
+2. Live adapter validates against active mandate limits
+3. Order submitted via Binance REST API with HMAC-SHA256 signing
+4. Result logged to Activity record with alert
 
-Alerts are:
-- **Structured:** Each alert has a level, category, title, detail, and optional action reference.
-- **Auditable:** All alerts are written to the `securityAlerts` table with timestamps and owner scoping.
-- **Linked:** Alerts reference operator actions in the Decision Journal when relevant.
-- **Acknowledgeable:** Operators can acknowledge alerts to mark them as resolved.
+### On-chain execution (Sailor)
+1. Agent proposes a swap/stake/liquidity action
+2. Live adapter validates against Sailor mandate scope and value caps
+3. Transaction sent via WalletConnect for owner signature
+4. Owner signs in their wallet → transaction broadcast
+5. Result logged to Activity record with alert
+
+Both paths enforce:
+- Active mandate required (real or armed mode)
+- Order/value caps checked against mandate limits
+- All attempts logged to immutable Activity record
+- Critical alerts for fills, rejections, and revocations
 
 ## Data discipline
 
-Owner-scoped records use the authenticated identity supplied by the server context. Browser-local preferences contain display, density, and shortcut choices only. The read marker for Activity is browser-local and must never modify source event data. Files belong in managed object storage, with metadata rather than raw bytes stored in the database.
+Owner-scoped records use the authenticated identity supplied by the server context. Browser-local preferences contain display, density, and shortcut choices only. The read marker for Activity is browser-local and must never modify source event data.
 
 ## UI truthfulness
 
-Never fabricate balances, venue connections, fills, ratings, testimonials, agent actions, or market evidence. Loading skeletons must communicate pending data, while empty and error states must remain explicit. Visual styling cannot imply real execution or successful authentication.
-
-## Reviewed hardening controls
-
-The maintained [security review record](../maintainers/security-review-2026-08.md) describes the current application-level hardening work. Public token-data requests are constrained to fixed providers, validated addresses, bounded cache entries, request timeouts, and shape-checked provider responses. Scheduled callbacks use a stable non-sensitive error envelope rather than returning raw exception details or request URLs.
-
-Dependency controls are maintained at the workspace level and production dependency auditing is part of the verification cycle. A clean audit does not replace an independent penetration test, production threat model, operational monitoring, or a separate review before any future authority expansion.
+Never fabricate balances, venue connections, fills, ratings, testimonials, agent actions, or market evidence. Loading skeletons must communicate pending data, while empty and error states must remain explicit.
 
 ## Owner security signals
 
-The Activity workspace projects **only actual immutable owner-scoped records** into security signals. A blocked authority request, failed capability-bound validation, or a hard-gate review can therefore be surfaced with its timestamp and journal detail. For example, a request to activate real mode is recorded as blocked before the server returns a forbidden response.
-
-The Security Alerts page provides a dedicated surface for security-relevant events. Alerts are distinct from Activity entries: they are structured, filterable by level, and acknowledgeable. Both alerts and Activity entries are owner-scoped and immutable.
-
-> Security signals are not wallet monitoring. They do not inspect wallet addresses, browser extensions, exchange accounts, transaction broadcasts, balances, or real transaction failures. Wallet connection is simulated in the current product; real provider integration would require a separate security review.
+The Activity workspace projects **only actual immutable owner-scoped records** into security signals. The Security Alerts page provides a dedicated surface for security-relevant events. Both alerts and Activity entries are owner-scoped and immutable.
