@@ -9,6 +9,9 @@ vi.mock("./db", () => ({
   getDb: vi.fn().mockResolvedValue({}),
 }));
 vi.mock("../drizzle/schema", () => ({ paperOrders: {} }));
+vi.mock("./liveData", () => ({
+  readBinanceTicker: vi.fn().mockResolvedValue({ ok: false, source: "binance", errorKind: "authority-blocked", message: "mocked off" }),
+}));
 
 import { submitPaperOrder, reconcilePaperOrder } from "./paperExecutor";
 import { getAuthorityState, appendLedgerEvent, getPaperOrderByIdempotencyKey } from "./db";
@@ -106,5 +109,33 @@ describe("reconcilePaperOrder guards", () => {
     });
     const r = await reconcilePaperOrder(1, "po-missing", "matched");
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("stage 2: server-side reference price preference", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { getPaperOrderByIdempotencyKey } = await import("./db");
+    vi.mocked(getPaperOrderByIdempotencyKey as never).mockResolvedValue(null);
+    setup("read-only-live");
+  });
+
+  it("uses the verified upstream price over a client-supplied one when reads are permitted", async () => {
+    const { readBinanceTicker } = await import("./liveData");
+    vi.mocked(readBinanceTicker as never).mockResolvedValue({
+      ok: true, data: { symbol: "BTCUSDT", price: 49_000 }, source: "binance", fetchedAtMs: Date.now(), latencyMs: 5,
+    } as never);
+
+    // Client claims the price is 60,000; server truth says 49,000.
+    const result = await submitPaperOrder({
+      userId: 1,
+      input,
+      mandate,
+      mandateBalanceUsd: 10_000,
+      referencePrice: { price: 60_000, timestampMs: Date.now() - 1_000 },
+    });
+
+    expect(result.status).toBe("filled");
+    if (result.status === "filled") expect(result.fillPrice).toBe(49_000); // server truth wins
   });
 });

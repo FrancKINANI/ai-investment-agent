@@ -107,7 +107,9 @@ export function decidePaperOrder(args: {
   }
 
   // 1. Authority state machine dominates everything (fail closed).
-  if (!["approval-required-live", "limited-live"].includes(authorityState) && authorityState !== "sandbox-only") {
+  // Paper fills are simulated, so any state below paused/revoked/disabled may run them;
+  // the dominant blocking states may not.
+  if (["disabled", "paused", "revoked"].includes(authorityState)) {
     return { action: "reject", reason: `Authority state "${authorityState}" does not permit paper execution.` };
   }
 
