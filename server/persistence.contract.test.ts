@@ -3,7 +3,8 @@ import type { TrpcContext } from "./_core/context";
 
 const db = vi.hoisted(() => ({
   createAgentRun: vi.fn(),
-  createAgentProposal: vi.fn(),
+	  createAgentProposal: vi.fn(),
+	  createBindingChangeRequest: vi.fn(),
   createAwarenessRecord: vi.fn(),
   createOperatorAction: vi.fn(),
   createOutcomeRecord: vi.fn(),
@@ -11,9 +12,11 @@ const db = vi.hoisted(() => ({
   createStrategyLineage: vi.fn(),
   createVenueConnection: vi.fn(),
   createWalletMandate: vi.fn(),
-  getAgentProposal: vi.fn(),
+	  getAgentProposal: vi.fn(),
+	  getBindingChangeRequest: vi.fn(),
   getInvestmentPolicy: vi.fn(),
-  listAgentProfiles: vi.fn(),
+	  listAgentProfiles: vi.fn(),
+	  listBindingChangeRequests: vi.fn(),
   listAgentProposals: vi.fn(),
   listAgentRuns: vi.fn(),
   listAwarenessRecords: vi.fn(),
@@ -23,7 +26,8 @@ const db = vi.hoisted(() => ({
   listStrategyLineages: vi.fn(),
   listVenueConnections: vi.fn(),
   listWalletMandates: vi.fn(),
-  saveInvestmentPolicy: vi.fn(),
+	  saveInvestmentPolicy: vi.fn(),
+	  reviewBindingChangeRequest: vi.fn(),
   updateAgentProposalStatus: vi.fn(),
   updateWalletMandateMode: vi.fn(),
 }));
@@ -49,7 +53,8 @@ function context(): TrpcContext {
 beforeEach(() => {
   vi.clearAllMocks();
   db.createAgentRun.mockResolvedValue({ id: 1 });
-  db.createAgentProposal.mockResolvedValue({ id: 7, proposalId: "proposal-1" });
+	  db.createAgentProposal.mockResolvedValue({ id: 7, proposalId: "proposal-1" });
+	  db.createBindingChangeRequest.mockResolvedValue({ id: 10, requestId: "binding-request-1", status: "pending" });
   db.createAwarenessRecord.mockResolvedValue({ id: 2 });
   db.createOperatorAction.mockResolvedValue({ id: 3 });
   db.createStrategyLineage.mockResolvedValue({ id: 4 });
@@ -57,7 +62,10 @@ beforeEach(() => {
   db.createOutcomeRecord.mockResolvedValue({ id: 6 });
   db.createVenueConnection.mockResolvedValue({ id: 8, connectionId: "connection-1" });
   db.createWalletMandate.mockResolvedValue({ id: 9, mandateId: "mandate-1" });
-  db.getInvestmentPolicy.mockResolvedValue(null);
+	  db.getInvestmentPolicy.mockResolvedValue(null);
+	  db.getBindingChangeRequest.mockResolvedValue({ id: 10, requestId: "binding-request-1", capabilityId: "market-evidence.read", roleKeys: ["fundamental"], permission: "research-only", status: "pending" });
+	  db.listBindingChangeRequests.mockResolvedValue([]);
+	  db.reviewBindingChangeRequest.mockResolvedValue({ id: 10, requestId: "binding-request-1", status: "approved" });
   db.listStrategyLineages.mockResolvedValue([{ id: 11, lineageId: "L-1" }]);
   db.listStrategyEvaluations.mockResolvedValue([{ id: 12, lineageId: "L-1", gateResult: "review" }]);
   db.listOutcomeRecords.mockResolvedValue([{ id: 13, lineageId: "L-1", deviation: "underperforming" }]);
@@ -162,7 +170,7 @@ describe("authenticated persistence contracts", () => {
     expect(lifecycleKinds.indexOf("proposal_approved")).toBeLessThan(lifecycleKinds.indexOf("simulation_settled"));
   });
 
-  it("records the ordered rejection branch and prevents settlement after owner rejection", async () => {
+	  it("records the ordered rejection branch and prevents settlement after owner rejection", async () => {
     const caller = appRouter.createCaller(context());
     const reviewProposal = { proposalId: "proposal-1", status: "review", policyResult: "pass", title: "Evidence supports paper review", venue: "evm", walletRole: "trading", runId: "run-1" };
     db.getInvestmentPolicy.mockResolvedValue({ name: "Owner IPS", version: 3, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
@@ -174,6 +182,15 @@ describe("authenticated persistence contracts", () => {
     const lifecycleKinds = db.createOperatorAction.mock.calls.map(([, action]) => action.kind);
     expect(lifecycleKinds.indexOf("proposal_created")).toBeLessThan(lifecycleKinds.indexOf("proposal_rejected"));
     expect(lifecycleKinds).not.toContain("simulation_settled");
-    expect(db.updateAgentProposalStatus).toHaveBeenCalledWith(7, "proposal-1", "rejected");
-  });
+	    expect(db.updateAgentProposalStatus).toHaveBeenCalledWith(7, "proposal-1", "rejected");
+	  });
+
+	  it("records a validated binding-change request and an administrator decision without changing the active registry", async () => {
+	    const caller = appRouter.createCaller(context());
+	    const request = await caller.agentFabric.requestBindingChange({ capabilityId: "market-evidence.read", roleKeys: ["fundamental"], permission: "research-only", rationale: "Allow the protected fundamental analyst to inspect bounded public market evidence." });
+	    await caller.agentFabric.reviewBindingChangeRequest({ requestId: request?.requestId ?? "binding-request-1", decision: "approved", reviewNote: "The requested research-only scope matches the active manifest and protected role contract." });
+	    expect(db.createBindingChangeRequest).toHaveBeenCalledWith(7, expect.objectContaining({ capabilityId: "market-evidence.read", roleKeys: ["fundamental"], permission: "research-only" }));
+	    expect(db.reviewBindingChangeRequest).toHaveBeenCalledWith(7, expect.any(String), 7, "approved", expect.stringContaining("matches the active manifest"));
+	    expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "scope_checked", payload: expect.objectContaining({ stagedOnly: true, activeManifestChanged: false }) }));
+	  });
 });

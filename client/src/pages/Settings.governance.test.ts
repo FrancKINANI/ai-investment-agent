@@ -11,6 +11,10 @@ describe("PAIA governance surfaces", () => {
     expect(settings).toContain("Binding editor");
     expect(settings).toContain("validateCapabilityBinding");
     expect(settings).toContain("The runtime manifest remains unchanged");
+    expect(settings).toContain("Binding change requests");
+    expect(settings).toContain("Submit for administrator review");
+    expect(settings).toContain("Approve staged request");
+    expect(settings).toContain("active manifest remains unchanged");
   });
 
   it("requires an explicit paper-only hard gate review before approval", () => {

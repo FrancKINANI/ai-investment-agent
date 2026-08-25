@@ -9,7 +9,7 @@ import { listLLMModels } from "./_core/llm";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createAgentProposal, createAgentRun, createAwarenessRecord, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getInvestmentPolicy, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
+import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
@@ -80,6 +80,8 @@ const watchlistSchema = z.object({ name: z.string().trim().min(2).max(120) });
 const watchlistItemSchema = z.object({ watchlistId: z.string().trim().min(1).max(64), label: z.string().trim().min(2).max(120), address: z.string().trim().max(64).optional(), symbol: z.string().trim().max(32).optional(), chain: z.string().trim().max(32).optional() });
 const watchlistScopeSchema = z.object({ watchlistId: z.string().trim().min(1).max(64), chains: z.array(z.enum(["ethereum"])).min(1).max(1), evidenceStandard: z.enum(["strict", "balanced"]) });
 const hardGateReviewSchema = z.object({ proposalId: z.string().trim().min(1).max(64), simulationPassed: z.boolean(), lineageCoverage: z.number().int().min(0).max(100), complexityPenalty: z.number().int().min(0).max(100), ownerPauseActive: z.boolean(), rationale: z.string().trim().min(5).max(1_000) });
+const bindingChangeRequestSchema = capabilityBindingDraftSchema.extend({ rationale: z.string().trim().min(12).max(1_000) });
+const bindingChangeReviewSchema = z.object({ requestId: z.string().trim().min(1).max(64), decision: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().min(8).max(1_000) });
 
 function requireOwnerAdmin(role: "user" | "admin") {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Only an administrator can validate configuration or hard evaluation gates." });
@@ -146,6 +148,38 @@ export const appRouter = router({
         capabilityIds: [input.capabilityId],
       });
       return validation;
+    }),
+    bindingChangeRequests: protectedProcedure.query(({ ctx }) => listBindingChangeRequests(ctx.user.id)),
+    requestBindingChange: protectedProcedure.input(bindingChangeRequestSchema).mutation(async ({ ctx, input }) => {
+      const validation = validateCapabilityBindingDraft(input);
+      if (!validation.valid || !validation.normalized) throw new TRPCError({ code: "PRECONDITION_FAILED", message: validation.issues.join(" ") || "The binding request is invalid." });
+      const requestId = nanoid();
+      const request = await createBindingChangeRequest(ctx.user.id, { requestId, ...validation.normalized, rationale: input.rationale });
+      await createOperatorAction(ctx.user.id, {
+        actionId: nanoid(), kind: "scope_checked", status: "review",
+        subject: `Binding change requested: ${validation.normalized.capabilityId}`,
+        detail: "Owner submitted a validated staged binding-change request for administrator review. The active manifest was not changed.",
+        payload: { requestId, binding: validation.normalized, rationale: input.rationale, status: "pending", stagedOnly: true, activeManifestChanged: false },
+        capabilityIds: [validation.normalized.capabilityId],
+      });
+      return request;
+    }),
+    reviewBindingChangeRequest: protectedProcedure.input(bindingChangeReviewSchema).mutation(async ({ ctx, input }) => {
+      requireOwnerAdmin(ctx.user.role);
+      const current = await getBindingChangeRequest(ctx.user.id, input.requestId);
+      if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "Binding-change request not found." });
+      if (current.status !== "pending") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a pending binding-change request can be reviewed." });
+      const validation = validateCapabilityBindingDraft({ capabilityId: current.capabilityId, roleKeys: current.roleKeys, permission: current.permission });
+      if (!validation.valid) throw new TRPCError({ code: "PRECONDITION_FAILED", message: `The staged request no longer validates: ${validation.issues.join(" ")}` });
+      const reviewed = await reviewBindingChangeRequest(ctx.user.id, input.requestId, ctx.user.id, input.decision, input.reviewNote);
+      await createOperatorAction(ctx.user.id, {
+        actionId: nanoid(), kind: "scope_checked", status: input.decision === "approved" ? "success" : "review",
+        subject: `Binding change ${input.decision}: ${current.capabilityId}`,
+        detail: input.decision === "approved" ? "Administrator approved a staged binding change for maintainer application. The active manifest remains unchanged." : "Administrator rejected a staged binding change. The active manifest remains unchanged.",
+        payload: { requestId: input.requestId, decision: input.decision, reviewNote: input.reviewNote, binding: validation.normalized, stagedOnly: true, activeManifestChanged: false },
+        capabilityIds: [current.capabilityId],
+      });
+      return reviewed;
     }),
     conversations: protectedProcedure.query(({ ctx }) => listConversations(ctx.user.id)),
     messages: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64) })).query(({ ctx, input }) => listAgentMessages(ctx.user.id, input.threadId)),

@@ -24,6 +24,17 @@ function configuration() {
 function command() {
   const args = process.argv.slice(2);
   const config = configuration();
+  if (args[0] === "doctor") {
+    const checks = [
+      { id: "yaml-schema", status: "pass", detail: "All Phase 0 YAML documents parsed and passed the safe CLI contract." },
+      { id: "execution-boundary", status: config.defaults.executionBoundary === "simulation-only" && config.system.executionBoundary === "simulation-only" ? "pass" : "block", detail: `Defaults and system profile declare ${config.defaults.executionBoundary}.` },
+      { id: "authority-flags", status: config.defaults.featureFlags.cexExecution === false && config.defaults.featureFlags.mcpActivation === false && config.defaults.featureFlags.liveExecution === false ? "pass" : "block", detail: "CEX execution, MCP activation, and live execution must remain disabled." },
+      { id: "mcp-declarations", status: config.mcp.servers.every((server) => server.state === "disabled" && server.registration === "declarative-only" && server.transport === "not-configured") ? "pass" : "block", detail: `${config.mcp.servers.length} declarative MCP entries are disabled and connection-free.` },
+      { id: "research-sources", status: config.sources.sources.every((source) => source.state === "active" && source.connection === "server-managed-public-data") ? "pass" : "review", detail: `${config.sources.sources.length} public research-source declarations are available.` },
+      { id: "protected-bindings", status: config.bindings.bindings.length > 0 ? "pass" : "block", detail: `${config.bindings.bindings.length} protected role bindings are available for validation.` },
+    ];
+    return print({ healthy: checks.every((check) => check.status === "pass"), project: config.defaults.project, profile: config.defaults.profile, executionBoundary: config.defaults.executionBoundary, checks, note: "Doctor is inspection-only. It never opens a network connection, launches MCP, changes configuration, or grants authority." });
+  }
   if (args[0] === "config" && args[1] === "validate") return print({ valid: true, project: config.defaults.project, profile: config.defaults.profile, executionBoundary: config.defaults.executionBoundary, activeMcpServers: 0, note: "Inspection only; no credentials, MCP execution, signing, custody, venue connection, or live authority." });
   if (args[0] === "config" && args[1] === "show") {
     const section = args[2] ?? "all";

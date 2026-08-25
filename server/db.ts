@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentProposals, agentRuns, awarenessRecords, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, awarenessRecords, bindingChangeRequests, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 
@@ -136,6 +136,36 @@ export async function listOperatorActions(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(operatorActions).where(eq(operatorActions.userId, userId)).orderBy(desc(operatorActions.createdAt)).limit(80);
+}
+
+export type BindingChangeRequestValues = { requestId: string; capabilityId: string; roleKeys: string[]; permission: "research-only" | "simulation-only"; rationale: string };
+
+export async function createBindingChangeRequest(userId: number, request: BindingChangeRequestValues) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(bindingChangeRequests).values({ userId, ...request, status: "pending", reviewerUserId: null, reviewNote: null, reviewedAt: null });
+  const saved = await db.select().from(bindingChangeRequests).where(eq(bindingChangeRequests.requestId, request.requestId)).limit(1);
+  return saved[0] ?? null;
+}
+
+export async function listBindingChangeRequests(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(bindingChangeRequests).where(eq(bindingChangeRequests.userId, userId)).orderBy(desc(bindingChangeRequests.updatedAt)).limit(40);
+}
+
+export async function getBindingChangeRequest(userId: number, requestId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const saved = await db.select().from(bindingChangeRequests).where(and(eq(bindingChangeRequests.userId, userId), eq(bindingChangeRequests.requestId, requestId))).limit(1);
+  return saved[0] ?? null;
+}
+
+export async function reviewBindingChangeRequest(userId: number, requestId: string, reviewerUserId: number, status: "approved" | "rejected", reviewNote: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(bindingChangeRequests).set({ status, reviewerUserId, reviewNote, reviewedAt: new Date(), updatedAt: new Date() }).where(and(eq(bindingChangeRequests.userId, userId), eq(bindingChangeRequests.requestId, requestId), eq(bindingChangeRequests.status, "pending")));
+  return getBindingChangeRequest(userId, requestId);
 }
 
 export type WalletMandateValues = { mandateId: string; walletRole: "trading" | "investment"; venue: "binance" | "evm" | "polymarket"; mode: "simulation" | "armed" | "real" | "paused"; status: "active" | "paused" | "disconnected"; allowedAssets: string[]; maxOrderBps: number; dailyCapBps: number; };

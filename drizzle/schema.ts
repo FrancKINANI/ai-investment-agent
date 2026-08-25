@@ -280,6 +280,23 @@ export const operatorActions = mysqlTable("operatorActions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** A validated configuration change proposal; approval never mutates the active manifest in Phase 0. */
+export const bindingChangeRequests = mysqlTable("bindingChangeRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  requestId: varchar("requestId", { length: 64 }).notNull().unique(),
+  capabilityId: varchar("capabilityId", { length: 120 }).notNull(),
+  roleKeys: json("roleKeys").$type<string[]>().notNull(),
+  permission: mysqlEnum("permission", ["research-only", "simulation-only"]).notNull(),
+  rationale: text("rationale").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewerUserId: int("reviewerUserId"),
+  reviewNote: text("reviewNote"),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type AgentProfile = typeof agentProfiles.$inferSelect;
@@ -301,3 +318,4 @@ export type WatchlistItem = typeof watchlistItems.$inferSelect;
 export type DiscoverySchedule = typeof discoverySchedules.$inferSelect;
 export type DiscoveryFinding = typeof discoveryFindings.$inferSelect;
 export type OperatorAction = typeof operatorActions.$inferSelect;
+export type BindingChangeRequest = typeof bindingChangeRequests.$inferSelect;
