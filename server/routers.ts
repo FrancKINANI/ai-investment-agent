@@ -5,6 +5,7 @@ import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { securityRouter } from "./securityRouter";
 import { authorityRouter } from "./authorityRouter";
+import { paperRouter } from "./paperRouter";
 import { liveRouter } from "./liveRouter";
 import { walletRouter } from "./walletRouter";
 import { decideProposal, evaluatePromotionGate } from "@shared/agentRuntime";
@@ -504,6 +505,7 @@ export const appRouter = router({
   }),
   security: securityRouter,
   authority: authorityRouter,
+  paper: paperRouter,
   live: liveRouter,
   wallet: walletRouter,
 });
