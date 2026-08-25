@@ -1,0 +1,86 @@
+# ─── Alertmanager Configuration ────────────────────────────────────────────
+# Routes alerts to different channels based on severity
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default'
+
+  routes:
+    # Critical alerts → immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 0s
+      repeat_interval: 5m
+
+    # Warning alerts → hourly digest
+    - match:
+        severity: warning
+      receiver: 'warning'
+      repeat_interval: 1h
+
+receivers:
+  # ─── Default ────────────────────────────────────────────────────────────
+  - name: 'default'
+    # Add your notification channels here
+    # webhook_configs:
+    #   - url: 'http://your-webhook-endpoint'
+
+  # ─── Critical Alerts ────────────────────────────────────────────────────
+  - name: 'critical'
+    # Slack notification
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    #     channel: '#alerts-critical'
+    #     title: '{{ .GroupLabels.alertname }}'
+    #     text: '{{ .CommonAnnotations.description }}'
+    #     send_resolved: true
+
+    # Email notification
+    # email_configs:
+    #   - to: 'alerts@yourdomain.com'
+    #     from: 'alertmanager@yourdomain.com'
+    #     smarthost: 'smtp.yourdomain.com:587'
+    #     subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+    #     text: '{{ .CommonAnnotations.description }}'
+
+    # PagerDuty
+    # pagerduty_configs:
+    #   - service_key: 'YOUR_PAGERDUTY_KEY'
+
+    # Webhook
+    # webhook_configs:
+    #   - url: 'http://your-webhook-endpoint'
+
+  # ─── Warning Alerts ─────────────────────────────────────────────────────
+  - name: 'warning'
+    # Slack notification
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    #     channel: '#alerts-warning'
+    #     title: '{{ .GroupLabels.alertname }}'
+    #     text: '{{ .CommonAnnotations.description }}'
+    #     send_resolved: true
+
+    # Email notification
+    # email_configs:
+    #   - to: 'alerts@yourdomain.com'
+    #     from: 'alertmanager@yourdomain.com'
+    #     smarthost: 'smtp.yourdomain.com:587'
+    #     subject: '[WARNING] {{ .GroupLabels.alertname }}'
+    #     text: '{{ .CommonAnnotations.description }}'
+
+# ─── Inhibition Rules ────────────────────────────────────────────────────
+# Suppress warning alerts if critical alert is firing
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname']

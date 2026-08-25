@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { handleMetricsRequest, createMetricsMiddleware } from "./metrics";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,9 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // ─── Metrics Middleware ─────────────────────────────────────────────────
+  app.use(createMetricsMiddleware());
 
   // ─── Health Check Endpoint ─────────────────────────────────────────────
   app.get("/healthz", (_req, res) => {
@@ -20,6 +24,11 @@ async function startServer() {
       version: process.env.npm_package_version || "0.0.0",
     };
     res.json(health);
+  });
+
+  // ─── Metrics Endpoint ──────────────────────────────────────────────────
+  app.get("/metrics", (req, res) => {
+    handleMetricsRequest(req, res);
   });
 
   // ─── Security Headers ──────────────────────────────────────────────────
@@ -49,6 +58,7 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log(`Health check: http://localhost:${port}/healthz`);
+    console.log(`Metrics: http://localhost:${port}/metrics`);
   });
 }
 
