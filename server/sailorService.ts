@@ -28,6 +28,7 @@ export type MandateScope = "swap" | "add_liquidity" | "remove_liquidity" | "stak
 
 export type SailorMandate = {
   mandateId: string;
+  userId: number;
   ownerAddress: string;
   chainId: number;
   contractAddress?: string;
@@ -90,6 +91,7 @@ export async function createMandate(
 ): Promise<SailorMandate> {
   const mandate: SailorMandate = {
     mandateId: nanoid(),
+    userId,
     ownerAddress: params.ownerAddress,
     chainId: params.chainId,
     scopes: params.scopes,
@@ -198,10 +200,10 @@ export async function revokeMandate(userId: number, mandateId: string): Promise<
 }
 
 /**
- * Get all mandates for a user.
+ * Get all mandates for a user (owner-isolated).
  */
 export function listMandates(userId: number): SailorMandate[] {
-  return Array.from(mandates.values());
+  return Array.from(mandates.values()).filter((m) => m.userId === userId);
 }
 
 /**

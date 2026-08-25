@@ -322,7 +322,7 @@ export const securityAlerts = mysqlTable("securityAlerts", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
-/** Platform API key records. Secrets are stored encrypted; the key prefix is kept for identification only. */
+/** Platform API key records. API key and secret are stored encrypted; the key prefix is kept for identification only. */
 export const platformApiKeys = mysqlTable("platformApiKeys", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -330,6 +330,7 @@ export const platformApiKeys = mysqlTable("platformApiKeys", {
   platform: mysqlEnum("platform", ["binance", "okx", "coinbase", "kraken", "polymarket"]).notNull(),
   label: varchar("label", { length: 120 }).notNull(),
   keyPrefix: varchar("keyPrefix", { length: 16 }).notNull(),
+  apiKeyEncrypted: varchar("apiKeyEncrypted", { length: 512 }).notNull(),
   secretEncrypted: varchar("secretEncrypted", { length: 512 }).notNull(),
   permissions: json("permissions").$type<string[]>().notNull(),
   hasWithdrawPermission: boolean("hasWithdrawPermission").default(false).notNull(),
