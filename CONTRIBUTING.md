@@ -19,7 +19,7 @@ Read the [demo dataset policy](docs/maintainers/demo-dataset-policy.md) before p
 
 ## Scope boundaries
 
-The project may support public-evidence research, policy checks, paper proposals, simulations, and owner-scoped activity. It must not request or store signing authority, custody material, withdrawal permissions, live venue credentials, or a real order path. Proposals and examples remain explicitly simulation-only.
+The project may support public-evidence research, policy checks, paper proposals, simulations, owner-scoped activity, wallet connection (simulated), platform API key management (encrypted), and security alerts. It must not request or store signing authority, custody material, live venue credentials, or a real order path. API keys must be restricted to trading-only permissions; withdrawal permissions trigger a critical alert. Proposals and examples remain explicitly simulation-only.
 
 ## Pull requests
 
