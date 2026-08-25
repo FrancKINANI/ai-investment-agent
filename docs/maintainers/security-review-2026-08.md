@@ -19,3 +19,7 @@ At the end of this review, `pnpm audit --prod --json` reported **0 low, 0 modera
 ## Explicit remaining work
 
 The following work is deliberately outside this cleanup: independent penetration testing, source-code review by a security specialist, production abuse-rate controls at the edge, secret-management design, signing architecture, legal/compliance review, testnet operations, and any real-mode execution design. These areas require separate scope, evidence, and approval; none can be activated through the current configuration system.
+
+## Interface verification
+
+The owner Activity workspace was reviewed at desktop and 390-pixel mobile widths after the security-signal panel was added. The panel remains readable, presents the current signal count, and explicitly states that it is based on immutable blocked/review records rather than wallet, credential, platform, or transaction monitoring.
