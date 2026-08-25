@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "revision": "paia-v0.4-foundation",
+  "executionBoundary": "simulation-only",
+  "capabilities": [
+    {
+      "id": "market-evidence.read",
+      "version": "1.0.0",
+      "kind": "data_source",
+      "label": "Public market evidence",
+      "scopes": ["market.read"],
+      "tags": ["research", "evidence", "public"],
+      "state": "active"
+    },
+    {
+      "id": "chain-evidence.read",
+      "version": "1.0.0",
+      "kind": "data_source",
+      "label": "Public on-chain evidence",
+      "scopes": ["chain.read"],
+      "tags": ["research", "evidence", "on-chain"],
+      "state": "active"
+    },
+    {
+      "id": "portfolio-snapshot.read",
+      "version": "1.0.0",
+      "kind": "tool",
+      "label": "Simulation portfolio snapshot",
+      "scopes": ["portfolio.read"],
+      "tags": ["policy", "simulation", "read-only"],
+      "state": "active"
+    },
+    {
+      "id": "paper-proposal.compose",
+      "version": "1.0.0",
+      "kind": "tool",
+      "label": "Paper proposal composer",
+      "scopes": ["proposal.write"],
+      "tags": ["simulation", "policy-gated", "no-execution"],
+      "state": "active"
+    }
+  ],
+  "bindings": [
+    {
+      "capabilityId": "market-evidence.read",
+      "roleKeys": ["supervisor", "fundamental", "sentiment", "technical", "news", "bull", "bear", "trader", "risk_guardians"],
+      "permission": "research-only"
+    },
+    {
+      "capabilityId": "chain-evidence.read",
+      "roleKeys": ["supervisor", "fundamental", "bull", "bear", "risk_guardians"],
+      "permission": "research-only"
+    },
+    {
+      "capabilityId": "portfolio-snapshot.read",
+      "roleKeys": ["trader", "risk_guardians", "fund_manager"],
+      "permission": "research-only"
+    },
+    {
+      "capabilityId": "paper-proposal.compose",
+      "roleKeys": ["supervisor", "trader", "fund_manager"],
+      "permission": "simulation-only"
+    }
+  ]
+}
