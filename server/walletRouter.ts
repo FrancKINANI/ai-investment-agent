@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "./_core/trpc";
 import {
   connectWallet,
   disconnectWallet,
-  getActiveSessions,
+  listWalletSessions,
   requestTransaction,
   getSupportedChains,
   isSupportedChain,
@@ -24,9 +24,15 @@ import {
 
 // ─── Schemas ──────────────────────────────────────────────────────────────
 
+/**
+ * Stage 4 view-first connect schema. The address MUST come from the owner's
+ * own wallet client (eth_requestAccounts / WalletConnect approval); the server
+ * validates shape and never generates one.
+ */
 const connectSchema = z.object({
   provider: z.enum(["walletconnect", "injected", "coinbase"]).default("walletconnect"),
   chainId: z.number().int().positive(),
+  address: z.string().trim().regex(/^0x[a-fA-F0-9]{40}$/, "Address must be a 0x-prefixed 20-byte hex address from your wallet client."),
 });
 
 const transactionSchema = z.object({
@@ -64,7 +70,11 @@ export const walletRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST", message: `Chain ${input.chainId} is not supported.` });
     }
     try {
-      return await connectWallet(ctx.user.id, input.provider as WalletProvider, input.chainId);
+      return await connectWallet(ctx.user.id, {
+        address: input.address,
+        chainId: input.chainId,
+        provider: input.provider as WalletProvider,
+      });
     } catch (error) {
       throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Wallet connection failed." });
     }
@@ -76,18 +86,16 @@ export const walletRouter = router({
     return { success: true };
   }),
 
-  sessions: protectedProcedure.query(() => getActiveSessions()),
+  sessions: protectedProcedure.query(({ ctx }) => listWalletSessions(ctx.user.id)),
 
-  signTransaction: protectedProcedure.input(transactionSchema).mutation(async ({ ctx, input }) => {
+  /** View-first: signing paths hard-reject. No signature, no hash, ever, in this stage. */
+  signTransaction: protectedProcedure.mutation(async ({ ctx }) => {
     try {
-      return await requestTransaction(ctx.user.id, input.sessionId, {
-        to: input.to,
-        value: input.value,
-        data: input.data,
-        chainId: input.chainId,
-      });
+      await requestTransaction(ctx.user.id);
+      throw new TRPCError({ code: "FORBIDDEN", message: "Signing not permitted." });
     } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Transaction signing failed." });
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({ code: "FORBIDDEN", message: error instanceof Error ? error.message : "Wallet signing is not permitted in the view-first stage." });
     }
   }),
 
