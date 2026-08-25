@@ -1,0 +1,21 @@
+schemaVersion: 1
+project: Ledgerline
+profile: safe-phase0
+executionBoundary: simulation-only
+featureFlags:
+  researchSources: true
+  supervisor: true
+  strategyEvolution: false
+  predictionMarkets: false
+  cexExecution: false
+  mcpActivation: false
+  liveExecution: false
+memory:
+  backend: owner-journal
+  remoteAccess: false
+lineage:
+  backend: database
+  retainVersions: 50
+orchestration:
+  engine: protected-fabric
+  dynamicConfiguration: false

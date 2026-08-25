@@ -17,6 +17,7 @@ import { calculateResearchNoteConfidence, composeFundManagerDisagreementSummary,
 import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
 import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft } from "@shared/capabilityRegistry";
+import { getPhase0ConfigurationSummary } from "./phase0Config";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -133,6 +134,7 @@ export const appRouter = router({
   agentFabric: router({
     nodes: protectedProcedure.query(({ ctx }) => ensureProtectedAgentNodes(ctx.user.id)),
     capabilityRegistry: protectedProcedure.query(() => getCapabilityRegistrySummary()),
+    phase0Configuration: protectedProcedure.query(() => getPhase0ConfigurationSummary()),
     validateCapabilityBinding: protectedProcedure.input(capabilityBindingDraftSchema).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const validation = validateCapabilityBindingDraft(input);

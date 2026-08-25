@@ -1,0 +1,18 @@
+schemaVersion: 1
+sources:
+  - id: public-market-evidence
+    label: Public market evidence
+    type: data_source
+    state: active
+    capabilityId: market-evidence.read
+    tags: [market, public, research]
+    scopes: [market.read]
+    connection: server-managed-public-data
+  - id: public-chain-evidence
+    label: Public chain evidence
+    type: data_source
+    state: active
+    capabilityId: chain-evidence.read
+    tags: [chain, public, research]
+    scopes: [chain.read]
+    connection: server-managed-public-data
