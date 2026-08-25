@@ -31,6 +31,14 @@ describe("agentFabric.capabilityRegistry", () => {
     expect(registry.capabilities.flatMap((capability) => capability.scopes)).not.toContain("execution.request");
   });
 
+  it("returns the validated safe Phase 0 configuration summary without exposing an MCP activation path", async () => {
+    const caller = appRouter.createCaller(createOwnerContext());
+    const configuration = await caller.agentFabric.phase0Configuration();
+    expect(configuration).toMatchObject({ project: "Ledgerline", profile: "safe-phase0", executionBoundary: "simulation-only", activeMcpCapabilityCount: 0, dynamicConfiguration: false });
+    expect(configuration.featureFlags).toMatchObject({ cexExecution: false, mcpActivation: false, liveExecution: false });
+    expect(configuration.mcpServers.every((server) => server.state === "disabled" && server.registration === "declarative-only")).toBe(true);
+  });
+
   it("rejects non-admin staged binding and hard-gate mutations before any configuration or proposal can change", async () => {
     const caller = appRouter.createCaller(createOwnerContext());
     await expect(caller.agentFabric.validateCapabilityBinding({ capabilityId: "market-evidence.read", roleKeys: ["fundamental"], permission: "research-only" })).rejects.toMatchObject({ code: "FORBIDDEN" });

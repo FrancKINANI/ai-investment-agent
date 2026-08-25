@@ -1,0 +1,5 @@
+schemaVersion: 1
+name: Ledgerline safe Phase 0
+executionBoundary: simulation-only
+overridePolicy: defaults-only
+notes: Static YAML is validated at startup and available through inspection commands. Runtime writes, credentials, external connections, signing, custody, and live execution remain unavailable.

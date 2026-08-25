@@ -22,7 +22,7 @@ Ledgerline helps an owner turn public evidence into a durable, inspectable resea
 | **Chat** | Dedicated Supervisor conversation with Bull, Bear, and Supervisor filters, disagreement summaries, and completeness bands. | Notes are research artifacts, not trade instructions or return forecasts. |
 | **Wallets** | Separate trading and investment mandate roles. | No private keys, wallet connection, signing, or custody. |
 | **Connections** | Simulation adapter and venue-boundary records. | No account credentials or live venue control. |
-| **Settings** | Protected model routes, optional read-only subagents, inactive discovery schedules, policy controls, and local owner preferences. | Changing a model never grants a new tool scope or financial authority. |
+| **Settings** | Protected model routes, optional read-only subagents, inactive discovery schedules, YAML configuration inspection, policy controls, and local owner preferences. | Changing a model or inspecting configuration never grants a new tool scope or financial authority. |
 | **Activity** | Owner-scoped immutable operating history and local read-state controls. | Activity does not fabricate balances, fills, connections, or agent actions. |
 
 ## Why simulation-first
@@ -70,6 +70,7 @@ pnpm build
 | `pnpm test` | Runs server, policy, theme, accessibility-oriented loading, and UI regression tests. |
 | `pnpm check` | Runs TypeScript without emitting output. |
 | `pnpm build` | Produces the production client and server bundles. |
+| `pnpm ledgerline config validate` | Validates the safe, inspection-only Phase 0 YAML configuration. |
 
 ### Configure the environment
 
@@ -93,6 +94,7 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 | Operators | [Operator guide](docs/guides/operator-guide.md) | Day-to-day use of all workspaces. |
 | Developers | [System overview](docs/architecture/system-overview.md) | Routes, services, agents, and authority flow. |
 | Architecture contributors | [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md) | Capability registry, awareness mapping, phase gates, and execution exclusions. |
+| Configuration contributors | [Safe Phase 0 configuration and CLI](docs/guides/phase0-configuration-cli.md) | YAML layout, validation, supported inspection commands, and deferred authority. |
 | Security reviewers | [Security and data](docs/architecture/security-and-data.md) | Storage, privacy, and execution boundaries. |
 | Maintainers | [Engineering and operations](docs/maintainers/engineering-and-operations.md) | Tests, releases, tokens, and maintenance conventions. |
 | Deployers | [Environment configuration](docs/maintainers/environment-configuration.md) | Required configuration names and public/private treatment. |

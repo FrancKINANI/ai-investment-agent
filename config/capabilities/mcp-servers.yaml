@@ -1,0 +1,18 @@
+schemaVersion: 1
+servers:
+  - id: sailor
+    label: Sailor (future integration)
+    type: mcp_server
+    state: disabled
+    registration: declarative-only
+    transport: not-configured
+    tags: [onchain, future-integration]
+    reason: MCP activation, local commands, remote endpoints, signing, and transaction paths are prohibited in Phase 0.
+  - id: binance-agent-os
+    label: Binance Agent OS (future integration)
+    type: mcp_server
+    state: disabled
+    registration: declarative-only
+    transport: not-configured
+    tags: [cex, future-integration]
+    reason: MCP activation, remote endpoints, credentials, and market execution are prohibited in Phase 0.
