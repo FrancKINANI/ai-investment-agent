@@ -1,0 +1,41 @@
+# ─── Prometheus Configuration ─────────────────────────────────────────────
+# Scrapes metrics from Ledgerline and infrastructure
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # ─── Ledgerline App ─────────────────────────────────────────────────────
+  - job_name: "ledgerline"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["app:3000"]
+        labels:
+          service: "ledgerline"
+          environment: "production"
+
+  # ─── Nginx ──────────────────────────────────────────────────────────────
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx-exporter:9113"]
+        labels:
+          service: "nginx"
+
+  # ─── MySQL ──────────────────────────────────────────────────────────────
+  - job_name: "mysql"
+    static_configs:
+      - targets: ["mysql-exporter:9104"]
+        labels:
+          service: "mysql"
+
+  # ─── Node Exporter (Docker host) ────────────────────────────────────────
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: "node"
+
+  # ─── Alert Rules ────────────────────────────────────────────────────────
+rule_files:
+  - "alerts.yml"

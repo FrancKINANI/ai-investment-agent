@@ -79,6 +79,25 @@ typecheck: ## Run TypeScript type checking
 build: ## Build the application
 	docker-compose exec app pnpm build
 
+# ─── Monitoring ──────────────────────────────────────────────────────────
+
+monitor: ## Start monitoring stack (Prometheus, Grafana, exporters)
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d
+
+monitor-build: ## Build and start monitoring stack
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d --build
+
+monitor-logs: ## Show monitoring logs
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.monitoring.yml logs -f
+
+grafana: ## Open Grafana dashboard
+	@echo "Grafana: http://localhost:3001"
+	@echo "Username: admin"
+	@echo "Password: admin"
+
+prometheus: ## Open Prometheus UI
+	@echo "Prometheus: http://localhost:9090"
+
 # ─── Utilities ────────────────────────────────────────────────────────────
 
 shell: ## Open a shell in the app container

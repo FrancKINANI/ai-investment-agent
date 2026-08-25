@@ -1,0 +1,91 @@
+# ─── Prometheus Alert Rules ────────────────────────────────────────────────
+# Alerts for Ledgerline monitoring
+
+groups:
+  - name: ledgerline_alerts
+    rules:
+      # ─── Availability ───────────────────────────────────────────────────
+      - alert: LedgerlineDown
+        expr: up{job="ledgerline"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ledgerline is down"
+          description: "Ledgerline has been unreachable for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: rate(http_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "HTTP error rate is above 10% for 5 minutes."
+
+      # ─── Performance ────────────────────────────────────────────────────
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is above 2 seconds."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 512
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 512MB."
+
+      # ─── Security ───────────────────────────────────────────────────────
+      - alert: HighRateLimiting
+        expr: rate(http_requests_by_status{status="429"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate limiting"
+          description: "More than 5% of requests are being rate-limited."
+
+      - alert: CriticalSecurityAlerts
+        expr: rate(security_alerts_by_level{level="critical"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical security alert"
+          description: "A critical security alert has been triggered."
+
+      # ─── Business ───────────────────────────────────────────────────────
+      - alert: HighOrderFailureRate
+        expr: rate(agent_execution_failures_total[5m]) / rate(agent_executions_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High order failure rate"
+          description: "More than 30% of agent executions are failing."
+
+      # ─── Infrastructure ─────────────────────────────────────────────────
+      - alert: MySQLDown
+        expr: up{job="mysql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL is down"
+          description: "MySQL database has been unreachable for more than 1 minute."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 20%."
