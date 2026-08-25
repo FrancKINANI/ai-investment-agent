@@ -384,3 +384,63 @@ export type BindingChangeRequest = typeof bindingChangeRequests.$inferSelect;
 export type SecurityAlert = typeof securityAlerts.$inferSelect;
 export type PlatformApiKey = typeof platformApiKeys.$inferSelect;
 export type AuthorityControl = typeof authorityControls.$inferSelect;
+
+/**
+ * Execution ledger events (Stage 1). Append-only: lifecycle transitions are
+ * recorded as immutable events; state is derived, never rewritten in place.
+ * Covers paper/sandbox execution; live execution reuses this ledger in Stage 5.
+ */
+export const executionLedger = mysqlTable("executionLedger", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+  orderId: varchar("orderId", { length: 64 }).notNull(),
+  /** Idempotency key supplied by the proposer; duplicates are rejected/returned as-is. */
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
+  /** Execution domain of this order: paper or sandbox. Live is a later, separately approved stage. */
+  executionMode: mysqlEnum("executionMode", ["paper", "sandbox"]).notNull(),
+  symbol: varchar("symbol", { length: 20 }).notNull(),
+  side: mysqlEnum("side", ["BUY", "SELL"]).notNull(),
+  orderType: mysqlEnum("orderType", ["MARKET", "LIMIT"]).notNull(),
+  quantity: varchar("quantity", { length: 40 }),
+  price: varchar("price", { length: 40 }),
+  quoteOrderQty: varchar("quoteOrderQty", { length: 40 }),
+  seq: int("seq").notNull(), // monotonically increasing event sequence per orderId
+  eventType: mysqlEnum("eventType", [
+    "proposed", "validated", "submitted", "filled", "rejected", "cancelled", "reconciled",
+  ]).notNull(),
+  payload: json("payload").$type<Record<string, unknown>>().notNull(),
+  mandateId: varchar("mandateId", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ExecutionLedgerEvent = typeof executionLedger.$inferSelect;
+
+/** Current derived order state (projection of ledger events). Mutable projection, source of truth is the ledger. */
+export const paperOrders = mysqlTable("paperOrders", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  orderId: varchar("orderId", { length: 64 }).notNull().unique(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  venue: mysqlEnum("venue", ["binance", "evm", "polymarket"]).notNull(),
+  executionMode: mysqlEnum("executionMode", ["paper", "sandbox"]).notNull(),
+  symbol: varchar("symbol", { length: 20 }).notNull(),
+  side: mysqlEnum("side", ["BUY", "SELL"]).notNull(),
+  orderType: mysqlEnum("orderType", ["MARKET", "LIMIT"]).notNull(),
+  quantity: varchar("quantity", { length: 40 }),
+  price: varchar("price", { length: 40 }),
+  quoteOrderQty: varchar("quoteOrderQty", { length: 40 }),
+  status: mysqlEnum("status", [
+    "proposed", "validated", "submitted", "filled", "rejected", "cancelled", "reconciled",
+  ]).default("proposed").notNull(),
+  reconciliationState: mysqlEnum("reconciliationState", ["pending", "matched", "mismatched"]).default("pending").notNull(),
+  fillPrice: varchar("fillPrice", { length: 40 }),
+  executedQty: varchar("executedQty", { length: 40 }),
+  mandateId: varchar("mandateId", { length: 64 }),
+  rejectReason: varchar("rejectReason", { length: 400 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PaperOrder = typeof paperOrders.$inferSelect;
