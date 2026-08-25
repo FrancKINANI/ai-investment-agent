@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
-import { decideProposal } from "@shared/agentRuntime";
+import { decideProposal, evaluatePromotionGate } from "@shared/agentRuntime";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
@@ -16,7 +16,7 @@ import { researchRequestSchema, runTokenResearch } from "./research";
 import { calculateResearchNoteConfidence, composeFundManagerDisagreementSummary, composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
 import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
-import { getCapabilityRegistrySummary } from "@shared/capabilityRegistry";
+import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft } from "@shared/capabilityRegistry";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -78,6 +78,11 @@ const chatMessageSchema = z.object({ threadId: z.string().trim().min(1).max(64).
 const watchlistSchema = z.object({ name: z.string().trim().min(2).max(120) });
 const watchlistItemSchema = z.object({ watchlistId: z.string().trim().min(1).max(64), label: z.string().trim().min(2).max(120), address: z.string().trim().max(64).optional(), symbol: z.string().trim().max(32).optional(), chain: z.string().trim().max(32).optional() });
 const watchlistScopeSchema = z.object({ watchlistId: z.string().trim().min(1).max(64), chains: z.array(z.enum(["ethereum"])).min(1).max(1), evidenceStandard: z.enum(["strict", "balanced"]) });
+const hardGateReviewSchema = z.object({ proposalId: z.string().trim().min(1).max(64), simulationPassed: z.boolean(), lineageCoverage: z.number().int().min(0).max(100), complexityPenalty: z.number().int().min(0).max(100), ownerPauseActive: z.boolean(), rationale: z.string().trim().min(5).max(1_000) });
+
+function requireOwnerAdmin(role: "user" | "admin") {
+  if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Only an administrator can validate configuration or hard evaluation gates." });
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -128,6 +133,18 @@ export const appRouter = router({
   agentFabric: router({
     nodes: protectedProcedure.query(({ ctx }) => ensureProtectedAgentNodes(ctx.user.id)),
     capabilityRegistry: protectedProcedure.query(() => getCapabilityRegistrySummary()),
+    validateCapabilityBinding: protectedProcedure.input(capabilityBindingDraftSchema).mutation(async ({ ctx, input }) => {
+      requireOwnerAdmin(ctx.user.role);
+      const validation = validateCapabilityBindingDraft(input);
+      await createOperatorAction(ctx.user.id, {
+        actionId: nanoid(), kind: "scope_checked", status: validation.valid ? "review" : "blocked",
+        subject: `Binding validation: ${input.capabilityId}`,
+        detail: validation.valid ? "Owner validated a staged capability binding. The immutable runtime manifest was not changed." : "Owner attempted an invalid staged capability binding; no runtime authority changed.",
+        payload: { binding: validation.normalized, valid: validation.valid, issues: validation.issues, stagedOnly: true },
+        capabilityIds: [input.capabilityId],
+      });
+      return validation;
+    }),
     conversations: protectedProcedure.query(({ ctx }) => listConversations(ctx.user.id)),
     messages: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64) })).query(({ ctx, input }) => listAgentMessages(ctx.user.id, input.threadId)),
     evolution: protectedProcedure.input(z.object({ threadId: z.string().trim().min(1).max(64).optional() })).query(({ ctx, input }) => listEvolutionEvents(ctx.user.id, input.threadId)),
@@ -320,6 +337,21 @@ export const appRouter = router({
     mandates: protectedProcedure.query(({ ctx }) => listWalletMandates(ctx.user.id)),
     connections: protectedProcedure.query(({ ctx }) => listVenueConnections(ctx.user.id)),
     proposals: protectedProcedure.query(({ ctx }) => listAgentProposals(ctx.user.id)),
+    reviewHardGate: protectedProcedure.input(hardGateReviewSchema).mutation(async ({ ctx, input }) => {
+      requireOwnerAdmin(ctx.user.role);
+      const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
+      if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
+      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, simulationPassed: input.simulationPassed, ownerPauseActive: input.ownerPauseActive, lineageCoverage: input.lineageCoverage / 100, complexityPenalty: input.complexityPenalty / 100 });
+      const status = gate.state === "pass" ? "success" : gate.state === "review" ? "review" : "blocked";
+      await createOperatorAction(ctx.user.id, {
+        actionId: nanoid(), kind: "scope_checked", status,
+        subject: `Hard gate: ${proposal.title}`,
+        detail: `${gate.reason} This gate governs paper-simulation review only; no live action can follow.`,
+        payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: { simulationPassed: input.simulationPassed, lineageCoverage: input.lineageCoverage, complexityPenalty: input.complexityPenalty, ownerPauseActive: input.ownerPauseActive }, rationale: input.rationale, decision: gate, simulationOnly: true },
+        capabilityIds: ["paper-proposal.compose", "portfolio-snapshot.read"],
+      });
+      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, executionBoundary: "simulation-only" as const };
+    }),
     createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
       const mandate = await createWalletMandate(ctx.user.id, { mandateId: nanoid(), ...input, mode: "simulation", status: "active" });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a simulation-only mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
@@ -337,12 +369,15 @@ export const appRouter = router({
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "venue_configured", status: "success", subject: `${input.venue} simulated adapter`, detail: "Owner enabled a simulated adapter. No external account, credential, or signed action was connected.", payload: { connectionId: connection?.connectionId, ...input, state: "simulation" } });
       return connection;
     }),
-    approveProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+    approveProposal: protectedProcedure.input(hardGateReviewSchema).mutation(async ({ ctx, input }) => {
+      requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
       if (proposal.status !== "review" || proposal.policyResult !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a policy-passing proposal awaiting review can be approved for simulation." });
+      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, simulationPassed: input.simulationPassed, ownerPauseActive: input.ownerPauseActive, lineageCoverage: input.lineageCoverage / 100, complexityPenalty: input.complexityPenalty / 100 });
+      if (gate.state !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Hard evaluation gate did not pass: ${gate.reason}` });
       const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "approved");
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Simulation approved: ${proposal.title}`, detail: "Owner approved this proposal for simulated execution only.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, simulationOnly: true } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Simulation approved: ${proposal.title}`, detail: "Administrator approved this proposal for simulated execution only after a passing hard evaluation gate.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, gate, rationale: input.rationale, simulationOnly: true } });
       return updated;
     }),
     rejectProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), reason: z.string().trim().min(2).max(500) })).mutation(async ({ ctx, input }) => {

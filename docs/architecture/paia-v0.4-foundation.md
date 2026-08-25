@@ -19,7 +19,7 @@ Ledgerline adopts the **PAIA v0.4** direction as a configuration-driven personal
 
 The manifest at `shared/capabilityManifest.json` is deliberately narrow. It describes capabilities through a stable identifier, version, type, tags, safe scopes, state, and explicit role bindings. Startup validation rejects malformed references, duplicate identifiers, unknown binding targets, and any scope outside the research and paper-proposal allowlist.
 
-The initial registry contains public market evidence, public on-chain evidence, a simulated portfolio snapshot, and a paper-proposal composer. It currently registers **zero MCP capabilities**. A future MCP integration must go through a separate security review, be explicitly bound to a role, remain owner-visible, record capability identifiers and versions in the journal, and preserve the execution seal.
+The initial registry contains public market evidence, public on-chain evidence, a simulated portfolio snapshot, and a paper-proposal composer. It currently registers **zero MCP capabilities**. Every newly written owner activity record carries its origin (`owner-control` or `capability-registry`), registry revision, simulation boundary, and the exact capability identifier, version, label, and safe scopes where applicable. A future MCP integration must go through a separate security review, be explicitly bound to a role, remain owner-visible, record capability identifiers and versions in the journal, and preserve the execution seal.
 
 ## Planned Progression
 
@@ -34,4 +34,10 @@ The PAIA proposal references on-chain and CEX execution concepts. These remain *
 
 ## Configuration Contract
 
-The registry is configuration data, not a credential store. Secrets remain environment-only and never enter JSON manifests, owner preferences, logs, or activity records. Editing a manifest can alter only declared safe capabilities and bindings after validation; it cannot grant custody, signing, live execution, or credential access.
+The registry is configuration data, not a credential store. Secrets remain environment-only and never enter JSON manifests, owner preferences, logs, or activity records. The Settings binding editor validates a **staged candidate** against the active manifest, protected TradingAgents roles, scope fit, capability state, and permission boundary; it writes an immutable review event but cannot mutate the active manifest. Editing a manifest can alter only declared safe capabilities and bindings after validation; it cannot grant custody, signing, live execution, or credential access.
+
+## Hard Evaluation Gates
+
+An administrator can review a policy-passing proposal through a structured hard-gate form: paper-evidence confirmation, lineage coverage, complexity penalty, owner-pause state, and review rationale. The server recomputes the gate and records the decision with capability provenance. Only a **passing** gate can approve a proposal for a paper simulation. The approval endpoint repeats the gate check server-side, so an interface request alone cannot bypass it.
+
+> A passing hard gate means “eligible for paper-simulation review.” It never means “approved for a live trade,” and no screen, configuration, or API path in this phase can create a venue order or transaction.
