@@ -112,25 +112,33 @@ export function checkMandateAllowance(
     return { allowed: false, reason: `Asset "${baseAsset}" is not in the allowed assets list.`, mandateId: mandate.mandateId };
   }
 
-  // Check order size against mandate limits (in basis points of account balance)
+  // Calculate order value in basis points of account balance
+  let orderValueUsd = 0;
   if (order.quoteOrderQty && accountBalanceUsd > 0) {
-    const orderBps = Math.round((order.quoteOrderQty / accountBalanceUsd) * 10_000);
+    orderValueUsd = order.quoteOrderQty;
+  } else if (order.price && order.quantity) {
+    orderValueUsd = order.price * order.quantity;
+  }
+
+  if (orderValueUsd > 0 && accountBalanceUsd > 0) {
+    const orderBps = Math.round((orderValueUsd / accountBalanceUsd) * 10_000);
+
+    // Check per-order limit
     if (orderBps > mandate.maxOrderBps) {
       return {
         allowed: false,
-        reason: `Order size ${orderBps}bps exceeds mandate max ${mandate.maxOrderBps}bps of account balance.`,
+        reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate max ${mandate.maxOrderBps}bps per order.`,
         mandateId: mandate.mandateId,
       };
     }
-  }
 
-  if (order.price && order.quantity && accountBalanceUsd > 0) {
-    const orderValueUsd = order.price * order.quantity;
-    const orderBps = Math.round((orderValueUsd / accountBalanceUsd) * 10_000);
-    if (orderBps > mandate.maxOrderBps) {
+    // Check daily cap (accumulated orders today vs dailyCapBps)
+    // ponytail: In production, query today's executed order total from Activity record
+    // For now, enforce that a single order cannot exceed the daily cap
+    if (orderBps > mandate.dailyCapBps) {
       return {
         allowed: false,
-        reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate max ${mandate.maxOrderBps}bps.`,
+        reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate daily cap ${mandate.dailyCapBps}bps.`,
         mandateId: mandate.mandateId,
       };
     }
@@ -149,11 +157,10 @@ export async function getLiveBalances(userId: number, platformKeyId: string): Pr
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");
 
+  const apiKey = decryptSecret(key.apiKeyEncrypted);
   const apiSecret = decryptSecret(key.secretEncrypted);
-  const balances = await binanceGetBalances(key.keyPrefix.slice(0, 4), apiSecret);
+  const balances = await binanceGetBalances(apiKey, apiSecret);
 
-  // ponytail: we use keyPrefix as a placeholder for the real API key
-  // In production, decrypt the full key from KMS
   return balances.filter((b) => b.total > 0);
 }
 
@@ -180,8 +187,9 @@ export async function getLiveOpenOrders(userId: number, platformKeyId: string, s
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");
 
+  const apiKey = decryptSecret(key.apiKeyEncrypted);
   const apiSecret = decryptSecret(key.secretEncrypted);
-  return binanceGetOpenOrders(key.keyPrefix.slice(0, 4), apiSecret, symbol);
+  return binanceGetOpenOrders(apiKey, apiSecret, symbol);
 }
 
 /**
@@ -237,8 +245,9 @@ export async function executeLiveOrder(
   });
 
   // 4. Place the order
+  const apiKey = decryptSecret(key.apiKeyEncrypted);
   const apiSecret = decryptSecret(key.secretEncrypted);
-  const response = await binancePlaceOrder(key.keyPrefix.slice(0, 4), apiSecret, {
+  const response = await binancePlaceOrder(apiKey, apiSecret, {
     symbol: order.symbol,
     side: order.side as BinanceOrderSide,
     type: order.type as BinanceOrderType,
@@ -317,8 +326,9 @@ export async function cancelLiveOrder(
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");
 
+  const apiKey = decryptSecret(key.apiKeyEncrypted);
   const apiSecret = decryptSecret(key.secretEncrypted);
-  const result = await binanceCancelOrder(key.keyPrefix.slice(0, 4), apiSecret, symbol, orderId);
+  const result = await binanceCancelOrder(apiKey, apiSecret, symbol, orderId);
 
   await createOperatorAction(userId, {
     actionId: nanoid(),

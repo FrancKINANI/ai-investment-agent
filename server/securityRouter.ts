@@ -88,6 +88,7 @@ export const securityRouter = router({
       }
 
       const keyPrefix = maskApiKey(input.apiKey);
+      const apiKeyEncrypted = encryptSecret(input.apiKey);
       const secretEncrypted = encryptSecret(input.apiSecret);
 
       const key = await createPlatformApiKey(ctx.user.id, {
@@ -95,6 +96,7 @@ export const securityRouter = router({
         platform: input.platform,
         label: input.label,
         keyPrefix,
+        apiKeyEncrypted,
         secretEncrypted,
         permissions: input.permissions,
         hasWithdrawPermission: input.hasWithdrawPermission,

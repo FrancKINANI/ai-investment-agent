@@ -6,7 +6,7 @@
 
 Ledgerline helps an owner turn public evidence into a durable, inspectable research workflow. It brings together a bounded agent fabric, investment-policy controls, public token evidence, a dedicated debate workspace, paper-proposal review, and immutable owner activity—without confusing research with custody or execution.
 
-> **Safety boundary:** Ledgerline does not store wallet keys, venue credentials, seed phrases, signing authority, custody controls, live orders, or real execution capability. Platform API keys are stored encrypted. The real-mandate path remains server-blocked.
+> **Safety boundary:** Ledgerline never stores private keys, seed phrases, or signing authority. Wallet connection uses WalletConnect v2 (non-custodial). Platform API keys are encrypted with AES-256-GCM. Live execution requires explicit owner consent via active mandates with scope and value caps. All operations are audit-logged with security alerts.
 
 ## Screenshots
 
@@ -38,12 +38,23 @@ Ledgerline deliberately expands **observability and review quality before author
 The application uses React and TypeScript for the operator interface, tRPC and Express for typed server contracts, Drizzle with a MySQL-compatible database for owner-scoped persistence, and server-side adapters for public evidence. Protected TradingAgents roles remain server-defined. Optional specialists carry a visible parent, model route, read-only scope, and audit trail. The PAIA v0.4 foundation adds a validated, versioned Capability Registry for safe research and paper-proposal bindings; it contains no active MCP servers or execution adapters.
 
 ```text
-Public evidence → bounded agent research → deterministic policy → owner approval → paper simulation → immutable activity
+Public evidence → bounded agent research → deterministic policy → owner approval
                                                     │
-                                                    └── no live execution path
+                    ┌───────────────────────────────┼───────────────────────────────┐
+                    ▼                               ▼                               ▼
+            Paper simulation               CEX execution                   On-chain execution
+           (safe path)                (requires active mandate)         (requires Sailor mandate)
+                    │                               │                               │
+                    ▼                               ▼                               ▼
+            simulated settlement           Binance API → order           WalletConnect → owner signs
+                    │                               │                               │
+                    └───────────────────────────────┴───────────────────────────────┘
+                                                    │
+                                                    ▼
+                                            immutable activity + alerts
 
-Platform API keys → encrypted storage → permission warnings → per-platform limits → audit log
-Wallet connection → WalletConnect/injected → address display → mode management → confirmation dialog
+Platform API keys → AES-256-GCM encrypted → permission warnings → per-platform limits → audit log
+Wallet connection → WalletConnect v2 → address display → mode management → confirmation dialog
 Security alerts → critical/warning/info → persistent badge → acknowledge/resolve → Decision Journal
 ```
 

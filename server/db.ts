@@ -366,6 +366,7 @@ export async function createPlatformApiKey(userId: number, key: {
   platform: "binance" | "okx" | "coinbase" | "kraken" | "polymarket";
   label: string;
   keyPrefix: string;
+  apiKeyEncrypted: string;
   secretEncrypted: string;
   permissions: string[];
   hasWithdrawPermission: boolean;
