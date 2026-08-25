@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { securityRouter } from "./securityRouter";
+import { liveRouter } from "./liveRouter";
 import { decideProposal, evaluatePromotionGate } from "@shared/agentRuntime";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
@@ -500,6 +501,7 @@ export const appRouter = router({
     ethereumToken: publicProcedure.input(z.object({ address: ethereumAddressSchema })).query(({ input }) => getEthereumTokenMetrics(input.address)),
   }),
   security: securityRouter,
+  live: liveRouter,
 });
 
 export type AppRouter = typeof appRouter;
