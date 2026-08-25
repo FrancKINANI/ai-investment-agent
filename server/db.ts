@@ -558,3 +558,17 @@ export async function getOrderLedger(userId: number, orderId: string) {
     .where(and(eq(executionLedger.userId, userId), eq(executionLedger.orderId, orderId)))
     .orderBy(asc(executionLedger.seq));
 }
+
+/** Rotation: atomically replace credential material for an existing key. */
+export async function updatePlatformApiKeyMaterial(
+  userId: number,
+  keyId: string,
+  material: { apiKeyEncrypted: string; secretEncrypted: string; keyPrefix: string },
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing to rotate key (fail closed).");
+  await db.update(platformApiKeys)
+    .set({ ...material, state: "testing", updatedAt: new Date() })
+    .where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
+  return getPlatformApiKey(userId, keyId);
+}
