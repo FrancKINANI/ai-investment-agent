@@ -281,12 +281,6 @@ export async function getTradeHistory(
 
 // ─── Utility ──────────────────────────────────────────────────────────────
 
-/** Decrypt a secret from the platformApiKeys table. */
-export function decryptSecret(encrypted: string): string {
-  // ponytail: base64 placeholder, replace with real AES-256-GCM via KMS
-  return Buffer.from(encrypted, "base64").toString();
-}
-
 /** Validate that a symbol is valid on Binance. */
 export async function validateSymbol(symbol: string): Promise<boolean> {
   const info = await getExchangeInfo();

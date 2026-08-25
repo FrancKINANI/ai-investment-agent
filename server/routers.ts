@@ -5,6 +5,7 @@ import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { securityRouter } from "./securityRouter";
 import { liveRouter } from "./liveRouter";
+import { walletRouter } from "./walletRouter";
 import { decideProposal, evaluatePromotionGate } from "@shared/agentRuntime";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
@@ -502,6 +503,7 @@ export const appRouter = router({
   }),
   security: securityRouter,
   live: liveRouter,
+  wallet: walletRouter,
 });
 
 export type AppRouter = typeof appRouter;

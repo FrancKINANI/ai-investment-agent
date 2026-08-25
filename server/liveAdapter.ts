@@ -18,11 +18,11 @@ import {
   placeOrder as binancePlaceOrder,
   cancelOrder as binanceCancelOrder,
   getTradeHistory as binanceGetTradeHistory,
-  decryptSecret,
   type BinanceOrderSide,
   type BinanceOrderType,
   type BinanceTimeInForce,
 } from "./binance";
+import { decryptSecret } from "./kms";
 import { getPlatformApiKey, createOperatorAction, createSecurityAlert } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────
