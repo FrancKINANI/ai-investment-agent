@@ -78,14 +78,84 @@ Both paths enforce:
 - All attempts logged to immutable Activity record
 - Critical alerts for fills, rejections, and revocations
 
-## Data discipline
+## Rate limiting
 
-Owner-scoped records use the authenticated identity supplied by the server context. Browser-local preferences contain display, density, and shortcut choices only. The read marker for Activity is browser-local and must never modify source event data.
+API endpoints are protected with sliding-window rate limiting:
 
-## UI truthfulness
+- **Default:** 60 requests per minute per user/IP
+- **API endpoints:** 10 requests/second with burst of 20
+- **Auth endpoints:** 5 requests/second with burst of 5
+- **Configuration:** Configurable per endpoint via `security.ts`
 
-Never fabricate balances, venue connections, fills, ratings, testimonials, agent actions, or market evidence. Loading skeletons must communicate pending data, while empty and error states must remain explicit.
+Rate-limited requests receive HTTP 429 with a `Retry-After` header.
 
-## Owner security signals
+## Input sanitization
 
-The Activity workspace projects **only actual immutable owner-scoped records** into security signals. The Security Alerts page provides a dedicated surface for security-relevant events. Both alerts and Activity entries are owner-scoped and immutable.
+All user input is sanitized before processing:
+
+- **Dangerous characters:** `<>'"&;(){}/\` are stripped
+- **Length limit:** Input truncated to 1000 characters
+- **Object sanitization:** Nested string values are recursively sanitized
+- **Validation:** Schema-based validation with Zod before processing
+
+## Error handling
+
+Errors are classified and sanitized before returning to users:
+
+- **Validation errors:** 400 — "Invalid input. Please check your request."
+- **Auth errors:** 403 — "You don't have permission." (audit logged)
+- **Not found:** 404 — "Resource not found."
+- **Rate limit:** 429 — "Too many requests."
+- **External service:** 502 — "Service temporarily unavailable."
+- **Internal:** 500 — "Unexpected error occurred." (audit logged)
+
+Internal details (DB host, stack traces, query errors) are never exposed to users.
+
+## Security headers
+
+All responses include security headers:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` (nginx)
+
+## Monitoring and alerting
+
+Security-relevant metrics are tracked and alerted:
+
+- **Rate limiting:** High rate of 429 responses triggers warning
+- **Security alerts:** Critical alerts trigger immediate notification
+- **Execution failures:** High failure rate triggers warning
+- **Unauthorized access:** Auth errors trigger audit logging
+
+Alertmanager routes alerts based on severity:
+- **Critical:** Immediate notification (Slack, email, PagerDuty)
+- **Warning:** Hourly digest
+- **Info:** Logged only
+
+## Environment security
+
+Production deployments must configure:
+
+- `DATABASE_URL`: MySQL connection string (required)
+- `JWT_SECRET`: Session token secret (required)
+- `ENCRYPTION_KEY`: AES-256-GCM master key (required in production)
+- `BINANCE_API_KEY` / `BINANCE_API_SECRET`: Optional for live trading
+
+Environment variables are validated at startup. Missing required variables cause immediate failure with descriptive error messages.
+
+## Audit trail
+
+Every security-relevant action is logged to the immutable Activity record:
+
+- API key operations (add, test, disable, delete)
+- Mandate operations (create, activate, revoke)
+- Execution attempts (success, failure, rejection)
+- Security alerts (critical, warning, info)
+- Rate limiting events
+- Authentication events
+
+Audit logs are owner-scoped, timestamped, and cannot be modified or deleted.

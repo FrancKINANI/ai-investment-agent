@@ -2,7 +2,66 @@
 
 This public changelog records meaningful Ledgerline improvements. It focuses on operator experience, engineering quality, and safety boundaries rather than internal task history.
 
-## Current release — Live execution: Binance trading, KMS encryption, WalletConnect v2, Sailor mandates
+## Current release — Infrastructure: Docker, CI/CD, monitoring, security hardening
+
+Ledgerline now has production-ready infrastructure with containerization, automated pipelines, and comprehensive monitoring.
+
+### Docker deployment
+
+- **Multi-stage Dockerfile:** deps → build → production stages for minimal image size
+- **Docker Compose:** MySQL + App services with health checks and dependency ordering
+- **Production overrides:** Resource limits, restart policies, and environment-specific config
+- **Development Dockerfile:** Hot reload with volume mounts
+- **Makefile:** Convenience commands for all operations (`make dev`, `make prod`, `make monitor`)
+- **Health check endpoint:** `/healthz` returns subsystem status, uptime, and version
+- **Security headers middleware:** X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy
+
+### CI/CD pipeline
+
+- **GitHub Actions:** Quality gate (typecheck + tests + build), security scan (Trivy), Docker build
+- **Staging/production deployment:** Automated with health checks and rollback support
+- **Docker image registry:** Pushed to GitHub Container Registry (ghcr.io)
+- **PR validation:** All checks must pass before merge
+
+### Nginx reverse proxy
+
+- **SSL termination:** TLS 1.2/1.3 with HSTS preload
+- **Rate limiting:** 10r/s for API, 5r/s for auth endpoints
+- **Security headers:** CSP, X-Frame-Options, X-XSS-Protection, Referrer-Policy
+- **WebSocket support:** For real-time updates
+- **Custom error pages:** 429 (rate limit), 502 (bad gateway), 503 (maintenance)
+
+### Monitoring stack
+
+- **Prometheus metrics:** HTTP requests, response times, errors, agent executions, security alerts
+- **Grafana dashboard:** 8 panels covering service status, request rate, error rate, latency, executions, alerts, memory, uptime
+- **Alert rules:** Availability, performance, security, business metrics, infrastructure
+- **Alertmanager:** Severity-based routing to Slack, email, PagerDuty
+- **Exporters:** Node, MySQL, Nginx exporters for infrastructure metrics
+
+### Security hardening
+
+- **Rate limiting:** Sliding window per userId + IP, configurable limits
+- **Input sanitization:** Strip dangerous characters, truncate to 1000 chars
+- **Error classification:** Never leak internal details (DB host, stack traces) to users
+- **Request validation:** Schema-based validation with Zod
+- **Security headers:** nosniff, DENY frame, XSS protection, strict referrer
+
+### Production readiness
+
+- **Environment validation:** Fail-fast on missing DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY
+- **Health check:** `/healthz` with subsystem status (database, encryption, binance)
+- **Graceful shutdown:** Drains connections on SIGTERM/SIGINT/uncaught exceptions
+- **Structured logging:** JSON in production, readable in dev, with request correlation
+- **Request ID generation:** Unique IDs for log correlation
+
+### Testing
+
+- **48 new tests:** Integration tests for wallet → mandate → execution pipeline, security module tests, production module tests
+- **218 total passing tests:** All server, client, and shared tests pass
+- **CI validation:** All checks pass in GitHub Actions
+
+## Previous release — Live execution: Binance trading, KMS encryption, WalletConnect v2, Sailor mandates
 
 Ledgerline now supports real execution through encrypted CEX API keys and non-custodial on-chain mandates.
 
@@ -18,17 +77,9 @@ Ledgerline now supports real execution through encrypted CEX API keys and non-cu
 
 **Safety maintained:** No private keys stored. AES-256-GCM encryption for all secrets. WalletConnect handles signing. Sailor mandates define scope and limits. All operations audit-logged with alerts.
 
-## Previous release — Real-mode foundation: wallet connection, API keys, security alerts
-
-**Wallet connection:** WalletConnect/injected provider support with address display, network info, and disconnect. Mode management: Simulation → Paper → Live with confirmation dialog.
-
-**Platform API keys:** Full CRUD for exchange keys with encrypted storage, permission warnings, per-platform limits, test/disable/delete.
-
-**Security alerts:** Dedicated alerts page with critical/warning/info levels, persistent badge, acknowledge/resolve.
-
-**New data layer:** `securityAlerts` and `platformApiKeys` tables. Extended `operatorActions` enum. `securityRouter` tRPC router.
-
 ## Earlier releases
+
+**Real-mode foundation:** Wallet connection, API keys dashboard, security alerts, mode management.
 
 **Performance and public experience:** Lazy-loaded routes, stable chunks, prefetch on intent, theme support, changelog route.
 

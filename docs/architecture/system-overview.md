@@ -12,6 +12,7 @@ Ledgerline is a React and TypeScript operator workspace backed by Express, tRPC,
 | `/platforms` | Platform API key management + live Binance trading (balances, orders, ticker). |
 | `/connections` | Venue capabilities and simulation adapter records. |
 | `/alerts` | Security alerts: critical/warning/info levels, acknowledge/resolve, persistent badge. |
+| `/mandates` | Sailor Protocol mandate management: create, activate, revoke with scope and value caps. |
 | `/settings` | Model routing, optional subagents, schedules, policy, and local owner preferences. |
 | `/activity` | Immutable owner-scoped event log. |
 
@@ -29,6 +30,20 @@ Ledgerline is a React and TypeScript operator workspace backed by Express, tRPC,
 | `security` | Alerts (CRUD) + Platform API keys (CRUD + limits) |
 | `live` | Binance API: balances, ticker, orders (place/cancel), exchange info |
 | `wallet` | WalletConnect v2 sessions + Sailor Protocol mandates |
+
+## Server modules
+
+| Module | Purpose |
+| --- | --- |
+| `kms.ts` | AES-256-GCM encryption for API secrets |
+| `binance.ts` | Binance REST API client with HMAC-SHA256 signing |
+| `liveAdapter.ts` | Live execution with mandate validation and safety guards |
+| `walletService.ts` | WalletConnect v2 session management |
+| `sailorService.ts` | Sailor Protocol mandate CRUD and execution |
+| `agentExecutor.ts` | Unified CEX + on-chain execution pipeline |
+| `security.ts` | Rate limiting, input sanitization, error classification |
+| `production.ts` | Environment validation, health checks, graceful shutdown |
+| `metrics.ts` | Prometheus metrics endpoint and tracking |
 
 ## Agent runtime
 
@@ -70,6 +85,32 @@ WalletConnect v2 handles on-chain signing — the agent never sees private keys.
 ## KMS — Key Management Service
 
 Secrets are encrypted with AES-256-GCM using random IVs and auth tags. The master key is derived from `ENCRYPTION_KEY` env var via scrypt. Dev fallback uses a fixed passphrase with a console warning.
+
+## Security hardening
+
+- **Rate limiting:** Sliding window per userId + IP, configurable limits (10r/s API, 5r/s auth)
+- **Input sanitization:** Strip dangerous characters, truncate to 1000 chars
+- **Error classification:** Never leak internal details to users
+- **Request validation:** Schema-based validation with Zod
+- **Security headers:** nosniff, DENY frame, XSS protection, strict referrer
+
+## Production infrastructure
+
+### Docker
+
+Multi-stage Dockerfile (deps → build → production) with Docker Compose for MySQL + App. Production overrides add resource limits and restart policies. Makefile provides convenience commands.
+
+### CI/CD
+
+GitHub Actions pipeline with quality gate (typecheck + tests + build), security scan (Trivy), Docker build, and staging/production deployment. All checks must pass before merge.
+
+### Nginx
+
+Reverse proxy with SSL termination (TLS 1.2/1.3), rate limiting, security headers, WebSocket support, and custom error pages.
+
+### Monitoring
+
+Prometheus scrapes `/metrics` endpoint for HTTP requests, response times, errors, agent executions, and security alerts. Grafana dashboard displays 8 panels. Alert rules cover availability, performance, security, and business metrics. Alertmanager routes alerts to Slack, email, or PagerDuty.
 
 ## Interface system
 
