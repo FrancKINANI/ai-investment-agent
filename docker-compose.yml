@@ -1,0 +1,62 @@
+# ─── Development Configuration ────────────────────────────────────────────
+# Usage: docker-compose up
+# This starts MySQL and the app in development mode with hot reload
+
+services:
+  # ─── MySQL Database ─────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: ledgerline-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ledgerline}
+      MYSQL_USER: ${MYSQL_USER:-ledgerline}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ledgerline}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ledgerline
+
+  # ─── App (Development) ──────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: ledgerline-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: mysql://${MYSQL_USER:-ledgerline}:${MYSQL_PASSWORD:-ledgerline}@mysql:3306/${MYSQL_DATABASE:-ledgerline}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-encryption-key-change-in-production}
+      PORT: 3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ledgerline
+
+# ─── Production Configuration ─────────────────────────────────────────────
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+# Or: docker-compose --profile prod up
+
+volumes:
+  mysql_data:
+
+networks:
+  ledgerline:
+    driver: bridge

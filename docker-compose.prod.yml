@@ -1,0 +1,58 @@
+# ─── Production Configuration ─────────────────────────────────────────────
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# This overrides the dev app service with the production build
+
+services:
+  # ─── App (Production) ───────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ledgerline-app-prod
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://${MYSQL_USER:-ledgerline}:${MYSQL_PASSWORD:-ledgerline}@mysql:3306/${MYSQL_DATABASE:-ledgerline}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      PORT: 3000
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - ledgerline
+
+  # ─── MySQL (Production) ─────────────────────────────────────────────────
+  mysql:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-connections=100
+      --innodb-buffer-pool-size=256M
