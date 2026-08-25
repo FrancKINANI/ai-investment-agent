@@ -6,7 +6,7 @@
 
 Ledgerline helps an owner turn public evidence into a durable, inspectable research workflow. It brings together a bounded agent fabric, investment-policy controls, public token evidence, a dedicated debate workspace, paper-proposal review, and immutable owner activity—without confusing research with custody or execution.
 
-> **Safety boundary:** Ledgerline does not store wallet keys, venue credentials, seed phrases, signing authority, custody controls, live orders, or real execution capability. The real-mandate path remains server-blocked.
+> **Safety boundary:** Ledgerline does not store wallet keys, venue credentials, seed phrases, signing authority, custody controls, live orders, or real execution capability. Platform API keys are stored encrypted. The real-mandate path remains server-blocked.
 
 ## Screenshots
 
@@ -22,8 +22,10 @@ The current product views below show the owner workspace in its **simulation-onl
 | --- | --- | --- |
 | **Command** | Watchlists, public EVM evidence research, policy checks, paper proposals, and a recent activity snapshot. | Research can create a paper-review state; it cannot reach a venue. |
 | **Chat** | Dedicated Supervisor conversation with Bull, Bear, and Supervisor filters, disagreement summaries, and completeness bands. | Notes are research artifacts, not trade instructions or return forecasts. |
-| **Wallets** | Separate trading and investment mandate roles. | No private keys, wallet connection, signing, or custody. |
+| **Wallets** | Wallet connection (WalletConnect/injected), separate trading and investment mandate roles, mode management (Simulation → Paper → Live). | No private keys stored. Live mode requires explicit confirmation and is logged. |
+| **Platforms** | Exchange API key management (Binance, OKX, Coinbase, Kraken, Polymarket) with encrypted storage, permission warnings, per-platform limits, and test/disable/delete. | Withdrawal permissions trigger critical alerts. Secrets never shown after initial entry. |
 | **Connections** | Simulation adapter and venue-boundary records. | No account credentials or live venue control. |
+| **Alerts** | Security alerts with critical/warning/info levels, persistent badge, acknowledge/resolve, and structured audit logging. | Alerts are owner-scoped, timestamped, and linked to the Decision Journal. |
 | **Settings** | Protected model routes, optional read-only subagents, inactive discovery schedules, YAML configuration inspection, policy controls, and local owner preferences. | Changing a model or inspecting configuration never grants a new tool scope or financial authority. |
 | **Activity** | Owner-scoped immutable operating history and local read-state controls. | Activity does not fabricate balances, fills, connections, or agent actions. |
 
@@ -39,6 +41,10 @@ The application uses React and TypeScript for the operator interface, tRPC and E
 Public evidence → bounded agent research → deterministic policy → owner approval → paper simulation → immutable activity
                                                     │
                                                     └── no live execution path
+
+Platform API keys → encrypted storage → permission warnings → per-platform limits → audit log
+Wallet connection → WalletConnect/injected → address display → mode management → confirmation dialog
+Security alerts → critical/warning/info → persistent badge → acknowledge/resolve → Decision Journal
 ```
 
 Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), [security and data boundaries](docs/architecture/security-and-data.md), and [future real-mode architecture](docs/architecture/future-real-mode-architecture.md) for the current route, capability, data, authority, and future-gate model.
@@ -76,7 +82,7 @@ pnpm build
 
 ### Configure the environment
 
-Follow the [environment configuration guide](docs/maintainers/environment-configuration.md). Server secrets such as `DATABASE_URL` and `JWT_SECRET` belong only in the deployment platform’s protected configuration store. Values with a `VITE_` prefix are browser-visible by design and must never contain credentials.
+Follow the [environment configuration guide](docs/maintainers/environment-configuration.md). Server secrets such as `DATABASE_URL` and `JWT_SECRET` belong only in the deployment platform's protected configuration store. Values with a `VITE_` prefix are browser-visible by design and must never contain credentials.
 
 ## First safe workflow
 
@@ -85,6 +91,9 @@ Follow the [environment configuration guide](docs/maintainers/environment-config
 3. Start a bounded research brief in **Chat**; use the Bull and Bear filters to inspect disagreement.
 4. Add a watchlist and use the Evidence Lab only with a public Ethereum contract address.
 5. Review paper-proposal states and the immutable **Activity** record. Owner approval can advance a proposal only to simulated settlement.
+6. Visit **Wallets** to connect a wallet and explore mode management (Simulation → Paper → Live).
+7. Visit **Platforms & API Keys** to add an exchange API key with trading-only permissions.
+8. Check **Security Alerts** for any alerts generated by your actions.
 
 Loading skeletons indicate a real pending request. Empty states indicate a completed request with no matching owner records. Treating those states separately is important: neither is evidence of a connection, balance, policy pass, or execution result.
 

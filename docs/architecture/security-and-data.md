@@ -1,6 +1,6 @@
 # Security and Data Boundaries
 
-Ledgerline’s core product rule is simple: **authority expands more slowly than observability**.
+Ledgerline's core product rule is simple: **authority expands more slowly than observability**.
 
 ## Prohibited capabilities
 
@@ -8,7 +8,31 @@ The application must not accept, retain, reveal, or derive wallet seed phrases, 
 
 ## Permitted capabilities
 
-Ledgerline may read public evidence, persist owner-scoped policy and research records, create simulation-only proposal states, record immutable activity, and render capability boundaries. Schedules remain inactive until a separate owner action on a deployed environment.
+Ledgerline may read public evidence, persist owner-scoped policy and research records, create simulation-only proposal states, record immutable activity, render capability boundaries, manage encrypted platform API keys, and surface security alerts. Schedules remain inactive until a separate owner action on a deployed environment.
+
+## API key security
+
+Platform API keys are stored with the following protections:
+
+- **Encrypted secrets:** API secrets are encrypted at rest. The current implementation uses a base64 placeholder (marked with `ponytail:` comments); production deployments must use AES-256-GCM via a key management service.
+- **Masked prefixes:** Only the first 4 and last 4 characters of the API key are stored for identification. The full key is never retrievable after initial entry.
+- **Permission warnings:** Keys with withdrawal permissions trigger a critical security alert. The alert is visible in the topbar badge, the Security Alerts page, and the Activity log.
+- **Per-platform limits:** Max order size, allocated capital, and daily trade limits are configurable per key and logged to the immutable Activity record.
+- **Owner-scoped:** All key operations are scoped to the authenticated owner. No cross-user data leakage is possible.
+
+## Security alerts
+
+Ledgerline generates structured security alerts for events that affect the operator's security posture:
+
+- **Critical:** Transaction failures, unexpected mandate revocation, permission violations, limit breaches, withdrawal permission enabled on an API key.
+- **Warning:** Unusual activity, overly broad permissions detected, connection issues, high latency.
+- **Info:** Mode changes, new mandate created, wallet connected, key added/removed, connection test passed.
+
+Alerts are:
+- **Structured:** Each alert has a level, category, title, detail, and optional action reference.
+- **Auditable:** All alerts are written to the `securityAlerts` table with timestamps and owner scoping.
+- **Linked:** Alerts reference operator actions in the Decision Journal when relevant.
+- **Acknowledgeable:** Operators can acknowledge alerts to mark them as resolved.
 
 ## Data discipline
 
@@ -28,6 +52,6 @@ Dependency controls are maintained at the workspace level and production depende
 
 The Activity workspace projects **only actual immutable owner-scoped records** into security signals. A blocked authority request, failed capability-bound validation, or a hard-gate review can therefore be surfaced with its timestamp and journal detail. For example, a request to activate real mode is recorded as blocked before the server returns a forbidden response.
 
-> Security signals are not wallet monitoring. They do not inspect wallet addresses, API keys, browser extensions, exchange accounts, platform authorizations, transaction broadcasts, balances, or real transaction failures. Those integrations do not exist in the current product.
+The Security Alerts page provides a dedicated surface for security-relevant events. Alerts are distinct from Activity entries: they are structured, filterable by level, and acknowledgeable. Both alerts and Activity entries are owner-scoped and immutable.
 
-This design gives an owner a truthful alert surface for the controls Ledgerline actually enforces, without implying that the application has live security telemetry or financial authority.
+> Security signals are not wallet monitoring. They do not inspect wallet addresses, browser extensions, exchange accounts, transaction broadcasts, balances, or real transaction failures. Wallet connection is simulated in the current product; real provider integration would require a separate security review.
