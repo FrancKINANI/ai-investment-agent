@@ -1,6 +1,14 @@
 # Ledgerline — Roadmap & Remaining Work
 
-**Date:** 2026-08-25 · **State:** Stages 0–5 of the real-mode program implemented (PR #7 open), Phase 0 architecture audit delivered (PR #6 open). System default authority remains `disabled`; nothing live is enabled.
+**Date:** 2026-08-25 · **State:** Stages 0–5 MERGED to main. Branch model adopted: `main` (production) + `staging` (integration) only; feature branches are ephemeral (PR → staging → tests → main → delete). System default authority remains `disabled`; nothing live is enabled.
+
+## Session log (2026-08-25) — done
+
+- Stages 0–5 implemented and merged: authority state machine (+authorityControls table, owner-only tRPC transitions, kill switch), fail-closed order gates in executeLiveOrder, deterministic paper executor + append-only executionLedger, read-only live data adapters with truthful envelopes, hardened credentials (withdrawal hard-reject, scope allowlist, real connection verification, rotation, one-venue policy), wallet view-first sessions (non-custodial, persisted, owner-scoped), Stage 5 live reconciliation (mandate↔authority gate, idempotency, per-order approvals, price freshness).
+- Phase 0 architecture audit delivered (docs/architecture-audit.md). Security findings S1–S3 flagged, NOT fixed (paused by owner pending review of the audit).
+- Review hardening on Stage 5: idempotency-before-approval ordering fix, authority.approveLiveOrder + pendingApprovals tRPC surface, ledgerSeq consistency, LIMIT freshness exemption pinned by test, migration drizzle/0009 generated.
+- Repo cleaned to exactly two branches (main, staging); PRs #6/#7/#8 merged; all feature branches deleted post-merge.
+- Suite at merge time: 48 files / 321+ tests green.
 
 This document is the single source of truth for what remains. It is ordered by decision priority, not by category.
 
@@ -10,8 +18,8 @@ This document is the single source of truth for what remains. It is ordered by d
 
 | # | Item | Where | What is needed |
 |---|---|---|---|
-| D1 | **Stage 5 review & merge** | PR `feat/stage5-limited-live` (#7) | Owner reviews the 5 commits (incl. review-hardening commit). On merge: run `pnpm db:push` at next deploy — migration `drizzle/0009_*.sql` consolidates all Stage 0–5 schema changes. |
-| D2 | **Architecture audit validation** | PR #6 (`docs/architecture-audit.md`) | Owner reads the audit, confirms or amends findings. Unblocks the refactor program (§4) and decides the fate of S1–S3 (§3). |
+| D1 | ~~Stage 5 review & merge~~ ✅ DONE — merged via PR #7. Migration `drizzle/0009_*.sql` still must run via `pnpm db:push` at next deploy. |
+| D2 | **Architecture audit validation** — audit merged into main (docs/architecture-audit.md); owner still owes a verdict on findings S1–S3 (fix now vs defer). Refactor program stays paused until then. |
 
 ## 2. Security findings awaiting triage (from the Phase 0 audit)
 
