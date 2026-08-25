@@ -49,19 +49,7 @@ const updateLimitsSchema = z.object({
   dailyTradeLimit: z.number().int().positive().max(100_000).optional(),
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
-
-/** Simple XOR-based key masking — NOT real encryption. Real encryption must happen server-side with a KMS. */
-function maskApiKey(key: string): string {
-  if (key.length <= 8) return "****";
-  return key.slice(0, 4) + "****" + key.slice(-4);
-}
-
-/** Fake encryption placeholder — replace with real KMS integration in production. */
-function encryptSecret(secret: string): string {
-  // ponytail: base64 placeholder, replace with real AES-256-GCM via KMS
-  return Buffer.from(secret).toString("base64");
-}
+import { encryptSecret, maskApiKey } from "./kms";
 
 // ─── Router ───────────────────────────────────────────────────────────────
 
