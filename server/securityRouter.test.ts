@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
+import * as binance from "./binance";
 import { encryptSecret, decryptSecret, maskApiKey } from "./kms";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────
@@ -158,21 +159,37 @@ describe("security.platforms", () => {
     expect(db.createSecurityAlert).not.toHaveBeenCalled();
   });
 
-  it("emits a critical alert and logs review status when withdrawal permission is enabled", async () => {
+  it("HARD-REJECTS withdrawal permission: nothing is stored (spec non-negotiable)", async () => {
     const caller = appRouter.createCaller(context());
-    await caller.security.platforms.addKey({
+    await expect(caller.security.platforms.addKey({
       ...validKeyInput,
       hasWithdrawPermission: true,
-    });
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Critical alert recorded for the attempt...
     expect(db.createSecurityAlert).toHaveBeenCalledWith(42, expect.objectContaining({
       level: "critical",
       category: "key-permission",
-      title: expect.stringContaining("Withdrawal permission"),
     }));
-    expect(db.createOperatorAction).toHaveBeenCalledWith(42, expect.objectContaining({
-      kind: "platform_key_added",
-      status: "review",
-    }));
+    // ...but no key was created and no platform_key_added action was logged.
+    expect(db.createPlatformApiKey).not.toHaveBeenCalled();
+  });
+
+  it("rejects scopes outside the safe allowlist at validation time", async () => {
+    const caller = appRouter.createCaller(context());
+    await expect(caller.security.platforms.addKey({
+      ...validKeyInput,
+      permissions: ["read-only", "withdraw"],
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(db.createPlatformApiKey).not.toHaveBeenCalled();
+  });
+
+  it("restricts credential ingestion to active venues only", async () => {
+    const caller = appRouter.createCaller(context());
+    await expect(caller.security.platforms.addKey({
+      ...validKeyInput,
+      platform: "kraken" as const,
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(db.createPlatformApiKey).not.toHaveBeenCalled();
   });
 
   it("stores the API secret encrypted (base64 placeholder) and masks the key prefix", async () => {
@@ -192,16 +209,26 @@ describe("security.platforms", () => {
     await expect(caller.security.platforms.testConnection({ keyId: "nonexistent" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("tests an existing connection and emits an info alert", async () => {
-    db.getPlatformApiKey.mockResolvedValue({ id: 1, keyId: "k1", platform: "binance", label: "Test key" });
+  it("tests an existing connection against the real read-only endpoint and emits an info alert on success", async () => {
+    db.getPlatformApiKey.mockResolvedValue({ id: 1, keyId: "k1", platform: "binance", label: "Test key", apiKeyEncrypted: encryptSecret("keyvalue123"), secretEncrypted: encryptSecret("secretvalue456") });
+    vi.spyOn(binance, "getAccount").mockResolvedValue({ canTrade: false, balances: [] } as never);
     const caller = appRouter.createCaller(context());
     await caller.security.platforms.testConnection({ keyId: "k1" });
+    expect(binance.getAccount).toHaveBeenCalled();
     expect(db.updatePlatformApiKeyState).toHaveBeenCalledWith(42, "k1", "active");
     expect(db.createSecurityAlert).toHaveBeenCalledWith(42, expect.objectContaining({
       level: "info",
       category: "connection-test",
-      title: expect.stringContaining("binance"),
     }));
+  });
+
+  it("reports verification failure truthfully and disables the key instead of faking success", async () => {
+    db.getPlatformApiKey.mockResolvedValue({ id: 1, keyId: "k1", platform: "binance", label: "Test key" });
+    vi.spyOn(binance, "getAccount").mockRejectedValue(new Error("API-key format invalid."));
+    const caller = appRouter.createCaller(context());
+    await expect(caller.security.platforms.testConnection({ keyId: "k1" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(db.updatePlatformApiKeyState).toHaveBeenCalledWith(42, "k1", "disabled");
+    expect(db.createSecurityAlert).toHaveBeenCalledWith(42, expect.objectContaining({ level: "warning" }));
   });
 
   it("disables a key and logs a platform_key_disabled action", async () => {
