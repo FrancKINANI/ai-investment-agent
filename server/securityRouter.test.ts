@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
+import { encryptSecret, decryptSecret, maskApiKey } from "./kms";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────
 
@@ -178,12 +179,11 @@ describe("security.platforms", () => {
     const caller = appRouter.createCaller(context());
     await caller.security.platforms.addKey(validKeyInput);
     const callArgs = db.createPlatformApiKey.mock.calls[0][1];
-    // Key prefix should be masked: first 4 + **** + last 4
-    // API key is 'abcdefghijklmnopqrstuvwxyz1234' → first 4='abcd', last 4='1234'
-    expect(callArgs.keyPrefix).toBe("abcd****1234");
-    // Secret should be base64-encoded (ponytail: placeholder for real KMS)
-    const decoded = Buffer.from(callArgs.secretEncrypted, "base64").toString();
-    expect(decoded).toBe("supersecretkeyvalue12345678");
+    // Key prefix should be masked using the same KMS module
+    expect(callArgs.keyPrefix).toBe(maskApiKey(validKeyInput.apiKey));
+    // Secret should be encrypted with AES-256-GCM and decryptable
+    const decrypted = decryptSecret(callArgs.secretEncrypted);
+    expect(decrypted).toBe("supersecretkeyvalue12345678");
   });
 
   it("returns NOT_FOUND when testing a nonexistent key", async () => {
