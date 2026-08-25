@@ -30,7 +30,7 @@ beforeEach(() => {
   fabric.markDiscoveryScheduleRun.mockResolvedValue();
   db.getInvestmentPolicy.mockResolvedValue({ allowedAssets: ["0x0000000000000000000000000000000000000001"] });
   db.createOperatorAction.mockResolvedValue({});
-  onchain.getEthereumTokenMetrics.mockResolvedValue({ token: { address: "0x0000000000000000000000000000000000000001", symbol: "TEST", holders: 22 }, market: { liquidityUsd: 250000, sourceUrl: "https://dex.example" }, sources: { explorer: "Blockscout public API", market: "DexScreener public API" }, freshness: "live" });
+  onchain.getEthereumTokenMetrics.mockResolvedValue({ token: { address: "0x0000000000000000000000000000000000000001", symbol: "TEST", holders: 22 }, market: { liquidityUsd: 250000 }, sources: { explorer: "Blockscout public API", market: "DexScreener public API" }, freshness: "live" });
 });
 
 describe("scheduled discovery callback", () => {
@@ -57,5 +57,13 @@ describe("scheduled discovery callback", () => {
     await scheduledDiscoveryHandler({ originalUrl: "/api/scheduled/discovery" } as never, res as never);
     expect(fabric.createDiscoveryFinding).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true, findings: 0 }));
+  });
+
+  it("returns a stable non-sensitive failure envelope when the scheduler path fails", async () => {
+    sdk.authenticateRequest.mockRejectedValue(new Error("internal upstream detail"));
+    const res = response();
+    await scheduledDiscoveryHandler({ originalUrl: "/api/scheduled/discovery?secret=never-return" } as never, res as never);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: "scheduled-discovery-unavailable" });
   });
 });

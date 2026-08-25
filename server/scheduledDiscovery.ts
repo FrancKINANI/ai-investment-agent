@@ -36,7 +36,7 @@ export async function scheduledDiscoveryHandler(req: Request, res: Response) {
           evidence.push(`source:${metrics.sources.explorer}`, `source:${metrics.sources.market}`, `freshness:${metrics.freshness}`, `token:${metrics.token.address}`);
           const liquidity = metrics.market?.liquidityUsd ?? null;
           score = status === "candidate" ? Math.min(100, 65 + (liquidity && liquidity > 0 ? 15 : 0) + (metrics.token.holders && metrics.token.holders > 0 ? 10 : 0)) : score;
-          confidence = metrics.market?.sourceUrl ? "high" : "medium";
+          confidence = metrics.market ? "high" : "medium";
           summary = `Public evidence collected for ${metrics.token.symbol}: ${metrics.token.holders ?? "unavailable"} holders, ${liquidity ?? "unavailable"} USD reported liquidity. Policy state is ${status}; this is not a trade signal.`;
         } catch (error) {
           evidence.push("public-token-data-unavailable");
@@ -52,7 +52,7 @@ export async function scheduledDiscoveryHandler(req: Request, res: Response) {
     await createOperatorAction(schedule.userId, { actionId: nanoid(), kind: "discovery_completed", status: "success", subject: `${schedule.cadence} watchlist discovery`, detail: `Scheduled discovery created ${findings.length} source-bound simulation-only finding(s).`, payload: { scheduleId: schedule.scheduleId, findingCount: findings.length, execution: "simulation-only" } });
     return res.json({ ok: true, scheduleId: schedule.scheduleId, findings: findings.length });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return res.status(500).json({ error: message, context: { url: req.originalUrl }, timestamp: new Date().toISOString() });
+    console.error("[Scheduled discovery] callback failed", { name: error instanceof Error ? error.name : "unknown" });
+    return res.status(500).json({ error: "scheduled-discovery-unavailable" });
   }
 }
