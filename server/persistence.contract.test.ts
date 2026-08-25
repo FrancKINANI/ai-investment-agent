@@ -40,7 +40,7 @@ import { appRouter } from "./routers";
 
 function context(): TrpcContext {
   return {
-    user: { id: 7, openId: "test-owner", name: "Test Owner", email: null, loginMethod: "manus", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+    user: { id: 7, openId: "test-owner", name: "Test Owner", email: null, loginMethod: "manus", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };
@@ -75,6 +75,7 @@ beforeEach(() => {
 });
 
 describe("authenticated persistence contracts", () => {
+  const passingGate = { simulationPassed: true, lineageCoverage: 80, complexityPenalty: 10, ownerPauseActive: false, rationale: "Administrator reviewed a complete paper-evidence packet." };
   it("returns null, not undefined, when an authenticated owner has no saved IPS", async () => {
     const caller = appRouter.createCaller(context());
     await expect(caller.policy.current()).resolves.toBeNull();
@@ -127,7 +128,7 @@ describe("authenticated persistence contracts", () => {
     const caller = appRouter.createCaller(context());
     const reviewProposal = { proposalId: "proposal-1", status: "review", policyResult: "pass", title: "ETH evidence review", venue: "evm", walletRole: "trading", runId: "run-1" };
     db.getAgentProposal.mockResolvedValueOnce(reviewProposal).mockResolvedValueOnce({ ...reviewProposal, status: "approved" }).mockResolvedValueOnce(reviewProposal);
-    await caller.autonomy.approveProposal({ proposalId: "proposal-1" });
+    await caller.autonomy.approveProposal({ proposalId: "proposal-1", ...passingGate });
     await caller.autonomy.settleSimulation({ proposalId: "proposal-1" });
     await caller.autonomy.rejectProposal({ proposalId: "proposal-1", reason: "Owner wants more evidence before a paper test." });
     expect(db.updateAgentProposalStatus).toHaveBeenCalledWith(7, "proposal-1", "approved");
@@ -153,7 +154,7 @@ describe("authenticated persistence contracts", () => {
     db.getInvestmentPolicy.mockResolvedValue({ name: "Owner IPS", version: 3, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
     db.getAgentProposal.mockResolvedValueOnce(reviewProposal).mockResolvedValueOnce({ ...reviewProposal, status: "approved" });
     await caller.research.analyzeToken({ address: "0x0000000000000000000000000000000000000001", question: "Run the complete paper lifecycle." });
-    await caller.autonomy.approveProposal({ proposalId: "proposal-1" });
+    await caller.autonomy.approveProposal({ proposalId: "proposal-1", ...passingGate });
     await caller.autonomy.settleSimulation({ proposalId: "proposal-1" });
     const lifecycleKinds = db.createOperatorAction.mock.calls.map(([, action]) => action.kind);
     expect(lifecycleKinds).toEqual(expect.arrayContaining(["research_completed", "proposal_created", "proposal_approved", "simulation_settled"]));
@@ -165,9 +166,10 @@ describe("authenticated persistence contracts", () => {
     const caller = appRouter.createCaller(context());
     const reviewProposal = { proposalId: "proposal-1", status: "review", policyResult: "pass", title: "Evidence supports paper review", venue: "evm", walletRole: "trading", runId: "run-1" };
     db.getInvestmentPolicy.mockResolvedValue({ name: "Owner IPS", version: 3, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
-    db.getAgentProposal.mockResolvedValueOnce(reviewProposal).mockResolvedValueOnce({ ...reviewProposal, status: "rejected" });
+    db.getAgentProposal.mockResolvedValueOnce(reviewProposal);
     await caller.research.analyzeToken({ address: "0x0000000000000000000000000000000000000001", question: "Reject this proposal after the research cycle." });
     await caller.autonomy.rejectProposal({ proposalId: "proposal-1", reason: "The owner requires additional protocol diligence." });
+    db.getAgentProposal.mockResolvedValueOnce({ ...reviewProposal, status: "rejected" });
     await expect(caller.autonomy.settleSimulation({ proposalId: "proposal-1" })).rejects.toThrow("Only an owner-approved proposal can be settled");
     const lifecycleKinds = db.createOperatorAction.mock.calls.map(([, action]) => action.kind);
     expect(lifecycleKinds.indexOf("proposal_created")).toBeLessThan(lifecycleKinds.indexOf("proposal_rejected"));

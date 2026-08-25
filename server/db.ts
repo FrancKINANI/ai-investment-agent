@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { agentProfiles, agentProposals, agentRuns, awarenessRecords, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -107,12 +108,26 @@ export type OperatorActionInput = {
   subject: string;
   detail: string;
   payload: Record<string, unknown>;
+  capabilityIds?: string[];
+};
+
+const defaultCapabilityIdsByAction: Partial<Record<OperatorActionInput["kind"], string[]>> = {
+  research_completed: ["market-evidence.read", "chain-evidence.read"],
+  proposal_created: ["paper-proposal.compose"],
+  proposal_approved: ["paper-proposal.compose", "portfolio-snapshot.read"],
+  proposal_rejected: ["paper-proposal.compose"],
+  simulation_started: ["portfolio-snapshot.read", "paper-proposal.compose"],
+  simulation_settled: ["portfolio-snapshot.read", "paper-proposal.compose"],
+  onchain_viewed: ["chain-evidence.read"],
+  discovery_completed: ["market-evidence.read", "chain-evidence.read"],
 };
 
 export async function createOperatorAction(userId: number, action: OperatorActionInput) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(operatorActions).values({ userId, ...action });
+  const { capabilityIds, payload, ...record } = action;
+  const provenance = createCapabilityProvenance(capabilityIds ?? defaultCapabilityIdsByAction[action.kind] ?? []);
+  await db.insert(operatorActions).values({ userId, ...record, payload: { ...payload, provenance } });
   const saved = await db.select().from(operatorActions).where(eq(operatorActions.actionId, action.actionId)).limit(1);
   return saved[0];
 }

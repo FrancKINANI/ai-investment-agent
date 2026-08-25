@@ -1,6 +1,7 @@
 /* Autonomous operating system */
 @import url('https://fonts.googleapis.com/css2?family=Chilanka&family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif:ital@0;1&display=swap');
 @import "tailwindcss";
+@import "./governance.css";
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 @media (min-width:681px) { [data-slot="sidebar-wrapper"] .os-layout>.os-mobile-workspace { width:100%!important; max-width:none!important; min-width:0!important; flex:1 1 0!important; } [data-slot="sidebar-wrapper"] .os-layout>.os-mobile-workspace>.os-inset { width:100%!important; max-width:none!important; min-width:0!important; flex:1 1 0!important; } [data-slot="sidebar-wrapper"] .os-layout:has([data-slot="sidebar"][data-collapsible="offcanvas"])>.os-mobile-workspace { width:100%!important; max-width:none!important; flex-basis:0!important; } }
