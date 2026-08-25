@@ -1,0 +1,70 @@
+flowchart TB
+  classDef active fill:#e7f1ff,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;
+  classDef future fill:#fff7ed,stroke:#ea580c,color:#7c2d12,stroke-width:1.5px;
+  classDef gate fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:2px;
+  classDef external fill:#f1f5f9,stroke:#64748b,color:#1e293b,stroke-width:1.5px;
+  classDef blocked fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
+
+  subgraph NOW[Active Ledgerline · simulation-only]
+    direction LR
+    Owner[Owner / administrator<br/>consent, override & kill request]:::active --> UX[Command · Chat · Settings · Activity]:::active
+    Doctor[Config validator + doctor<br/>disabled MCP declarations]:::active --> Registry[Versioned capability registry<br/>safe scopes only]:::active
+    Evidence[Public market & chain evidence]:::active --> Fabric[Protected agent fabric<br/>Supervisor + TradingAgents roles]:::active
+    UX --> Policy[IPS & deterministic policy engine]:::active
+    Registry --> Fabric
+    Policy --> Proposal[Paper proposal + hard evaluation gate]:::active
+    Fabric --> Proposal
+    Proposal --> Simulation[Paper simulation<br/>wallet mandates & venue adapters]:::active
+    UX --> Journal[Immutable owner-scoped journal<br/>provenance, lineage & outcomes]:::active
+    Proposal --> Journal
+    Simulation --> Journal
+  end
+
+  Boundary[Current enforced boundary<br/>No keys · no credentials · no signing · no custody<br/>No active MCP · no venue connection · no live orders]:::blocked
+  Simulation -. cannot cross today .-> Boundary
+
+  subgraph ACTIVATION[Future real-mode activation program · every gate required]
+    direction LR
+    Gate1{1. Product, legal &<br/>jurisdiction review}:::gate --> Gate2{2. Independent security design<br/>& threat-model review}:::gate --> Gate3{3. Testnet / paper evidence,<br/>reconciliation & incident drills}:::gate --> Gate4{4. Explicit owner consent +<br/>scoped authority policy}:::gate --> Gate5{5. Staged rollout, limits &<br/>continuous monitoring}:::gate
+  end
+
+  Boundary -. only a future program may remove this boundary .-> Gate1
+
+  subgraph CONTROL[Future real-mode control plane · not implemented]
+    direction LR
+    Change[Change-control registry<br/>signed releases, separation of duties,<br/>two-person authority review]:::future --> IAM[Identity & authority service<br/>least privilege, session binding,<br/>time-boxed permissions]:::future
+    Change --> Secrets[Secret / signer boundary<br/>HSM or MPC policy, rotation,<br/>no raw key exposure to agents]:::future
+    FuturePolicy[Policy-attested approved intent<br/>from a separately governed flow]:::future --> Risk[Pre-trade risk & compliance<br/>IPS, position, exposure, rate,<br/>venue / jurisdiction eligibility]:::future
+    FuturePolicy --> Sandbox[Transaction / order simulation<br/>gas, slippage, balance & nonce checks]:::future
+    IAM --> Authz[Execution authorization coordinator<br/>owner consent, policy attestation,<br/>approval quorum & idempotency key]:::future
+    Secrets --> Authz
+    Risk --> Authz
+    Sandbox --> Authz
+    Kill[Out-of-band kill switch<br/>revoke session, cancel pending work,<br/>freeze adapters]:::future -. immediate revocation .-> Authz
+  end
+
+  Gate5 --> Change
+  Gate5 --> FuturePolicy
+  Owner -. future written consent only .-> Gate4
+
+  subgraph ADAPTERS[Future execution adapters · not implemented]
+    direction LR
+    Broker[Adapter security boundary<br/>venue allowlist, rate control,<br/>normalised receipts]:::future --> CEX[CEX adapter<br/>trade-only credentials, no withdrawal scope]:::future
+    Broker --> Chain[On-chain adapter<br/>allowance policy, simulation before signer request]:::future
+    Broker --> Predict[Prediction-market adapter<br/>market allowlist & jurisdiction checks]:::future
+  end
+
+  Authz --> Broker
+  CEX --> CEXVenue[(Approved CEX APIs)]:::external
+  Chain --> RPC[(Approved RPC / smart contracts)]:::external
+  Predict --> PMVenue[(Approved prediction-market APIs)]:::external
+
+  subgraph ASSURANCE[Future assurance & operations · not implemented]
+    direction LR
+    Receipts[Execution receipts<br/>authorization, signer, venue acknowledgement]:::future --> Audit[Tamper-evident audit ledger]:::future --> Recon[Independent reconciliation<br/>orders, fills, balances & chain receipts]:::future --> Monitor[Observability / SIEM<br/>alerts, anomaly detection & incident response]:::future
+  end
+
+  Broker --> Receipts
+  Authz --> Receipts
+  Monitor -. emergency signal .-> Kill
+  Recon -. outcome and reconciliation only .-> Journal

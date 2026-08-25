@@ -41,7 +41,7 @@ Public evidence → bounded agent research → deterministic policy → owner ap
                                                     └── no live execution path
 ```
 
-Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), and [security and data boundaries](docs/architecture/security-and-data.md) for the current route, capability, data, and authority model.
+Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), [security and data boundaries](docs/architecture/security-and-data.md), and [future real-mode architecture](docs/architecture/future-real-mode-architecture.md) for the current route, capability, data, authority, and future-gate model.
 
 ## Quick start
 
@@ -96,6 +96,7 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 | Operators | [Operator guide](docs/guides/operator-guide.md) | Day-to-day use of all workspaces. |
 | Developers | [System overview](docs/architecture/system-overview.md) | Routes, services, agents, and authority flow. |
 | Architecture contributors | [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md) | Capability registry, awareness mapping, phase gates, and execution exclusions. |
+| Future-program reviewers | [Future real-mode architecture](docs/architecture/future-real-mode-architecture.md) | Prospective trust boundaries, sequential activation gates, controls, adapters, and assurance. |
 | Configuration contributors | [Safe Phase 0 configuration and CLI](docs/guides/phase0-configuration-cli.md) | YAML layout, validation, supported inspection commands, and deferred authority. |
 | Security reviewers | [Security and data](docs/architecture/security-and-data.md) | Storage, privacy, and execution boundaries. |
 | Maintainers | [Engineering and operations](docs/maintainers/engineering-and-operations.md) | Tests, releases, tokens, and maintenance conventions. |
