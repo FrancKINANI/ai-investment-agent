@@ -444,3 +444,22 @@ export const paperOrders = mysqlTable("paperOrders", {
 });
 
 export type PaperOrder = typeof paperOrders.$inferSelect;
+
+/**
+ * Wallet view sessions (Stage 4, view-first). Non-custodial: only public
+ * session metadata is stored. No keys, no signing authority. Revocable.
+ */
+export const walletSessions = mysqlTable("walletSessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull().unique(),
+  address: varchar("address", { length: 42 }).notNull(), // 0x + 20-byte hex, client-verified
+  chainId: int("chainId").notNull(),
+  provider: mysqlEnum("provider", ["walletconnect", "injected", "coinbase"]).notNull(),
+  state: mysqlEnum("state", ["active", "revoked"]).default("active").notNull(),
+  capabilities: json("capabilities").$type<string[]>().notNull(), // always ["view"] in Stage 4
+  connectedAt: timestamp("connectedAt").defaultNow().notNull(),
+  revokedAt: timestamp("revokedAt"),
+});
+
+export type WalletSessionRecord = typeof walletSessions.$inferSelect;
