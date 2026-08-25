@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentProposals, agentRuns, awarenessRecords, bindingChangeRequests, InsertUser, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, awarenessRecords, bindingChangeRequests, InsertUser, securityAlerts, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 
@@ -103,7 +103,7 @@ export async function saveInvestmentPolicy(userId: number, values: PolicyValues)
 
 export type OperatorActionInput = {
   actionId: string;
-  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled" | "agent_configured" | "subagent_created" | "subagent_retired" | "chat_message" | "watchlist_created" | "watchlist_updated" | "discovery_schedule_configured" | "discovery_completed";
+  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled" | "agent_configured" | "subagent_created" | "subagent_retired" | "chat_message" | "watchlist_created" | "watchlist_updated" | "discovery_schedule_configured" | "discovery_completed" | "platform_key_added" | "platform_key_removed" | "platform_key_disabled" | "wallet_connected" | "wallet_disconnected" | "mode_changed" | "alert_created" | "alert_acknowledged";
   status: "success" | "review" | "blocked";
   subject: string;
   detail: string;
@@ -318,4 +318,110 @@ export async function createOutcomeRecord(userId: number, record: {
   await db.insert(outcomeRecords).values({ userId, ...record, runId: record.runId ?? null, realizedBps: record.realizedBps ?? null });
   const saved = await db.select().from(outcomeRecords).where(eq(outcomeRecords.userId, userId)).orderBy(desc(outcomeRecords.createdAt)).limit(1);
   return saved[0];
+}
+
+// ─── Security Alerts ───────────────────────────────────────────────────────
+
+
+export async function createSecurityAlert(userId: number, alert: {
+  alertId: string;
+  level: "critical" | "warning" | "info";
+  category: string;
+  title: string;
+  detail: string;
+  actionRef?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(securityAlerts).values({ userId, ...alert, actionRef: alert.actionRef ?? null });
+  const saved = await db.select().from(securityAlerts).where(eq(securityAlerts.alertId, alert.alertId)).limit(1);
+  return saved[0];
+}
+
+export async function listSecurityAlerts(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(securityAlerts).where(eq(securityAlerts.userId, userId)).orderBy(desc(securityAlerts.createdAt)).limit(100);
+}
+
+export async function acknowledgeSecurityAlert(userId: number, alertId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(securityAlerts).set({ acknowledged: true, updatedAt: new Date() }).where(and(eq(securityAlerts.userId, userId), eq(securityAlerts.alertId, alertId)));
+  const saved = await db.select().from(securityAlerts).where(and(eq(securityAlerts.userId, userId), eq(securityAlerts.alertId, alertId))).limit(1);
+  return saved[0] ?? null;
+}
+
+export async function countUnacknowledgedAlerts(userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(securityAlerts).where(and(eq(securityAlerts.userId, userId), eq(securityAlerts.acknowledged, false)));
+  return result.length;
+}
+
+// ─── Platform API Keys ─────────────────────────────────────────────────────
+
+export async function createPlatformApiKey(userId: number, key: {
+  keyId: string;
+  platform: "binance" | "okx" | "coinbase" | "kraken" | "polymarket";
+  label: string;
+  keyPrefix: string;
+  secretEncrypted: string;
+  permissions: string[];
+  hasWithdrawPermission: boolean;
+  maxOrderUsd?: number;
+  allocatedCapitalUsd?: number;
+  dailyTradeLimit?: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(platformApiKeys).values({
+    userId,
+    ...key,
+    maxOrderUsd: key.maxOrderUsd ?? null,
+    allocatedCapitalUsd: key.allocatedCapitalUsd ?? null,
+    dailyTradeLimit: key.dailyTradeLimit ?? null,
+  });
+  const saved = await db.select().from(platformApiKeys).where(eq(platformApiKeys.keyId, key.keyId)).limit(1);
+  return saved[0];
+}
+
+export async function listPlatformApiKeys(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(platformApiKeys).where(eq(platformApiKeys.userId, userId)).orderBy(desc(platformApiKeys.createdAt));
+}
+
+export async function getPlatformApiKey(userId: number, keyId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(platformApiKeys).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId))).limit(1);
+  return result[0] ?? null;
+}
+
+export async function updatePlatformApiKeyState(userId: number, keyId: string, state: "active" | "disabled" | "testing") {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(platformApiKeys).set({ state, updatedAt: new Date() }).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
+  return getPlatformApiKey(userId, keyId);
+}
+
+export async function updatePlatformApiKeyLimits(userId: number, keyId: string, limits: {
+  maxOrderUsd?: number;
+  allocatedCapitalUsd?: number;
+  dailyTradeLimit?: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(platformApiKeys).set({ ...limits, updatedAt: new Date() }).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
+  return getPlatformApiKey(userId, keyId);
+}
+
+export async function deletePlatformApiKey(userId: number, keyId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const existing = await getPlatformApiKey(userId, keyId);
+  if (!existing) return null;
+  await db.delete(platformApiKeys).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
+  return existing;
 }

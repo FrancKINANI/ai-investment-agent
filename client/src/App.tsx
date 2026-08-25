@@ -9,11 +9,13 @@ import { pageLoaders } from "./lib/routePrefetch";
 
 const DashboardLayout = lazy(pageLoaders.dashboardLayout);
 const Activity = lazy(pageLoaders.activity);
+const Alerts = lazy(pageLoaders.alerts);
 const Chat = lazy(pageLoaders.chat);
 const Changelog = lazy(pageLoaders.changelog);
 const CommandCenter = lazy(pageLoaders.command);
 const Connections = lazy(pageLoaders.connections);
 const NotFound = lazy(pageLoaders.notFound);
+const Platforms = lazy(pageLoaders.platforms);
 const Settings = lazy(pageLoaders.settings);
 const Wallets = lazy(pageLoaders.wallets);
 const Welcome = lazy(pageLoaders.welcome);
@@ -27,7 +29,9 @@ function Router() {
       <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
       <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
       <Route path={"/wallets"}><Workspace><Wallets /></Workspace></Route>
+      <Route path={"/platforms"}><Workspace><Platforms /></Workspace></Route>
       <Route path={"/connections"}><Workspace><Connections /></Workspace></Route>
+      <Route path={"/alerts"}><Workspace><Alerts /></Workspace></Route>
       <Route path={"/settings"}><Workspace><Settings /></Workspace></Route>
       <Route path={"/activity"}><Workspace><Activity /></Workspace></Route>
       <Route path={"/404"} component={NotFound} />
