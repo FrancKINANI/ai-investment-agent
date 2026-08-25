@@ -29,13 +29,13 @@ export const AuthorityState = z.enum([
 export type AuthorityState = z.infer<typeof AuthorityState>;
 
 /** States in which order placement (any mutation against a venue) is permitted at all. */
-const ORDER_PLACING_STATES: ReadonlySet<AuthorityState> = new Set([
+const ORDER_PLACING_STATES: ReadonlySet<AuthorityState> = new Set<AuthorityState>([
   "approval-required-live",
   "limited-live",
 ]);
 
 /** States in which read-only live market/account data may be fetched. */
-const READ_ONLY_LIVE_STATES: ReadonlySet<AuthorityState> = new Set([
+const READ_ONLY_LIVE_STATES: ReadonlySet<AuthorityState> = new Set<AuthorityState>([
   "read-only-live",
   "approval-required-live",
   "limited-live",

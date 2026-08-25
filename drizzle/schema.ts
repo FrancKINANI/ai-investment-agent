@@ -268,6 +268,21 @@ export const discoveryFindings = mysqlTable("discoveryFindings", {
 });
 
 /** Immutable operator-originated actions. This is distinct from the AI awareness journal. */
+/** Owner-controlled real-mode authority state (Ledgerline v1.1). Defaults to disabled; fail closed. */
+export const authorityControls = mysqlTable("authorityControls", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  state: mysqlEnum("state", [
+    "disabled", "sandbox-only", "read-only-live",
+    "approval-required-live", "limited-live", "paused", "revoked",
+  ]).default("disabled").notNull(),
+  machineVersion: int("machineVersion").default(1).notNull(),
+  updatedBy: varchar("updatedBy", { length: 120 }),
+  reason: varchar("reason", { length: 800 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const operatorActions = mysqlTable("operatorActions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -281,6 +296,7 @@ export const operatorActions = mysqlTable("operatorActions", {
     "watchlist_updated", "discovery_schedule_configured", "discovery_completed",
     "platform_key_added", "platform_key_removed", "platform_key_disabled",
     "wallet_connected", "wallet_disconnected", "mode_changed",
+    "authority_changed",
     "alert_created", "alert_acknowledged",
   ]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
@@ -367,3 +383,4 @@ export type OperatorAction = typeof operatorActions.$inferSelect;
 export type BindingChangeRequest = typeof bindingChangeRequests.$inferSelect;
 export type SecurityAlert = typeof securityAlerts.$inferSelect;
 export type PlatformApiKey = typeof platformApiKeys.$inferSelect;
+export type AuthorityControl = typeof authorityControls.$inferSelect;

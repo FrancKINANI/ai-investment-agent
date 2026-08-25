@@ -23,7 +23,8 @@ import {
   type BinanceTimeInForce,
 } from "./binance";
 import { decryptSecret } from "./kms";
-import { getPlatformApiKey, createOperatorAction, createSecurityAlert } from "./db";
+import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert } from "./db";
+import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -213,6 +214,23 @@ export async function executeLiveOrder(
   order: LiveOrderRequest,
   accountBalanceUsd: number,
 ): Promise<{ result: LiveOrderResult; mandateCheck: MandateCheck }> {
+  // 0. Authority state machine gate (fail closed). Dominates mandate checks.
+  const authorityState = await getAuthorityState(userId);
+  try {
+    assertAuthorityAllows(authorityState, "place-order");
+  } catch (error) {
+    const reason = error instanceof AuthorityBlockedError ? error.message : "Authority check failed.";
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "simulation_blocked",
+      status: "blocked",
+      subject: `Order blocked by authority state: ${order.symbol} ${order.side}`,
+      detail: reason,
+      payload: { order, authorityState, reason },
+    });
+    throw error;
+  }
+
   // 1. Check mandate
   const mandateCheck = checkMandateAllowance(mandate, order, accountBalanceUsd);
   if (!mandateCheck.allowed) {
