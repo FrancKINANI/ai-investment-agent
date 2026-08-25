@@ -25,7 +25,8 @@ import {
 import { decryptSecret } from "./kms";
 import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
-import { reconcileLiveExecution, type LegacyMandateMode } from "@shared/mandateAuthority";
+import { reconcileLiveExecution, liveOrderApprovalHash, type LegacyMandateMode } from "@shared/mandateAuthority";
+import { getLiveOrderByIdempotencyKey, appendLedgerEvent } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,8 @@ export type LiveOrderRequest = {
   quoteOrderQty?: number;
   price?: number;
   timeInForce?: "GTC" | "IOC" | "FOK";
+  /** Required for live orders (Stage 5): duplicates return the original result, never re-submit. */
+  idempotencyKey?: string;
 };
 
 export type LiveOrderResult = {
@@ -268,10 +271,56 @@ export async function executeLiveOrder(
     throw new Error(`Order blocked: ${mandateCheck.reason}`);
   }
 
+  // 0c. Live idempotency (Stage 5): a repeated key returns the original outcome, never re-submits.
+  if (!order.idempotencyKey) {
+    throw new AuthorityBlockedError(authorityState, "place-order", "Live orders require a caller-supplied idempotencyKey (Stage 5).");
+  }
+  const duplicate = await getLiveOrderByIdempotencyKey(userId, order.idempotencyKey);
+  if (duplicate) {
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "scope_checked",
+      status: "review",
+      subject: `Live order duplicate key suppressed: ${order.symbol} ${order.side}`,
+      detail: `Idempotency key already recorded (status: ${duplicate.status}). Original outcome returned; Binance was NOT called again.`,
+      payload: { order, duplicateStatus: duplicate.status },
+    });
+    const dupResult: LiveOrderResult = {
+      orderId: duplicate.orderId,
+      symbol: order.symbol,
+      side: order.side,
+      type: order.type,
+      status: duplicate.status,
+      price: String(duplicate.outcome.price ?? ""),
+      quantity: String(duplicate.outcome.origQty ?? ""),
+      executedQty: String(duplicate.outcome.executedQty ?? ""),
+    };
+    return { result: dupResult, mandateCheck: { allowed: true, reason: "Duplicate idempotency key; original outcome returned without re-submission.", mandateId: mandate?.mandateId, mode: mandate?.mode } };
+  }
+
   // 2. Get API key
   const key = await getPlatformApiKey(userId, platformKeyId);
-  if (!key) throw new Error("API key not found.");
+  if (!key) throw new Error("API key is required for live orders.");
   if (key.state !== "active") throw new Error("API key is disabled.");
+
+  const clientOrderId = `ll-${nanoid(12)}`;
+  // Ledger: submitted (request snapshot) before any venue call — append-only.
+  await appendLedgerEvent(userId, {
+    orderId: order.idempotencyKey,
+    idempotencyKey: order.idempotencyKey,
+    venue: "binance",
+    executionMode: "live",
+    symbol: order.symbol,
+    side: order.side,
+    orderType: order.type,
+    quantity: order.quantity?.toString() ?? null,
+    price: order.price?.toString() ?? null,
+    quoteOrderQty: order.quoteOrderQty?.toString() ?? null,
+    seq: 2,
+    eventType: "submitted",
+    payload: { clientOrderId, mandateId: mandateCheck.mandateId ?? null },
+    mandateId: mandateCheck.mandateId ?? null,
+  });
 
   // 3. Log the attempt
   await createOperatorAction(userId, {
@@ -286,15 +335,51 @@ export async function executeLiveOrder(
   // 4. Place the order
   const apiKey = decryptSecret(key.apiKeyEncrypted);
   const apiSecret = decryptSecret(key.secretEncrypted);
-  const response = await binancePlaceOrder(apiKey, apiSecret, {
+  let response;
+  try {
+    response = await binancePlaceOrder(apiKey, apiSecret, {
+      symbol: order.symbol,
+      side: order.side as BinanceOrderSide,
+      type: order.type as BinanceOrderType,
+      quantity: order.quantity?.toString(),
+      quoteOrderQty: order.quoteOrderQty?.toString(),
+      price: order.price?.toString(),
+      timeInForce: order.timeInForce as BinanceTimeInForce,
+      newClientOrderId: clientOrderId,
+    });
+  } catch (error) {
+    // Reconciliation: venue call failed after submission intent was recorded.
+    await appendLedgerEvent(userId, {
+      orderId: order.idempotencyKey!,
+      idempotencyKey: order.idempotencyKey!,
+      venue: "binance",
+      executionMode: "live",
+      symbol: order.symbol,
+      side: order.side,
+      orderType: order.type,
+      seq: 3,
+      eventType: "rejected",
+      payload: { clientOrderId, outcome: { status: "REJECTED", reason: error instanceof Error ? error.message : "unknown" } },
+      mandateId: mandateCheck.mandateId ?? null,
+    });
+    throw error;
+  }
+  // Reconciliation: record the authoritative venue outcome.
+  await appendLedgerEvent(userId, {
+    orderId: order.idempotencyKey!,
+    idempotencyKey: order.idempotencyKey!,
+    venue: "binance",
+    executionMode: "live",
     symbol: order.symbol,
-    side: order.side as BinanceOrderSide,
-    type: order.type as BinanceOrderType,
-    quantity: order.quantity?.toString(),
-    quoteOrderQty: order.quoteOrderQty?.toString(),
-    price: order.price?.toString(),
-    timeInForce: order.timeInForce as BinanceTimeInForce,
-    newClientOrderId: `ll-${nanoid(12)}`,
+    side: order.side,
+    orderType: order.type,
+    quantity: order.quantity?.toString() ?? null,
+    price: order.price?.toString() ?? null,
+    quoteOrderQty: order.quoteOrderQty?.toString() ?? null,
+    seq: 3,
+    eventType: response.status === "REJECTED" ? "rejected" : "filled",
+    payload: { clientOrderId, outcome: { orderId: response.orderId, status: response.status, price: response.price, origQty: response.origQty, executedQty: response.cummulativeQuoteQty } },
+    mandateId: mandateCheck.mandateId ?? null,
   });
 
   // 5. Log the result
