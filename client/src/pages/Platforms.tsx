@@ -28,6 +28,168 @@ const platforms = [
 
 const recommendedPermissions = ["spot:trade", "spot:read"];
 
+type BinKey = { keyId: string; platform: string; label: string; keyPrefix: string; state: string };
+
+function LiveTradingSection({ binanceKeys }: { binanceKeys: BinKey[] }) {
+  const [selectedKey, setSelectedKey] = useState(binanceKeys[0]?.keyId ?? "");
+  const [symbol, setSymbol] = useState("BTCUSDT");
+  const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
+  const [orderType, setOrderType] = useState<"MARKET" | "LIMIT">("MARKET");
+  const [quantity, setQuantity] = useState("");
+  const [price, setPrice] = useState("");
+  const [showOrderConfirm, setShowOrderConfirm] = useState(false);
+
+  const balanceQuery = trpc.live.balances.useQuery(
+    { platformKeyId: selectedKey },
+    { enabled: !!selectedKey, retry: false, refetchInterval: 30_000 }
+  );
+  const tickerQuery = trpc.live.ticker.useQuery(
+    { symbol },
+    { enabled: !!symbol, retry: false, refetchInterval: 10_000 }
+  );
+  const placeOrderMutation = trpc.live.placeOrder.useMutation({
+    onSuccess: () => {
+      balanceQuery.refetch();
+      setShowOrderConfirm(false);
+      setQuantity("");
+      setPrice("");
+      toast.success("Order placed successfully.");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const ticker = tickerQuery.data;
+  const balances = balanceQuery.data ?? [];
+  const usdtBalance = balances.find((b) => b.asset === "USDT" || b.asset === "BUSD");
+
+  const handlePlaceOrder = () => {
+    if (!selectedKey) return toast.error("Select an API key first.");
+    if (!symbol) return toast.error("Enter a symbol.");
+    if (orderType === "LIMIT" && !price) return toast.error("Limit orders require a price.");
+    if (!quantity && !price) return toast.error("Enter a quantity or quote amount.");
+    setShowOrderConfirm(true);
+  };
+
+  const confirmOrder = () => {
+    placeOrderMutation.mutate({
+      platformKeyId: selectedKey,
+      symbol,
+      side: orderSide,
+      type: orderType,
+      quantity: quantity ? Number(quantity) : undefined,
+      quoteOrderQty: orderType === "MARKET" && !quantity ? Number(price) : undefined,
+      price: orderType === "LIMIT" ? Number(price) : undefined,
+    });
+  };
+
+  return (
+    <section style={{ marginTop: 24 }}>
+      <span className="eyebrow" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+        <Zap size={12} /> LIVE TRADING
+      </span>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* Balances */}
+        <div style={{ padding: 18, border: "1px solid var(--ll-line)", borderRadius: 7, background: "var(--ll-surface)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <strong style={{ color: "var(--ll-ink)", fontSize: 12 }}>Account Balances</strong>
+            <select value={selectedKey} onChange={(e) => setSelectedKey(e.target.value)} style={{ height: 28, padding: "0 6px", border: "1px solid var(--ll-line)", borderRadius: 4, background: "var(--ll-surface-2)", color: "var(--ll-ink)", fontSize: 9 }}>
+              {binanceKeys.map((k) => <option key={k.keyId} value={k.keyId}>{k.label} ({k.keyPrefix})</option>)}
+            </select>
+          </div>
+          {usdtBalance && (
+            <div style={{ padding: "10px 0", borderBottom: "1px solid var(--ll-line)", marginBottom: 8 }}>
+              <span style={{ color: "var(--ll-muted)", font: "8px 'DM Mono',monospace", textTransform: "uppercase" }}>Available USDT</span>
+              <strong style={{ display: "block", color: "var(--ll-ink)", fontSize: 20, fontFamily: "'DM Mono',monospace", marginTop: 4 }}>
+                ${usdtBalance.free.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </strong>
+              <span style={{ color: "var(--ll-muted)", fontSize: 9 }}>
+                Locked: ${usdtBalance.locked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          <div style={{ display: "grid", gap: 4 }}>
+            {balances.filter((b) => b.asset !== "USDT" && b.asset !== "BUSD" && b.total > 0).slice(0, 8).map((b) => (
+              <div key={b.asset} style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ll-ink)", padding: "3px 0", borderBottom: "1px solid var(--ll-line)" }}>
+                <span style={{ fontWeight: 500 }}>{b.asset}</span>
+                <span style={{ fontFamily: "'DM Mono',monospace" }}>{b.total.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+              </div>
+            ))}
+            {balances.length === 0 && <span style={{ color: "var(--ll-muted)", fontSize: 10 }}>No balances found.</span>}
+          </div>
+        </div>
+
+        {/* Order Form */}
+        <div style={{ padding: 18, border: "1px solid var(--ll-line)", borderRadius: 7, background: "var(--ll-surface)" }}>
+          <strong style={{ color: "var(--ll-ink)", fontSize: 12 }}>Place Order</strong>
+          {ticker && (
+            <div style={{ marginTop: 8, padding: "8px 0", borderBottom: "1px solid var(--ll-line)" }}>
+              <span style={{ color: "var(--ll-muted)", font: "8px 'DM Mono',monospace" }}>{ticker.symbol}</span>
+              <strong style={{ display: "block", color: "var(--ll-ink)", fontSize: 18, fontFamily: "'DM Mono',monospace", marginTop: 2 }}>
+                ${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </strong>
+              <span style={{ color: Number(ticker.priceChangePercent) >= 0 ? "var(--ll-success)" : "var(--ll-danger)", fontSize: 10 }}>
+                {Number(ticker.priceChangePercent) >= 0 ? "+" : ""}{ticker.priceChangePercent}%
+              </span>
+            </div>
+          )}
+          <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+            <label style={{ display: "grid", gap: 4, color: "var(--ll-muted)", font: "8px 'DM Mono',monospace", textTransform: "uppercase" }}>
+              Symbol
+              <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} style={{ height: 34, padding: "0 8px", border: "1px solid var(--ll-line)", borderRadius: 4, background: "var(--ll-surface-2)", color: "var(--ll-ink)", fontFamily: "'DM Mono',monospace" }} />
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button type="button" onClick={() => setOrderSide("BUY")} style={{ flex: 1, height: 32, border: `1px solid ${orderSide === "BUY" ? "var(--ll-success)" : "var(--ll-line)"}`, borderRadius: 4, background: orderSide === "BUY" ? "color-mix(in srgb, var(--ll-success) 12%, var(--ll-surface))" : "var(--ll-surface-2)", color: orderSide === "BUY" ? "var(--ll-success)" : "var(--ll-muted)", font: "9px 'DM Mono',monospace", cursor: "pointer" }}>BUY</button>
+                <button type="button" onClick={() => setOrderSide("SELL")} style={{ flex: 1, height: 32, border: `1px solid ${orderSide === "SELL" ? "var(--ll-danger)" : "var(--ll-line)"}`, borderRadius: 4, background: orderSide === "SELL" ? "color-mix(in srgb, var(--ll-danger) 12%, var(--ll-surface))" : "var(--ll-surface-2)", color: orderSide === "SELL" ? "var(--ll-danger)" : "var(--ll-muted)", font: "9px 'DM Mono',monospace", cursor: "pointer" }}>SELL</button>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button type="button" onClick={() => setOrderType("MARKET")} style={{ flex: 1, height: 32, border: `1px solid ${orderType === "MARKET" ? "var(--ll-blue)" : "var(--ll-line)"}`, borderRadius: 4, background: orderType === "MARKET" ? "var(--ll-blue-soft)" : "var(--ll-surface-2)", color: orderType === "MARKET" ? "var(--ll-blue)" : "var(--ll-muted)", font: "9px 'DM Mono',monospace", cursor: "pointer" }}>MARKET</button>
+                <button type="button" onClick={() => setOrderType("LIMIT")} style={{ flex: 1, height: 32, border: `1px solid ${orderType === "LIMIT" ? "var(--ll-blue)" : "var(--ll-line)"}`, borderRadius: 4, background: orderType === "LIMIT" ? "var(--ll-blue-soft)" : "var(--ll-surface-2)", color: orderType === "LIMIT" ? "var(--ll-blue)" : "var(--ll-muted)", font: "9px 'DM Mono',monospace", cursor: "pointer" }}>LIMIT</button>
+              </div>
+            </div>
+            <label style={{ display: "grid", gap: 4, color: "var(--ll-muted)", font: "8px 'DM Mono',monospace", textTransform: "uppercase" }}>
+              {orderType === "MARKET" ? "Quote amount (USDT)" : "Quantity"}
+              <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder={orderType === "MARKET" ? "100" : "0.001"} style={{ height: 34, padding: "0 8px", border: "1px solid var(--ll-line)", borderRadius: 4, background: "var(--ll-surface-2)", color: "var(--ll-ink)", fontFamily: "'DM Mono',monospace" }} />
+            </label>
+            {orderType === "LIMIT" && (
+              <label style={{ display: "grid", gap: 4, color: "var(--ll-muted)", font: "8px 'DM Mono',monospace", textTransform: "uppercase" }}>
+                Price (USDT)
+                <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" style={{ height: 34, padding: "0 8px", border: "1px solid var(--ll-line)", borderRadius: 4, background: "var(--ll-surface-2)", color: "var(--ll-ink)", fontFamily: "'DM Mono',monospace" }} />
+              </label>
+            )}
+            <Button onClick={handlePlaceOrder} disabled={!selectedKey || placeOrderMutation.isPending} style={{ marginTop: 4 }}>
+              {placeOrderMutation.isPending ? "Placing…" : `Place ${orderSide} order`}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Order confirmation dialog */}
+      {showOrderConfirm && (
+        <div style={{ marginTop: 12, padding: 16, border: "2px solid var(--ll-warn, #e0a030)", borderRadius: 7, background: "color-mix(in srgb, var(--ll-warn, #e0a030) 8%, var(--ll-surface))" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <AlertTriangle size={16} style={{ color: "var(--ll-warn, #e0a030)" }} />
+            <strong style={{ color: "var(--ll-ink)", fontSize: 12 }}>Confirm Live Order</strong>
+          </div>
+          <p style={{ color: "var(--ll-muted)", fontSize: 10, margin: "0 0 8px", lineHeight: 1.5 }}>
+            You are about to place a <strong style={{ color: orderSide === "BUY" ? "var(--ll-success)" : "var(--ll-danger)" }}>{orderSide}</strong> {orderType} order for <strong>{symbol}</strong>.
+            {orderType === "MARKET" && quantity && <span> Amount: ${Number(quantity).toLocaleString()} USDT.</span>}
+            {orderType === "LIMIT" && <span> {quantity} @ ${Number(price).toLocaleString()}.</span>}
+            This is a real order on Binance. All actions are logged and audited.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button variant="outline" size="sm" onClick={() => setShowOrderConfirm(false)}>Cancel</Button>
+            <Button size="sm" onClick={confirmOrder} disabled={placeOrderMutation.isPending}>
+              {placeOrderMutation.isPending ? "Placing…" : "Confirm order"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function Platforms() {
   const { isAuthenticated } = useAuth();
   const keysQuery = trpc.security.platforms.listKeys.useQuery(undefined, {
@@ -403,6 +565,11 @@ export default function Platforms() {
           </div>
         )}
       </section>
+
+      {/* Live Trading Section */}
+      {keys.filter((k) => k.platform === "binance" && k.state === "active").length > 0 && (
+        <LiveTradingSection binanceKeys={keys.filter((k) => k.platform === "binance" && k.state === "active")} />
+      )}
 
       <section className="connection-warning" style={{ marginTop: 16 }}>
         <AlertTriangle size={18} />
