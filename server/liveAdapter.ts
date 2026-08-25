@@ -25,6 +25,7 @@ import {
 import { decryptSecret } from "./kms";
 import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
+import { reconcileLiveExecution, type LegacyMandateMode } from "@shared/mandateAuthority";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -229,6 +230,26 @@ export async function executeLiveOrder(
       payload: { order, authorityState, reason },
     });
     throw error;
+  }
+
+  // 0b. Mandate ↔ authority reconciliation (Stage 5): both must agree.
+  if (mandate) {
+    const verdict = reconcileLiveExecution({
+      authorityState,
+      mandateMode: mandate.mode as LegacyMandateMode,
+      mandateStatus: mandate.status,
+    });
+    if (!verdict.allowed) {
+      await createOperatorAction(userId, {
+        actionId: nanoid(),
+        kind: "simulation_blocked",
+        status: "blocked",
+        subject: `Order blocked by mandate/authority disagreement: ${order.symbol} ${order.side}`,
+        detail: verdict.reason,
+        payload: { order, authorityState, mandateMode: mandate.mode, reason: verdict.reason },
+      });
+      throw new AuthorityBlockedError(authorityState, "place-order", verdict.reason);
+    }
   }
 
   // 1. Check mandate
