@@ -10,9 +10,11 @@ Ledgerline helps an owner turn public evidence into a durable, inspectable resea
 
 ## Screenshots
 
-| Welcome and documentation hub | Command workspace |
-| --- | --- |
-| ![Ledgerline welcome screen](/manus-storage/ledgerline-welcome_f05ea222.png) | ![Ledgerline Command workspace](/manus-storage/ledgerline-command_97d1fdf3.png) |
+The current product views below show the owner workspace in its **simulation-only** posture: Command for bounded research, Settings for configuration governance, and Activity for owner-scoped history.
+
+| Command workspace | Settings and governance | Immutable activity |
+| --- | --- | --- |
+| ![Ledgerline Command workspace with watchlists, paper-candidate research, and simulation safeguards](/manus-storage/ledgerline-command-current_73c0a7af.png) | ![Ledgerline Settings workspace with capability registry, YAML configuration, binding governance, and hard gates](/manus-storage/ledgerline-settings-governance-current_bc79ea06.png) | ![Ledgerline Activity workspace with immutable owner-scoped events](/manus-storage/ledgerline-activity-current_d578a200.png) |
 
 ## What it provides
 
