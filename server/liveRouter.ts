@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
-import { listWalletMandates, getAuthorityState } from "./db";
+import { listWalletMandates, getAuthorityState, recordLiveOrderApproval, listOperatorActions } from "./db";
+import { liveOrderApprovalHash } from "@shared/mandateAuthority";
 import { readBinanceTicker } from "./liveData";
 import {
   getLiveBalances,
@@ -23,6 +24,8 @@ const orderSchema = z.object({
   quoteOrderQty: z.number().positive().optional(),
   price: z.number().positive().optional(),
   timeInForce: z.enum(["GTC", "IOC", "FOK"]).default("GTC"),
+  /** Stage 5: required for live orders; duplicates return the original outcome without re-submission. */
+  idempotencyKey: z.string().trim().min(8).max(128),
 }).refine(
   (data) => (data.type === "MARKET" ? data.quantity || data.quoteOrderQty : data.quantity && data.price),
   { message: "Market orders need quantity or quoteOrderQty. Limit orders need quantity and price." },
@@ -101,6 +104,7 @@ export const liveRouter = router({
         quoteOrderQty: input.quoteOrderQty,
         price: input.price,
         timeInForce: input.timeInForce,
+        idempotencyKey: input.idempotencyKey,
       }, accountBalanceUsd);
     } catch (error) {
       throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Order failed." });
