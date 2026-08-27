@@ -44,33 +44,36 @@
 - 21 regression tests added for security fixes
 - Verdict: GO for paper-only, GO conditionnel for real capital
 
-### Security Findings Fixed
+### Security Findings Fixed (all 10/10)
 
-| ID | Severity | Finding | Fix |
-|---|---|---|---|
-| LL-SEC-001 | HIGH | Rate limiter not wired into tRPC | Added `rateLimitMiddleware` to protected/admin procedures |
-| LL-SEC-002 | HIGH | KMS dev fallback key predictable | Block fallback unless `NODE_ENV=development` + `ALLOW_DEV_KMS_FALLBACK=true` |
-| LL-SEC-003 | MEDIUM | Config overlay bypasses binding approval | `local.yaml` only allows research-only/simulation-only |
-| LL-SEC-004 | MEDIUM | MCP HTTP has no SSRF protection | `isSafeMcpUrl()` blocks localhost, private IPs, metadata, IPv6 private |
-| LL-SEC-005 | MEDIUM | `createAgentRun` hardcodes simulationOnly | Parameterized with `simulationOnly?: boolean` (default true) |
+| ID | Severity | Finding | Fix | Commit |
+|---|---|---|---|---|
+| LL-SEC-001 | HIGH | Rate limiter not wired into tRPC | `rateLimitMiddleware` on protected/admin | `e842231` |
+| LL-SEC-002 | HIGH | KMS dev fallback key predictable | Block unless dev + opt-in | `e842231` |
+| LL-SEC-003 | MEDIUM | Config overlay bypasses binding approval | Overlay = research/simulation only | `e842231` |
+| LL-SEC-004 | MEDIUM | MCP HTTP has no SSRF protection | `isSafeMcpUrl()` blocks private IPs | `e842231` |
+| LL-SEC-005 | MEDIUM | `createAgentRun` hardcodes simulationOnly | Parameterized (default true) | `e842231` |
+| LL-SEC-006 | LOW | Rate limiter no cleanup | 5min `setInterval` cleanup | `b356ece` |
+| LL-SEC-007 | LOW | Auth logs leak timing | Sanitized `console.warn` | `b356ece` |
+| LL-SEC-008 | LOW | Admin role not revalidated | `requireAdminFresh` DB re-fetch | `b356ece` |
+| LL-SEC-009 | LOW | Cron depends on external OAuth | 503 retryable on network error | `b356ece` |
+| LL-SEC-010 | INFO | Permissions-Policy header missing | Added to tRPC middleware | `b356ece` |
 
-### Residual Low/Info (all fixed)
+### Remaining Risks (documented, not blocking)
 
-| ID | Finding | Fix |
-|---|---|---|
-| LL-SEC-006 | In-memory rate limiter loses state on restart | Periodic cleanup interval (5min); Redis noted as production improvement |
-| LL-SEC-007 | `console.warn` on auth failure leaks timing | Removed error details from log message |
-| LL-SEC-008 | Admin role not revalidated mid-session | `adminProcedure` re-fetches user from DB on every call |
-| LL-SEC-009 | Cron depends on external OAuth | Returns 503 (retryable) when OAuth is unreachable |
-| LL-SEC-010 | `Permissions-Policy` header missing | Added to tRPC server middleware |
+- Rate limiter is in-memory (not Redis) — adequate for single-server
+- KMS uses env var (not cloud KMS) — adequate for single-server
+- MCP SSRF protection doesn't cover DNS rebinding
 
 ### Test Status
 - **52/52 test files pass**
 - **368/368 tests pass**
+- **21 security regression tests** across 4 test files
 - Remaining "simulation-only" references are only in functional enum/type definitions
 
 ### Git Status
-- **16 commits** on `staging`, all pushed to `origin/staging`
+- **18 commits** on `staging` since work began (all pushed to `origin/staging`)
+- **107 total** commits on `staging`
 - `main` is at `4b2fd83` (unchanged)
 
 ---
