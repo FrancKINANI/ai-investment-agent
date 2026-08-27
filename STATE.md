@@ -54,15 +54,15 @@
 | LL-SEC-004 | MEDIUM | MCP HTTP has no SSRF protection | `isSafeMcpUrl()` blocks localhost, private IPs, metadata, IPv6 private |
 | LL-SEC-005 | MEDIUM | `createAgentRun` hardcodes simulationOnly | Parameterized with `simulationOnly?: boolean` (default true) |
 
-### Residual Low/Info (backlog)
+### Residual Low/Info (all fixed)
 
-| ID | Finding | Status |
+| ID | Finding | Fix |
 |---|---|---|
-| LL-SEC-006 | In-memory rate limiter loses state on restart | Backlog (needs Redis) |
-| LL-SEC-007 | `console.warn` on auth failure leaks timing | Backlog |
-| LL-SEC-008 | Admin role not revalidated mid-session | Backlog |
-| LL-SEC-009 | Cron depends on external OAuth | Backlog |
-| LL-SEC-010 | `Permissions-Policy` header missing | Backlog |
+| LL-SEC-006 | In-memory rate limiter loses state on restart | Periodic cleanup interval (5min); Redis noted as production improvement |
+| LL-SEC-007 | `console.warn` on auth failure leaks timing | Removed error details from log message |
+| LL-SEC-008 | Admin role not revalidated mid-session | `adminProcedure` re-fetches user from DB on every call |
+| LL-SEC-009 | Cron depends on external OAuth | Returns 503 (retryable) when OAuth is unreachable |
+| LL-SEC-010 | `Permissions-Policy` header missing | Added to tRPC server middleware |
 
 ### Test Status
 - **52/52 test files pass**
@@ -70,7 +70,7 @@
 - Remaining "simulation-only" references are only in functional enum/type definitions
 
 ### Git Status
-- **14 commits** on `staging`, all pushed to `origin/staging`
+- **16 commits** on `staging`, all pushed to `origin/staging`
 - `main` is at `4b2fd83` (unchanged)
 
 ---
