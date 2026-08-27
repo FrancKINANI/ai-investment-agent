@@ -1,4 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Sailor mandate behaviour is unit-tested against its in-memory mandate store.
+// Audit persistence is an integration concern and must not require DATABASE_URL
+// in a GitHub Actions runner.
+vi.mock("./db", () => ({
+  createOperatorAction: vi.fn().mockResolvedValue({ id: 1 }),
+  createSecurityAlert: vi.fn().mockResolvedValue({ id: 1 }),
+}));
+
 import { activateMandate, createMandate, listMandateTransactions, revokeMandate, validateMandateParams } from "./sailorService";
 
 describe("sailor mandate validation", () => {
