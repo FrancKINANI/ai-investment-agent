@@ -24,12 +24,10 @@ function configuration() {
 
 function validateMcpServers(config, requireDisabled) {
   if (requireDisabled) {
-    // Phase 0 / non-activated: all MCP must be disabled and connection-free
     return config.mcp.servers.every(
       (server) => server.state === "disabled" && server.registration === "declarative-only" && server.transport === "not-configured" && !("command" in server) && !("url" in server)
     );
   }
-  // When mcpActivation is true: allow active servers with command/url
   return config.mcp.servers.every((server) => {
     if (server.state === "disabled") return true;
     if (server.state === "active" && server.registration === "dynamic") {
@@ -113,7 +111,95 @@ function command() {
     const serverId = args[2];
     return print({ action: "stop", serverId: serverId ?? "all", note: "MCP server stop requested." });
   }
-  throw new Error("supported commands: config validate | config show [section] | agents list [--layer LAYER] [--enabled-only] | capabilities list [--type TYPE] [--agent ROLE] | bindings show [ROLE] | mcp list | mcp status | mcp start [SERVER_ID] | mcp stop [SERVER_ID] | doctor");
+
+  // ── Execution backend commands ──────────────────────────────────────────
+
+  if (args[0] === "execution") {
+    const backends = [
+      {
+        id: "paper",
+        label: "Paper / Sandbox",
+        status: "always-available",
+        authorityRequired: "none",
+        description: "Deterministic paper execution. No real capital. Safe for testing.",
+      },
+      {
+        id: "cex",
+        label: "Binance (Live)",
+        status: config.defaults.featureFlags?.cexExecution === true ? "enabled" : "disabled-by-config",
+        authorityRequired: "approval-required-live or limited-live",
+        description: "Real Binance order submission. Requires active API key + mandate + authority transition.",
+      },
+      {
+        id: "onchain",
+        label: "Non-custodial On-chain",
+        status: "not-implemented",
+        authorityRequired: "limited-live",
+        description: "Sailor / WalletConnect signing. Phase 3+ feature.",
+      },
+    ];
+
+    if (args[1] === "status") {
+      const cexEnabled = config.defaults.featureFlags?.cexExecution === true;
+      return print({
+        activeBackend: "paper",
+        cexEnabled,
+        cexExecutionFlag: config.defaults.featureFlags?.cexExecution ?? false,
+        liveExecutionFlag: config.defaults.featureFlags?.liveExecution ?? false,
+        authorityNote: "Live execution requires climbing the authority state machine (disabled → sandbox-only → read-only-live → approval-required-live).",
+        backends,
+        note: cexEnabled
+          ? "CEX execution flag is enabled. Backend can be switched at runtime via API."
+          : "CEX execution is disabled by config. Set featureFlags.cexExecution: true in config/default.yaml or config/local.yaml to enable.",
+      });
+    }
+
+    if (args[1] === "list") {
+      return print({ backends });
+    }
+
+    if (args[1] === "switch") {
+      const target = args[2];
+      if (!target) fail("Usage: ledgerline execution switch <paper|cex>");
+      if (!["paper", "cex"].includes(target)) fail(`Unknown backend: "${target}". Valid options: paper, cex`);
+
+      if (target === "cex") {
+        const cexEnabled = config.defaults.featureFlags?.cexExecution === true;
+        if (!cexEnabled) {
+          return print({
+            action: "switch-blocked",
+            target: "cex",
+            reason: "CEX execution is disabled by config.",
+            steps: [
+              "1. Set featureFlags.cexExecution: true in config/default.yaml or config/local.yaml",
+              "2. Add and verify a Binance API key in Settings → Platforms",
+              "3. Create a wallet mandate with mode: real for venue: binance",
+              "4. Transition authority state to approval-required-live",
+              "5. Restart the server or reload config",
+              "6. Run: ledgerline execution switch cex",
+            ],
+          });
+        }
+        return print({
+          action: "switch",
+          target: "cex",
+          note: "CEX backend will be active. Authority + mandate + key checks apply at execution time.",
+          runtime: "Call registry.setActive('cex') via the API or Settings UI.",
+        });
+      }
+
+      if (target === "paper") {
+        return print({
+          action: "switch",
+          target: "paper",
+          note: "Paper backend is now active. No real capital at risk.",
+          runtime: "Call registry.setActive('paper') via the API or Settings UI.",
+        });
+      }
+    }
+  }
+
+  throw new Error("supported commands: config validate | config show [section] | agents list [--layer LAYER] [--enabled-only] | capabilities list [--type TYPE] [--agent ROLE] | bindings show [ROLE] | mcp list | mcp status | mcp start [SERVER_ID] | mcp stop [SERVER_ID] | execution status | execution list | execution switch <paper|cex> | doctor");
 }
 
 try { command(); } catch (error) { fail(error instanceof Error ? error.message : "unknown error"); }

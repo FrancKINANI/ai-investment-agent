@@ -1,13 +1,3 @@
-/**
- * Ledgerline MCP Server Manager
- *
- * Manages MCP server processes: spawn, discover tools, lifecycle, failure isolation.
- * Gated behind featureFlags.mcpActivation — no process is spawned unless explicitly enabled.
- *
- * Each MCP server is isolated: a crash in one server does not affect others.
- * Tools discovered from MCP servers are registered as capabilities in the registry.
- */
-
 import { z } from "zod";
 import { spawn, type ChildProcess } from "node:child_process";
 import { loadYamlFile } from "./configFiles";
@@ -65,6 +55,70 @@ export type McpServerStatus = {
   pid?: number;
 };
 
+// ─── SSRF Protection ───────────────────────────────────────────────────────
+
+/**
+ * LL-SEC-004 FIX: Validate MCP HTTP URLs against SSRF risks.
+ * Rejects localhost, private ranges, link-local, and cloud metadata IPs.
+ */
+export function isSafeMcpUrl(urlString: string): { safe: boolean; reason?: string } {
+  try {
+    const url = new URL(urlString);
+
+    // Only allow http/https
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return { safe: false, reason: `Protocol "${url.protocol}" is not allowed. Only http/https.` };
+    }
+
+    const hostname = url.hostname.toLowerCase();
+
+    // Block localhost variants
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]") {
+      return { safe: false, reason: "localhost/loopback addresses are blocked (SSRF protection)." };
+    }
+
+    // Block cloud metadata endpoints
+    if (hostname === "169.254.169.254" || hostname === "metadata.google.internal") {
+      return { safe: false, reason: "Cloud metadata endpoints are blocked (SSRF protection)." };
+    }
+
+    // Block private IPv4 ranges (10.x, 172.16-31.x, 192.168.x)
+    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const [, a, b] = ipv4Match.map(Number);
+      if (a === 10) return { safe: false, reason: "Private IP range (10.x.x.x) is blocked." };
+      if (a === 172 && b >= 16 && b <= 31) return { safe: false, reason: "Private IP range (172.16-31.x.x) is blocked." };
+      if (a === 192 && b === 168) return { safe: false, reason: "Private IP range (192.168.x.x) is blocked." };
+      if (a === 0) return { safe: false, reason: "Invalid IP range (0.x.x.x) is blocked." };
+      if (a >= 224) return { safe: false, reason: "Multicast/reserved IP range is blocked." };
+    }
+
+    // Block link-local (169.254.x.x — besides metadata already caught)
+    if (hostname.startsWith("169.254.")) {
+      return { safe: false, reason: "Link-local IP range (169.254.x.x) is blocked." };
+    }
+
+    // Block IPv6 private/link-local (fe80::, fc00::, fd00::)
+    // hostname may include brackets for IPv6 (e.g., [fe80::1])
+    const cleanHost = hostname.replace(/^\[|\]$/g, "");
+    if (cleanHost.startsWith("fe80:") || cleanHost.startsWith("fc00:") || cleanHost.startsWith("fd00:")) {
+      return { safe: false, reason: "IPv6 private/link-local addresses are blocked." };
+    }
+
+    // Block obvious internal hostnames
+    const blockedHostnames = [".internal", ".local", ".localhost", ".corp", ".lan", "internal", "local"];
+    for (const suffix of blockedHostnames) {
+      if (hostname === suffix.replace(".", "") || hostname.endsWith(suffix)) {
+        return { safe: false, reason: `Internal hostname pattern "${suffix}" is blocked.` };
+      }
+    }
+
+    return { safe: true };
+  } catch {
+    return { safe: false, reason: "Invalid URL format." };
+  }
+}
+
 // ─── Manager ───────────────────────────────────────────────────────────────
 
 /**
@@ -104,6 +158,27 @@ export class McpServerManager {
         tools: [],
       });
     }
+  }
+
+  /**
+   * Get status of all servers.
+   */
+  getAllStatus(): McpServerStatus[] {
+    return Array.from(this.servers.values());
+  }
+
+  /**
+   * Get status of all servers or a specific server.
+   * Called without args: returns all statuses (for backward compatibility).
+   * Called with id: returns a single status.
+   */
+  getStatus(): McpServerStatus[];
+  getStatus(id: string): McpServerStatus | undefined;
+  getStatus(id?: string): McpServerStatus[] | McpServerStatus | undefined {
+    if (id === undefined) {
+      return Array.from(this.servers.values());
+    }
+    return this.servers.get(id);
   }
 
   /**
@@ -184,16 +259,14 @@ export class McpServerManager {
       if (status.state !== "failed") {
         console.info(`[MCP] Server ${config.id} exited with code ${code}`);
         status.state = "disabled";
-        status.pid = undefined;
       }
       this.processes.delete(config.id);
     });
 
-    // Discover tools via MCP protocol
     try {
       const tools = await this.discoverTools(child, config.id);
-      status.tools = tools;
       status.state = "active";
+      status.tools = tools;
       this.toolsByServer.set(config.id, tools);
     } catch (error) {
       status.state = "failed";
@@ -206,9 +279,17 @@ export class McpServerManager {
 
   /**
    * Start an MCP server over HTTP (SSE or streamable-http).
-   * For now, this is a placeholder — real implementation connects to the URL.
+   * LL-SEC-004: Validates URL against SSRF before connecting.
    */
   private async startHttpServer(config: McpServerConfig, status: McpServerStatus): Promise<McpServerStatus> {
+    // LL-SEC-004 FIX: Validate URL against SSRF risks before fetching
+    const urlCheck = isSafeMcpUrl(config.url!);
+    if (!urlCheck.safe) {
+      status.state = "failed";
+      status.error = `SSRF protection: ${urlCheck.reason}`;
+      return status;
+    }
+
     // HTTP transport: verify the endpoint is reachable
     try {
       const response = await fetch(config.url!, { method: "GET", signal: AbortSignal.timeout(5000) });
@@ -256,34 +337,41 @@ export class McpServerManager {
           tools.push({
             name: String(t.name),
             description: String(t.description ?? ""),
-            inputSchema: (typeof t.inputSchema === "object" && t.inputSchema !== null ? t.inputSchema : {}) as Record<string, unknown>,
+            inputSchema: (t.inputSchema as Record<string, unknown>) ?? {},
           });
         }
       }
     }
 
+    console.info(`[MCP] Server ${serverId} discovered ${tools.length} tools`);
     return tools;
   }
 
   /**
-   * Send a JSON-RPC request and wait for the response.
+   * Send a JSON-RPC request and wait for a response.
    */
   private sendRequest(child: ChildProcess, method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const id = Math.floor(Math.random() * 100000);
-      const request = { jsonrpc: "2.0", id, method, params };
-      const timeout = setTimeout(() => reject(new Error(`Request ${method} timed out`)), 10000);
+      const id = Math.floor(Math.random() * 1000000);
+      const request = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
+
+      const timeout = setTimeout(() => {
+        reject(new Error(`MCP request ${method} timed out after 10s`));
+      }, 10000);
 
       const onData = (data: Buffer) => {
         try {
-          const messages = data.toString().split("\n").filter(Boolean);
-          for (const raw of messages) {
-            const msg = JSON.parse(raw);
+          const lines = data.toString().split("\n").filter(Boolean);
+          for (const line of lines) {
+            const msg = JSON.parse(line);
             if (msg.id === id) {
               clearTimeout(timeout);
               child.stdout?.off("data", onData);
-              if (msg.error) reject(new Error(msg.error.message ?? "MCP error"));
-              else resolve(msg.result);
+              if (msg.error) {
+                reject(new Error(`MCP error: ${msg.error.message}`));
+              } else {
+                resolve(msg.result);
+              }
               return;
             }
           }
@@ -293,7 +381,7 @@ export class McpServerManager {
       };
 
       child.stdout?.on("data", onData);
-      child.stdin?.write(JSON.stringify(request) + "\n");
+      child.stdin?.write(request);
     });
   }
 
@@ -301,87 +389,61 @@ export class McpServerManager {
    * Send a JSON-RPC notification (no response expected).
    */
   private sendNotification(child: ChildProcess, method: string, params: unknown): void {
-    const notification = { jsonrpc: "2.0", method, params };
-    child.stdin?.write(JSON.stringify(notification) + "\n");
+    const notification = JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n";
+    child.stdin?.write(notification);
   }
 
   /**
-   * Stop a single MCP server.
+   * Kill a specific server process.
    */
-  stopServer(serverId: string): void {
-    this.killServer(serverId);
-    const status = this.servers.get(serverId);
+  killServer(id: string): void {
+    const child = this.processes.get(id);
+    if (child) {
+      child.kill();
+      this.processes.delete(id);
+    }
+    const status = this.servers.get(id);
     if (status) {
       status.state = "disabled";
-      status.tools = [];
-      status.pid = undefined;
-      status.error = undefined;
-    }
-    this.toolsByServer.delete(serverId);
-  }
-
-  /**
-   * Stop all running MCP servers.
-   */
-  stopAll(): void {
-    for (const serverId of this.processes.keys()) {
-      this.killServer(serverId);
-    }
-    for (const [id, status] of this.servers) {
-      status.state = "disabled";
-      status.tools = [];
-      status.pid = undefined;
-      status.error = undefined;
-    }
-    this.toolsByServer.clear();
-  }
-
-  /**
-   * Kill a server process.
-   */
-  private killServer(serverId: string): void {
-    const child = this.processes.get(serverId);
-    if (child) {
-      try {
-        child.kill("SIGTERM");
-        // Force kill after 5 seconds if still alive
-        setTimeout(() => {
-          try { child.kill("SIGKILL"); } catch { /* already dead */ }
-        }, 5000);
-      } catch { /* already dead */ }
-      this.processes.delete(serverId);
     }
   }
 
   /**
-   * Get the status of all servers.
+   * Get all discovered tools across all servers.
    */
-  getStatus(): McpServerStatus[] {
-    return Array.from(this.servers.values());
-  }
-
-  /**
-   * Get tools discovered from a specific server.
-   */
-  getTools(serverId: string): McpTool[] {
-    return this.toolsByServer.get(serverId) ?? [];
-  }
-
-  /**
-   * Get all discovered tools across all active servers.
-   */
-  getAllTools(): Array<McpTool & { serverId: string }> {
-    const allTools: Array<McpTool & { serverId: string }> = [];
-    for (const [serverId, tools] of this.toolsByServer) {
-      for (const tool of tools) {
-        allTools.push({ ...tool, serverId });
-      }
+  getAllTools(): McpTool[] {
+    const allTools: McpTool[] = [];
+    for (const tools of this.toolsByServer.values()) {
+      allTools.push(...tools);
     }
     return allTools;
   }
 
   /**
-   * Load MCP server config from YAML.
+   * Get tools for a specific server.
+   */
+  getTools(id: string): McpTool[] {
+    return this.toolsByServer.get(id) ?? [];
+  }
+
+  /**
+   * Stop a specific server (alias for killServer).
+   */
+  stopServer(id: string): void {
+    this.killServer(id);
+  }
+
+  /**
+   * Stop all running servers.
+   */
+  stopAll(): void {
+    for (const [id] of this.processes) {
+      this.killServer(id);
+    }
+  }
+
+  /**
+   * Load MCP server configuration.
    */
   private loadConfig() {
     const raw = loadYamlFile("capabilities/mcp-servers.yaml");

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { McpServerManager, getMcpServerManager, resetMcpServerManager, mcpConfigFileSchema } from "./mcpServer";
+import { McpServerManager, getMcpServerManager, resetMcpServerManager, mcpConfigFileSchema, isSafeMcpUrl } from "./mcpServer";
 
 describe("MCP server configuration", () => {
   it("accepts a valid disabled MCP server config", () => {
@@ -171,5 +171,60 @@ describe("MCP singleton", () => {
     resetMcpServerManager();
     const b = getMcpServerManager();
     expect(a).not.toBe(b);
+  });
+});
+
+describe("LL-SEC-004: MCP SSRF URL validation", () => {
+  it("blocks localhost", () => {
+    expect(isSafeMcpUrl("http://localhost:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://127.0.0.1:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://[::1]:8080/mcp").safe).toBe(false);
+  });
+
+  it("blocks cloud metadata endpoints", () => {
+    expect(isSafeMcpUrl("http://169.254.169.254/latest/meta-data/").safe).toBe(false);
+    expect(isSafeMcpUrl("http://metadata.google.internal/computeMetadata/v1/").safe).toBe(false);
+  });
+
+  it("blocks private IPv4 ranges", () => {
+    expect(isSafeMcpUrl("http://10.0.0.1:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://172.16.0.1:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://172.31.255.255:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://192.168.1.1:8080/mcp").safe).toBe(false);
+  });
+
+  it("blocks link-local addresses", () => {
+    expect(isSafeMcpUrl("http://169.254.1.1:8080/mcp").safe).toBe(false);
+  });
+
+  it("blocks IPv6 private addresses", () => {
+    expect(isSafeMcpUrl("http://[fe80::1]:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://[fc00::1]:8080/mcp").safe).toBe(false);
+  });
+
+  it("blocks internal hostnames", () => {
+    expect(isSafeMcpUrl("http://myserver.internal:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://service.local:8080/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("http://app.localhost:8080/mcp").safe).toBe(false);
+  });
+
+  it("blocks non-http protocols", () => {
+    expect(isSafeMcpUrl("ftp://example.com/mcp").safe).toBe(false);
+    expect(isSafeMcpUrl("file:///etc/passwd").safe).toBe(false);
+  });
+
+  it("allows public HTTPS URLs", () => {
+    expect(isSafeMcpUrl("https://api.example.com/mcp").safe).toBe(true);
+    expect(isSafeMcpUrl("https://mcp-server.example.org:8443/sse").safe).toBe(true);
+  });
+
+  it("allows public HTTP URLs", () => {
+    expect(isSafeMcpUrl("http://8.8.8.8:8080/mcp").safe).toBe(true);
+    expect(isSafeMcpUrl("http://203.0.113.1/mcp").safe).toBe(true);
+  });
+
+  it("rejects invalid URLs", () => {
+    expect(isSafeMcpUrl("not-a-url").safe).toBe(false);
+    expect(isSafeMcpUrl("").safe).toBe(false);
   });
 });

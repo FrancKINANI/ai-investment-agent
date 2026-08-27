@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterAll } from "vitest";
 import { encrypt, decrypt, encryptSecret, decryptSecret, maskApiKey, verifySecret } from "./kms";
 
 describe("KMS AES-256-GCM encryption", () => {
@@ -110,5 +110,62 @@ describe("KMS security contracts", () => {
   it("decryption fails with wrong data length", () => {
     // Too short to contain IV + auth tag + ciphertext
     expect(() => decrypt(Buffer.alloc(10).toString("base64"))).toThrow();
+  });
+});
+
+describe("LL-SEC-002: KMS fallback blocking", () => {
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    // Save env vars we'll modify
+    savedEnv.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    savedEnv.NODE_ENV = process.env.NODE_ENV;
+    savedEnv.ALLOW_DEV_KMS_FALLBACK = process.env.ALLOW_DEV_KMS_FALLBACK;
+  });
+
+  afterAll(() => {
+    // Restore env vars
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  });
+
+  it("blocks fallback when NODE_ENV=staging", async () => {
+    process.env.NODE_ENV = "staging";
+    delete process.env.ENCRYPTION_KEY;
+    delete process.env.ALLOW_DEV_KMS_FALLBACK;
+    // Dynamic import to pick up env changes
+    const mod = await import("./kms");
+    expect(() => mod.encrypt("test")).toThrow("ENCRYPTION_KEY is required");
+  });
+
+  it("blocks fallback when NODE_ENV=production", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.ENCRYPTION_KEY;
+    delete process.env.ALLOW_DEV_KMS_FALLBACK;
+    const mod = await import("./kms");
+    expect(() => mod.encrypt("test")).toThrow("ENCRYPTION_KEY is required");
+  });
+
+  it("blocks fallback when NODE_ENV=development without opt-in", async () => {
+    process.env.NODE_ENV = "development";
+    delete process.env.ENCRYPTION_KEY;
+    delete process.env.ALLOW_DEV_KMS_FALLBACK;
+    const mod = await import("./kms");
+    expect(() => mod.encrypt("test")).toThrow("ALLOW_DEV_KMS_FALLBACK");
+  });
+
+  it("allows fallback when NODE_ENV=development with opt-in", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.ALLOW_DEV_KMS_FALLBACK = "true";
+    delete process.env.ENCRYPTION_KEY;
+    const mod = await import("./kms");
+    const secret = "dev-secret";
+    const encrypted = mod.encrypt(secret);
+    expect(mod.decrypt(encrypted)).toBe(secret);
   });
 });

@@ -23,11 +23,25 @@ const KEY_LENGTH = 32;
 function getMasterKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) {
-    // Fail closed: refuse to derive secrets from a known fallback in production.
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("[KMS] ENCRYPTION_KEY is required in production. Refusing to use a development fallback key (fail closed).");
+    // LL-SEC-002 FIX: Block dev fallback unless explicitly allowed.
+    // Prevents using a known master key in staging/production.
+    // Allow fallback in undefined NODE_ENV (test) or explicit development with opt-in.
+    const isProductionOrStaging = process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging";
+    const isExplicitDev = process.env.NODE_ENV === "development";
+    const fallbackAllowed = !isProductionOrStaging && (isExplicitDev ? process.env.ALLOW_DEV_KMS_FALLBACK === "true" : true);
+
+    if (!fallbackAllowed) {
+      throw new Error(
+        "[KMS] ENCRYPTION_KEY is required. " +
+        (isExplicitDev
+          ? "Set ALLOW_DEV_KMS_FALLBACK=true to use a dev fallback (not recommended)."
+          : "Refusing to use a development fallback key in this environment (fail closed).")
+      );
     }
-    console.warn("[KMS] No ENCRYPTION_KEY set. Using development fallback. DO NOT use in production.");
+
+    if (isExplicitDev) {
+      console.warn("[KMS] No ENCRYPTION_KEY set. Using development fallback. DO NOT use in production.");
+    }
     return scryptSync("ledgerline-dev-fallback-key-do-not-use-in-prod", "ledgerline-salt", KEY_LENGTH);
   }
 

@@ -195,3 +195,35 @@ describe("rate limit cleanup", () => {
     }));
   });
 });
+
+describe("rate limit middleware integration", () => {
+  beforeEach(() => {
+    // Reset all rate limit keys that might exist
+    resetRateLimit("user:1");
+    resetRateLimit("user:2");
+  });
+
+  it("blocks after exceeding per-user limit", () => {
+    const config = { maxRequests: 3, windowMs: 60_000 };
+    // Simulate 3 requests from user:1
+    expect(checkRateLimit("user:1", config).allowed).toBe(true);
+    expect(checkRateLimit("user:1", config).allowed).toBe(true);
+    expect(checkRateLimit("user:1", config).allowed).toBe(true);
+    // 4th request should be blocked
+    const blocked = checkRateLimit("user:1", config);
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) {
+      expect(blocked.retryAfterMs).toBeGreaterThan(0);
+    }
+  });
+
+  it("tracks different users independently", () => {
+    const config = { maxRequests: 2, windowMs: 60_000 };
+    // User 1 uses both slots
+    expect(checkRateLimit("user:1", config).allowed).toBe(true);
+    expect(checkRateLimit("user:1", config).allowed).toBe(true);
+    expect(checkRateLimit("user:1", config).allowed).toBe(false);
+    // User 2 still has slots
+    expect(checkRateLimit("user:2", config).allowed).toBe(true);
+  });
+});
