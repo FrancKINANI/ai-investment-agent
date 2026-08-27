@@ -272,11 +272,12 @@ export const appRouter = router({
       }
       
       for (const agent of delegatedAgents) await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "delegated", summary: `${agent.name} was delegated a bounded research perspective.`, evidence: ["supervisor-delegation", `model:${agent.model}`, "execution-sealed"] });
-      const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, output: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history }) })));
+      const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, result: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history, userId: ctx.user.id }) })));
       const specialistReports: { role: string; name: string; output: string; confidence?: number }[] = [];
       for (const result of settled) {
         if (result.status === "fulfilled") {
-          const { agent, output } = result.value;
+          const { agent, result: specResult } = result.value;
+          const output = typeof specResult === "string" ? specResult : specResult.output;
           const confidence = agent.roleKey === "bull" || agent.roleKey === "bear" ? calculateResearchNoteConfidence(output) : undefined;
           specialistReports.push({ role: agent.roleKey, name: agent.name, output, confidence });
           await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "agent", agentId: agent.agentId, content: output, confidence, evidence: ["specialist-working-note", `role:${agent.roleKey}`, `model:${agent.model}`, ...(confidence ? ["confidence:research-note-completeness"] : []), "execution-sealed"] });
