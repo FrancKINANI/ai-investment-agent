@@ -66,15 +66,30 @@
 - MCP SSRF protection doesn't cover DNS rebinding
 
 ### Test Status
-- **52/52 test files pass**
-- **368/368 tests pass**
+- **53/53 test files pass**
+- **384/384 tests pass**
 - **21 security regression tests** across 4 test files
 - Remaining "simulation-only" references are only in functional enum/type definitions
 
 ### Git Status
-- **18 commits** on `staging` since work began (all pushed to `origin/staging`)
+- **19 commits** on `staging` since work began (all pushed to `origin/staging`)
 - **107 total** commits on `staging`
 - `main` is at `4b2fd83` (unchanged)
+
+---
+
+**v0.3 — First real CEX path (Binance only)** (latest)
+- `CEXExecutionBackend` uses `liveAdapter` for real Binance order submission
+- Authority state machine gate: only `approval-required-live` or `limited-live`
+- Mandate validation: mode, status, venue, asset allowance, order limits
+- Per-order owner approval in `approval-required-live` state
+- Pre-trade price freshness for market orders
+- Idempotency via proposalId (server-generated)
+- Full ledger lifecycle: submitted → filled/rejected
+- Alerts on fill/reject
+- Config: `setActive("cex")` to switch from paper to live
+- **Default: paper** — live requires explicit owner action
+- 16 new tests (authority gates, credentials, mandate checks, happy path)
 
 ---
 
