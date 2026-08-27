@@ -14,7 +14,7 @@ import { listLLMModels } from "./_core/llm";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
+import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, getAuthorityState, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
@@ -25,6 +25,7 @@ import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCap
 import { getPhase0ConfigurationSummary } from "./phase0Config";
 import { findTeamRole, loadAgentTeam } from "@shared/agentTeam";
 import { executeApprovedProposal } from "./runtime/executionOrchestrator";
+import { isBlockedByDominantState } from "@shared/authorityState";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -92,6 +93,29 @@ const bindingChangeReviewSchema = z.object({ requestId: z.string().trim().min(1)
 
 function requireOwnerAdmin(role: "user" | "admin") {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Only an administrator can validate configuration or hard evaluation gates." });
+}
+
+/**
+ * S2 FIX: Derive gate inputs from server-side persisted records.
+ * Client-supplied gate inputs are IGNORED — this prevents manipulation.
+ */
+async function deriveGateInputs(userId: number, proposal: { runId?: string | null; policyResult: string }) {
+  const authorityState = await getAuthorityState(userId);
+  const ownerPauseActive = isBlockedByDominantState(authorityState);
+
+  // simulationPassed: derived from the associated run's status
+  let simulationPassed = false;
+  if (proposal.runId) {
+    const runs = await listAgentRuns(userId);
+    const run = runs.find((r) => r.runId === proposal.runId);
+    simulationPassed = run?.status === "passed";
+  }
+
+  // lineageCoverage and complexityPenalty: default to 0 until lineage tracking is per-proposal
+  const lineageCoverage = 0;
+  const complexityPenalty = 0;
+
+  return { simulationPassed, ownerPauseActive, lineageCoverage, complexityPenalty };
 }
 
 export const appRouter = router({
@@ -408,20 +432,22 @@ export const appRouter = router({
     mandates: protectedProcedure.query(({ ctx }) => listWalletMandates(ctx.user.id)),
     connections: protectedProcedure.query(({ ctx }) => listVenueConnections(ctx.user.id)),
     proposals: protectedProcedure.query(({ ctx }) => listAgentProposals(ctx.user.id)),
-    reviewHardGate: protectedProcedure.input(hardGateReviewSchema).mutation(async ({ ctx, input }) => {
+    reviewHardGate: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
-      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, simulationPassed: input.simulationPassed, ownerPauseActive: input.ownerPauseActive, lineageCoverage: input.lineageCoverage / 100, complexityPenalty: input.complexityPenalty / 100 });
+      // S2: Derive gate inputs from server-side records, not client claims
+      const gateInputs = await deriveGateInputs(ctx.user.id, proposal);
+      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, ...gateInputs });
       const status = gate.state === "pass" ? "success" : gate.state === "review" ? "review" : "blocked";
       await createOperatorAction(ctx.user.id, {
         actionId: nanoid(), kind: "scope_checked", status,
         subject: `Hard gate: ${proposal.title}`,
-        detail: `${gate.reason} This gate governs paper-simulation review only; no live action can follow.`,
-        payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: { simulationPassed: input.simulationPassed, lineageCoverage: input.lineageCoverage, complexityPenalty: input.complexityPenalty, ownerPauseActive: input.ownerPauseActive }, rationale: input.rationale, decision: gate, simulationOnly: true },
+        detail: `${gate.reason} Gate inputs derived server-side from persisted records.`,
+        payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: gateInputs, rationale: input.rationale, decision: gate },
         capabilityIds: ["paper-proposal.compose", "portfolio-snapshot.read"],
       });
-      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, executionBoundary: "fail-closed" as const };
+      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, inputs: gateInputs, executionBoundary: "fail-closed" as const };
     }),
     createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
       const mandate = await createWalletMandate(ctx.user.id, { mandateId: nanoid(), ...input, mode: "simulation", status: "active" });
@@ -469,15 +495,17 @@ export const appRouter = router({
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "venue_configured", status: "success", subject: `${input.venue} simulated adapter`, detail: "Owner enabled a simulated adapter. No external account, credential, or signed action was connected.", payload: { connectionId: connection?.connectionId, ...input, state: "simulation" } });
       return connection;
     }),
-    approveProposal: protectedProcedure.input(hardGateReviewSchema).mutation(async ({ ctx, input }) => {
+    approveProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
-      if (proposal.status !== "review" || proposal.policyResult !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a policy-passing proposal awaiting review can be approved for simulation." });
-      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, simulationPassed: input.simulationPassed, ownerPauseActive: input.ownerPauseActive, lineageCoverage: input.lineageCoverage / 100, complexityPenalty: input.complexityPenalty / 100 });
+      if (proposal.status !== "review" || proposal.policyResult !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a policy-passing proposal awaiting review can be approved for paper execution." });
+      // S2: Derive gate inputs from server-side records, not client claims
+      const gateInputs = await deriveGateInputs(ctx.user.id, proposal);
+      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, ...gateInputs });
       if (gate.state !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Hard evaluation gate did not pass: ${gate.reason}` });
       const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "approved");
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Simulation approved: ${proposal.title}`, detail: "Administrator approved this proposal for simulated execution only after a passing hard evaluation gate.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, gate, rationale: input.rationale, simulationOnly: true } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Paper approved: ${proposal.title}`, detail: "Administrator approved this proposal for paper execution after a passing hard evaluation gate with server-derived inputs.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, gate, inputs: gateInputs, rationale: input.rationale } });
       return updated;
     }),
     rejectProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), reason: z.string().trim().min(2).max(500) })).mutation(async ({ ctx, input }) => {
