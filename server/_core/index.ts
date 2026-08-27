@@ -38,6 +38,16 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.post("/api/scheduled/discovery", scheduledDiscoveryHandler);
+  // LL-SEC-010 FIX: Security headers for all responses
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -59,6 +69,13 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  // LL-SEC-006 FIX: Periodic cleanup of expired rate limit entries
+  const { cleanupRateLimits } = await import("../security");
+  setInterval(() => {
+    const cleaned = cleanupRateLimits();
+    if (cleaned > 0) console.debug(`[Security] Cleaned ${cleaned} expired rate limit entries`);
+  }, 5 * 60 * 1000); // Every 5 minutes
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
