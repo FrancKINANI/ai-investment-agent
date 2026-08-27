@@ -4,25 +4,27 @@ export const pageLoaders = {
   alerts: () => import("../pages/Alerts"),
   chat: () => import("../pages/Chat"),
   changelog: () => import("../pages/Changelog"),
-  command: () => import("../pages/CommandCenter"),
-  connections: () => import("../pages/Connections"),
-  mandates: () => import("../pages/Mandates"),
+  decisions: () => import("../pages/DecisionDesk"),
+  mission: () => import("../pages/MissionControl"),
   notFound: () => import("../pages/NotFound"),
-  platforms: () => import("../pages/Platforms"),
+  portfolio: () => import("../pages/Portfolio"),
   settings: () => import("../pages/Settings"),
-  wallets: () => import("../pages/Wallets"),
+  tasks: () => import("../pages/Tasks"),
   welcome: () => import("../pages/Welcome"),
 };
 
-export const prefetchablePaths = ["/", "/chat", "/wallets", "/mandates", "/platforms", "/connections", "/alerts", "/settings", "/activity", "/welcome", "/changelog"] as const;
+export const prefetchablePaths = ["/", "/chat", "/tasks", "/decisions", "/portfolio", "/wallets", "/mandates", "/platforms", "/connections", "/alerts", "/settings", "/activity", "/welcome", "/changelog"] as const;
 
 const routeLoaders: Record<(typeof prefetchablePaths)[number], Array<() => Promise<unknown>>> = {
-  "/": [pageLoaders.dashboardLayout, pageLoaders.command],
+  "/": [pageLoaders.dashboardLayout, pageLoaders.mission],
   "/chat": [pageLoaders.dashboardLayout, pageLoaders.chat],
-  "/wallets": [pageLoaders.dashboardLayout, pageLoaders.wallets],
-  "/mandates": [pageLoaders.dashboardLayout, pageLoaders.mandates],
-  "/platforms": [pageLoaders.dashboardLayout, pageLoaders.platforms],
-  "/connections": [pageLoaders.dashboardLayout, pageLoaders.connections],
+  "/tasks": [pageLoaders.dashboardLayout, pageLoaders.tasks],
+  "/decisions": [pageLoaders.dashboardLayout, pageLoaders.decisions],
+  "/portfolio": [pageLoaders.dashboardLayout, pageLoaders.portfolio],
+  "/wallets": [pageLoaders.dashboardLayout, pageLoaders.portfolio],
+  "/mandates": [pageLoaders.dashboardLayout, pageLoaders.portfolio],
+  "/platforms": [pageLoaders.dashboardLayout, pageLoaders.portfolio],
+  "/connections": [pageLoaders.dashboardLayout, pageLoaders.portfolio],
   "/alerts": [pageLoaders.dashboardLayout, pageLoaders.alerts],
   "/settings": [pageLoaders.dashboardLayout, pageLoaders.settings],
   "/activity": [pageLoaders.dashboardLayout, pageLoaders.activity],
