@@ -187,6 +187,17 @@ export const agentConversations = mysqlTable("agentConversations", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Individual owner–agent threads are separate from legacy supervisor conversations for an additive migration. */
+export const agentIndividualConversations = mysqlTable("agentIndividualConversations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  threadId: varchar("threadId", { length: 64 }).notNull().unique(),
+  targetAgentId: varchar("targetAgentId", { length: 64 }).notNull(),
+  title: varchar("title", { length: 180 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const agentMessages = mysqlTable("agentMessages", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -198,6 +209,45 @@ export const agentMessages = mysqlTable("agentMessages", {
   /** Research-note completeness score (0–100), never a performance or return forecast. */
   confidence: int("confidence"),
   evidence: json("evidence").$type<string[]>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Owner-scoped durable research context. Private entries are readable only by their selected agent and owner. */
+export const agentMemoryEntries = mysqlTable("agentMemoryEntries", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  memoryId: varchar("memoryId", { length: 64 }).notNull().unique(),
+  scope: mysqlEnum("scope", ["shared", "private"]).notNull(),
+  agentId: varchar("agentId", { length: 64 }),
+  kind: mysqlEnum("kind", ["owner_instruction", "constraint", "verified_fact", "research_note", "question", "decision", "source_reference"]).notNull(),
+  content: text("content").notNull(),
+  contentDigest: varchar("contentDigest", { length: 64 }).notNull(),
+  sourceType: mysqlEnum("sourceType", ["owner_entry", "conversation", "watchlist", "policy", "activity"]).notNull(),
+  sourceRef: varchar("sourceRef", { length: 160 }),
+  status: mysqlEnum("status", ["active", "pending_promotion", "superseded", "expired", "redacted"]).default("active").notNull(),
+  pinned: boolean("pinned").default(false).notNull(),
+  revision: int("revision").default(1).notNull(),
+  expiresAt: timestamp("expiresAt"),
+  createdBy: mysqlEnum("createdBy", ["owner", "agent", "system"]).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Append-only memory lifecycle evidence. It holds metadata and never a duplicate unredacted secret-bearing payload. */
+export const agentMemoryActions = mysqlTable("agentMemoryActions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  actionId: varchar("actionId", { length: 64 }).notNull().unique(),
+  memoryId: varchar("memoryId", { length: 64 }).notNull(),
+  action: mysqlEnum("action", ["created", "promotion_requested", "promotion_approved", "promotion_rejected", "retired", "redacted"]).notNull(),
+  actorType: mysqlEnum("actorType", ["owner", "agent", "system"]).notNull(),
+  actorAgentId: varchar("actorAgentId", { length: 64 }),
+  fromScope: mysqlEnum("fromScope", ["shared", "private"]),
+  toScope: mysqlEnum("toScope", ["shared", "private"]),
+  fromStatus: mysqlEnum("fromStatus", ["active", "pending_promotion", "superseded", "expired", "redacted"]),
+  toStatus: mysqlEnum("toStatus", ["active", "pending_promotion", "superseded", "expired", "redacted"]),
+  reason: varchar("reason", { length: 600 }),
+  payload: json("payload").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -375,7 +425,10 @@ export type VenueConnection = typeof venueConnections.$inferSelect;
 export type AgentProposal = typeof agentProposals.$inferSelect;
 export type AgentNode = typeof agentNodes.$inferSelect;
 export type AgentConversation = typeof agentConversations.$inferSelect;
+export type AgentIndividualConversation = typeof agentIndividualConversations.$inferSelect;
 export type AgentMessage = typeof agentMessages.$inferSelect;
+export type AgentMemoryEntry = typeof agentMemoryEntries.$inferSelect;
+export type AgentMemoryAction = typeof agentMemoryActions.$inferSelect;
 export type AgentEvolutionEvent = typeof agentEvolutionEvents.$inferSelect;
 export type Watchlist = typeof watchlists.$inferSelect;
 export type WatchlistItem = typeof watchlistItems.$inferSelect;
