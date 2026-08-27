@@ -82,4 +82,4 @@ Use the required workflow: `feat/*` or `fix/*` → pull request → `staging` �
 
 Contributions must not add fabricated balances, fills, connected accounts, customer reviews, ratings, or execution results. They must not bypass owner isolation, policy checks, secret handling, prompt-boundary controls, or the compiled venue seal.
 
-Ledgerline is MIT licensed. The repository remains private until the owner chooses otherwise.
+Ledgerline is MIT licensed.
