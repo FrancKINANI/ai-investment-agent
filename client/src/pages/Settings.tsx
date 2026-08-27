@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { trpc } from "@/lib/trpc";
 import { defaultOwnerPreferences, primaryShortcutLabel, readOwnerPreferences, saveOwnerPreferences, type OwnerPreferences } from "@/lib/ownerPreferences";
-import { Bot, BrainCircuit, CheckCircle2, CircleAlert, CircleStop, ClipboardCheck, Clock3, Gauge, Github, Keyboard, LayoutPanelTop, LockKeyhole, Network, Plus, Route, Settings2, ShieldCheck, SlidersHorizontal, Star, Trash2, UserRound } from "lucide-react";
+import { Bot, BrainCircuit, CheckCircle2, CircleAlert, CircleStop, ClipboardCheck, Clock3, Gauge, Github, Keyboard, LayoutPanelTop, LockKeyhole, Network, Plus, Route, Settings2, ShieldCheck, SlidersHorizontal, Star, Trash2, UserRound, Zap } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -39,6 +39,15 @@ export default function Settings() {
   const [bindingReviewNotes, setBindingReviewNotes] = useState<Record<string, string>>({});
   const [hardGateDraft, setHardGateDraft] = useState<HardGateDraft>({ proposalId: "", simulationPassed: false, lineageCoverage: 0, complexityPenalty: 0, ownerPauseActive: false, rationale: "" });
   const [lastGate, setLastGate] = useState<{ proposalId: string; state: "pass" | "review" | "block"; reason: string } | null>(null);
+  // Execution backend
+  const executionQuery = trpc.system.executionBackends.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const switchBackendMutation = trpc.system.switchExecutionBackend.useMutation({
+    onSuccess: () => {
+      executionQuery.refetch();
+      toast.success("Execution backend switched.");
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const providers = catalogQuery.data?.providers ?? [];
   const protectedAgents = agentsQuery.data?.filter((agent) => agent.protectedRole) ?? [];
   const optionalAgents = agentsQuery.data?.filter((agent) => !agent.protectedRole && agent.state !== "retired") ?? [];
@@ -146,6 +155,7 @@ export default function Settings() {
     <section className="settings-card policy-config"><header><ShieldCheck size={19} /><div><span>CONSTITUTION</span><h2>Investment policy</h2></div><b>{policyQuery.data ? `v${policyQuery.data.version}` : "Not set"}</b></header>{policyQuery.data ? <dl><div><dt>Approved contracts</dt><dd>{policyQuery.data.allowedAssets.length}</dd></div><div><dt>Max concentration</dt><dd>{(policyQuery.data.maxConcentrationBps / 100).toFixed(2)}%</dd></div><div><dt>Minimum reserve</dt><dd>{(policyQuery.data.minReserveBps / 100).toFixed(2)}%</dd></div></dl> : <p className="settings-empty">An owner IPS is required before a wallet mandate can advance from simulation.</p>}<footer><span><LockKeyhole size={13} /> Owner-controlled limits</span><Button variant="outline" onClick={() => document.location.assign("/")}>Open policy</Button></footer></section>
 
     <section className="settings-card emergency-config"><header><CircleStop size={19} /><div><span>EMERGENCY CONTROL</span><h2>Global pause</h2></div><b>Ready</b></header><p>Global pause remains owner-only. It cannot be removed by the supervisor, a protected role, or an optional subagent.</p><footer><span>Owner emergency authority</span><Button className="pause-button" onClick={() => toast.message("No real mandates are active. The safety pause is already effectively enforced.")}>Pause all mandates</Button></footer></section>
+    <section className="settings-card execution-backend-card"><header><Zap size={19} /><div><span>EXECUTION BACKEND</span><h2>Paper vs Live</h2></div><b>{executionQuery.data?.activeType === "cex" ? "LIVE" : "PAPER"}</b></header><p className="settings-explainer">Switch between paper (sandbox) and live Binance execution. Paper is always safe. Live requires: CEX feature flag, active API key, mandate with mode "real", and authority state at approval-required-live.</p>{executionQuery.isLoading ? <LoadingSkeleton className="settings-loading-skeleton" label="Loading execution backends" lines={3} /> : <div className="execution-backend-list">{executionQuery.data?.backends.map((backend) => <div key={backend.type} className={`execution-backend-row ${backend.isCurrent ? "current" : ""}`}><span><Zap size={14} /><strong>{backend.label}</strong><small>{backend.type}</small></span>{backend.isCurrent ? <b className="backend-active">Active</b> : <Button size="sm" variant="outline" disabled={switchBackendMutation.isPending || backend.type === "onchain"} onClick={() => void switchBackendMutation.mutateAsync({ backend: backend.type as "paper" | "cex" })}>{switchBackendMutation.isPending ? "Switching…" : `Switch to ${backend.label}`}</Button>}</div>)}</div>}<footer><span><LockKeyhole size={13} /> {executionQuery.data?.activeType === "cex" ? "Live Binance execution is active. Authority + mandate + key checks apply." : "Paper execution. No real capital at risk."}</span><span>{executionQuery.data?.backends.length ?? 0} backends registered</span></footer></section>
 
     <section className="settings-card owner-preferences-card"><header><UserRound size={19} /><div><span>OWNER PROFILE</span><h2>Display and workspace density</h2></div><b>Local owner</b></header><p className="settings-explainer">These browser-local preferences personalize the operating shell. They never change account custody, agent scope, or execution authority.</p><div className="owner-preference-fields"><label>Display name<input aria-label="Owner display name" value={ownerPreferences.displayName} onChange={(event) => setOwnerPreferences((current) => ({ ...current, displayName: event.target.value }))} placeholder={user?.name ?? "Owner"} /></label><label>Layout density<select aria-label="Layout density" value={ownerPreferences.density} onChange={(event) => setOwnerPreferences((current) => ({ ...current, density: event.target.value as OwnerPreferences["density"] }))}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label></div><footer><span><LayoutPanelTop size={13} /> {ownerPreferences.density} spacing</span><Button variant="outline" onClick={savePreferences}>Save profile preferences</Button></footer></section>
 
