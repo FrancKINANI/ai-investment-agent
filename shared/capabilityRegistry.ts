@@ -163,3 +163,31 @@ export function getCapabilityRegistrySummary() {
     protectedRoles: listProtectedTeamRoles().map((role) => role.roleKey),
   };
 }
+
+/** 
+ * Verify that a role has access to all required capabilities for a given operation.
+ * Throws if any capability is missing or inactive.
+ * Returns the list of capabilities used for journaling.
+ */
+export function validateCapabilityAccess(roleKey: string, requiredCapabilities: string[]): string[] {
+  const registry = loadCapabilityRegistry();
+  const capabilitiesById = new Map(registry.capabilities.map((c) => [c.id, c]));
+  
+  for (const capId of requiredCapabilities) {
+    const capability = capabilitiesById.get(capId);
+    if (!capability) {
+      throw new Error(`Capability ${capId} not found in registry.`);
+    }
+    if (capability.state !== "active") {
+      throw new Error(`Capability ${capId} (${capability.label}) is not active.`);
+    }
+    const hasBinding = registry.bindings.some(
+      (binding) => binding.capabilityId === capId && binding.roleKeys.includes(roleKey)
+    );
+    if (!hasBinding) {
+      throw new Error(`Role ${roleKey} is not bound to capability ${capId}.`);
+    }
+  }
+  
+  return requiredCapabilities;
+}
