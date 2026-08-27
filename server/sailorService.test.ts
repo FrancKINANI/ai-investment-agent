@@ -1,4 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const dbMock = vi.hoisted(() => ({
+  createOperatorAction: vi.fn().mockResolvedValue(undefined),
+  createSecurityAlert: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./db", () => dbMock);
+vi.mock("./liveExecutionBoundary", () => ({
+  assertLiveVenueMutationAllowed: vi.fn(),
+}));
+
 import { activateMandate, createMandate, listMandateTransactions, revokeMandate, validateMandateParams } from "./sailorService";
 
 describe("sailor mandate validation", () => {
