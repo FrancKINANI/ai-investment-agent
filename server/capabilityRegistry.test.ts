@@ -42,6 +42,6 @@ describe("agentFabric.capabilityRegistry", () => {
   it("rejects non-admin staged binding and hard-gate mutations before any configuration or proposal can change", async () => {
     const caller = appRouter.createCaller(createOwnerContext());
     await expect(caller.agentFabric.validateCapabilityBinding({ capabilityId: "market-evidence.read", roleKeys: ["fundamental"], permission: "research-only" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.autonomy.reviewHardGate({ proposalId: "paper-proposal-1", simulationPassed: true, lineageCoverage: 80, complexityPenalty: 10, ownerPauseActive: false, rationale: "Evidence packet reviewed for the paper-only gate." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.autonomy.reviewHardGate({ proposalId: "paper-proposal-1", rationale: "Evidence packet reviewed for the gate." })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

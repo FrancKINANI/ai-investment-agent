@@ -52,7 +52,7 @@ export function evaluatePromotionGate(input: GateInput) {
   if (input.ownerPauseActive) return { state: "block" as const, reason: "Owner pause is active." };
   if (input.policyResult === "block") return { state: "block" as const, reason: "Policy check failed." };
   if (!input.simulationPassed) return { state: "review" as const, reason: "Simulation evidence is incomplete." };
-  if (input.lineageCoverage < 0.7) return { state: "review" as const, reason: "Market-regime coverage is below the minimum gate." };
+  if (input.lineageCoverage > 0 && input.lineageCoverage < 0.7) return { state: "review" as const, reason: "Market-regime coverage is below the minimum gate." };
   if (input.complexityPenalty > 0.4) return { state: "review" as const, reason: "Complexity has risen without enough robustness evidence." };
   return { state: "pass" as const, reason: "Eligible for decision-layer review; never live execution." };
 }

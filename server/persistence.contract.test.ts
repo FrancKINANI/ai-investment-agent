@@ -76,6 +76,7 @@ beforeEach(() => {
   db.listAgentProposals.mockResolvedValue([]);
   db.listVenueConnections.mockResolvedValue([]);
   db.getAuthorityState.mockResolvedValue("approval-required-live");
+  db.listAgentRuns.mockResolvedValue([]);
   db.listWalletMandates.mockResolvedValue([]);
   db.updateAgentProposalStatus.mockResolvedValue({ id: 7, proposalId: "proposal-1", status: "approved" });
   db.updateWalletMandateMode.mockResolvedValue({ id: 9, mandateId: "mandate-1", walletRole: "trading", venue: "binance", mode: "paused" });
@@ -88,7 +89,7 @@ beforeEach(() => {
 });
 
 describe("authenticated persistence contracts", () => {
-  const passingGate = { simulationPassed: true, lineageCoverage: 80, complexityPenalty: 10, ownerPauseActive: false, rationale: "Administrator reviewed a complete paper-evidence packet." };
+  const passingGate = { rationale: "Administrator reviewed a complete paper-evidence packet." };
   it("returns null, not undefined, when an authenticated owner has no saved IPS", async () => {
     const caller = appRouter.createCaller(context());
     await expect(caller.policy.current()).resolves.toBeNull();
@@ -144,6 +145,7 @@ describe("authenticated persistence contracts", () => {
     db.getAgentProposal
       .mockResolvedValueOnce(reviewProposal) // approveProposal check
       .mockResolvedValueOnce(reviewProposal); // rejectProposal check
+    db.listAgentRuns.mockResolvedValue([{ runId: "run-1", status: "passed", policyResult: "pass", summary: "test", evidence: [] }]);
     orchestrator.executeApprovedProposal.mockResolvedValue({ status: "approved", proposalId: "proposal-1", reason: "Paper execution succeeded." });
     await caller.autonomy.approveProposal({ proposalId: "proposal-1", ...passingGate });
     await caller.autonomy.settleSimulation({ proposalId: "proposal-1" });
@@ -169,6 +171,7 @@ describe("authenticated persistence contracts", () => {
     db.getAgentProposal
       .mockResolvedValueOnce(reviewProposal) // analyzeToken
       .mockResolvedValueOnce(reviewProposal); // approveProposal
+    db.listAgentRuns.mockResolvedValue([{ runId: "run-1", status: "passed", policyResult: "pass", summary: "test", evidence: [] }]);
     orchestrator.executeApprovedProposal.mockImplementation(async () => {
       // Simulate what the real orchestrator does: create operator action + awareness
       await db.createOperatorAction(7, { actionId: "mock", kind: "simulation_settled", status: "success", subject: "Execution", detail: "Paper succeeded", payload: {} });
