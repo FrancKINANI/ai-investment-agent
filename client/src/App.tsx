@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { pageLoaders } from "./lib/routePrefetch";
 import "./styles/missionControl.css";
+import "./styles/agentRoom.css";
 
 const DashboardLayout = lazy(pageLoaders.dashboardLayout);
 const Activity = lazy(pageLoaders.activity);

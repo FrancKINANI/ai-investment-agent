@@ -23,6 +23,7 @@ import { activateDiscoverySchedule, createAgentMessage, createConversation, crea
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
 import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft, validateCapabilityAccess, createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { getPhase0ConfigurationSummary } from "./phase0Config";
+import { agentMemoryRouter } from "./agentMemoryRouter";
 import { findTeamRole, loadAgentTeam } from "@shared/agentTeam";
 import { executeApprovedProposal } from "./runtime/executionOrchestrator";
 import { isBlockedByDominantState } from "@shared/authorityState";
@@ -145,6 +146,7 @@ export const appRouter = router({
       };
     }),
   }),
+  agentMemory: agentMemoryRouter,
   policy: router({
     current: protectedProcedure.query(({ ctx }) => getInvestmentPolicy(ctx.user.id)),
     save: protectedProcedure.input(investmentPolicySchema).mutation(async ({ ctx, input }) => {
