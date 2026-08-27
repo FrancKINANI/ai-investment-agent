@@ -75,10 +75,10 @@ make prod
 | `DATABASE_URL` | Yes | MySQL connection string |
 | `JWT_SECRET` | Yes | Session token secret |
 | `ENCRYPTION_KEY` | Prod | AES-256-GCM master key (64-char hex) |
-| `BINANCE_API_KEY` | No | Binance API key for live trading |
-| `BINANCE_API_SECRET` | No | Binance API secret |
 | `PORT` | No | Server port (default: 3000) |
 | `NODE_ENV` | No | Environment (default: development) |
+
+> Do not configure direct venue API credentials for the current product. Binance venue mutations remain sealed at compile time, and a configuration value cannot enable them. Any future credential programme requires separate security and deployment approval.
 
 ### Generating secrets
 
