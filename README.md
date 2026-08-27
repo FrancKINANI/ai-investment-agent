@@ -207,7 +207,7 @@ Response:
 
 ### Prerequisites
 
-Use **Node.js 22+** and pnpm. A local or hosted database and OAuth configuration are required for authenticated owner workflows. Do not commit environment files or populated credentials.
+Use **Node.js 24.x LTS** and pnpm. The project declares Node.js 24 as its supported runtime, which is also used by the CI workflows and Docker images. A local or hosted database and OAuth configuration are required for authenticated owner workflows. Do not commit environment files or populated credentials.
 
 ```bash
 git clone https://github.com/FrancKINANI/ai-investment-agent-mvp.git
