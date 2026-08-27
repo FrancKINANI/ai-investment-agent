@@ -23,6 +23,7 @@ import { activateDiscoverySchedule, createAgentMessage, createConversation, crea
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
 import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft } from "@shared/capabilityRegistry";
 import { getPhase0ConfigurationSummary } from "./phase0Config";
+import { findTeamRole, loadAgentTeam } from "@shared/agentTeam";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -328,7 +329,12 @@ export const appRouter = router({
         version: savedPolicy.version,
         allowedAssets: savedPolicy.allowedAssets,
       } : null;
-      const research = await runTokenResearch(input, policy);
+      
+      // Wire model from team config (variation agent)
+      const variationAgent = findTeamRole("variation");
+      const researchModel = variationAgent?.model ?? loadAgentTeam().defaultModel;
+      
+      const research = await runTokenResearch(input, policy, ctx.user.id, { model: researchModel });
       const runId = nanoid();
       const runStatus = research.advancement.status === "allowed" ? "passed" : research.advancement.status;
       const evidence = [
