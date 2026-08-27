@@ -41,7 +41,7 @@ beforeEach(() => {
   fabric.getDiscoverySchedule.mockResolvedValue({ scheduleId: "schedule-1", cadence: "daily", enabled: false, scheduleCronTaskUid: null }); fabric.pauseDiscoverySchedule.mockResolvedValue({ scheduleId: "schedule-1", enabled: false });
   db.createOperatorAction.mockResolvedValue({}); db.getInvestmentPolicy.mockResolvedValue({ version: 1, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
   llm.composeSpecialistOutput.mockResolvedValue("Observation: unknown\nConstraint: no live data\nNext research check: verify sources");
-  llm.composeSupervisorReply.mockResolvedValue("Interpretation: bounded\nFabric synthesis: complete\nConstraints: simulation-only\nNext safe step: inspect sources");
+  llm.composeSupervisorReply.mockResolvedValue("Interpretation: bounded\nFabric synthesis: complete\nConstraints: owner-governed\nNext safe step: inspect sources");
   llm.calculateResearchNoteConfidence.mockReturnValue(68);
   llm.composeFundManagerDisagreementSummary.mockReturnValue("Fund Manager review: disagreement preserved; execution remains sealed.");
 });

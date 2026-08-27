@@ -5,7 +5,7 @@ flowchart TB
   classDef external fill:#f1f5f9,stroke:#64748b,color:#1e293b,stroke-width:1.5px;
   classDef blocked fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
 
-  subgraph NOW[Active Ledgerline · simulation-only]
+  subgraph NOW[Active Ledgerline · fail-closed]
     direction LR
     Owner[Owner / administrator<br/>consent, override & kill request]:::active --> UX[Command · Chat · Settings · Activity]:::active
     Doctor[Config validator + doctor<br/>disabled MCP declarations]:::active --> Registry[Versioned capability registry<br/>safe scopes only]:::active

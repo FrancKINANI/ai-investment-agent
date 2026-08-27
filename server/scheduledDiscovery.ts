@@ -28,7 +28,7 @@ export async function scheduledDiscoveryHandler(req: Request, res: Response) {
       let status: "candidate" | "review" | "blocked" = !policy || !item.address ? "review" : allowed.has(item.address.toLowerCase()) ? "candidate" : "blocked";
       let score = status === "candidate" ? 70 : status === "review" ? 45 : 0;
       let confidence: "low" | "medium" | "high" = item.address ? "medium" : "low";
-      const evidence = ["schedule:simulation-only", `cadence:${schedule.cadence}`, `watchlist-item:${item.itemId}`];
+      const evidence = ["schedule:paper-only", `cadence:${schedule.cadence}`, `watchlist-item:${item.itemId}`];
       let summary = item.address ? `Policy state is ${status}. Public-token evidence has not been retrieved yet.` : "No EVM contract address is configured, so this item remains under review.";
       if (item.address) {
         try {
@@ -49,7 +49,7 @@ export async function scheduledDiscoveryHandler(req: Request, res: Response) {
       await createEvolutionEvent(schedule.userId, { eventId: nanoid(), agentId: discoveryAgent?.agentId, state: "completed", summary: `Scheduled ${schedule.cadence} discovery recorded ${item.label} as ${status}.`, evidence });
     }
     await markDiscoveryScheduleRun(schedule.scheduleId);
-    await createOperatorAction(schedule.userId, { actionId: nanoid(), kind: "discovery_completed", status: "success", subject: `${schedule.cadence} watchlist discovery`, detail: `Scheduled discovery created ${findings.length} source-bound simulation-only finding(s).`, payload: { scheduleId: schedule.scheduleId, findingCount: findings.length, execution: "simulation-only" } });
+    await createOperatorAction(schedule.userId, { actionId: nanoid(), kind: "discovery_completed", status: "success", subject: `${schedule.cadence} watchlist discovery`, detail: `Scheduled discovery created ${findings.length} source-bound finding(s).`, payload: { scheduleId: schedule.scheduleId, findingCount: findings.length, execution: "paper-only" } });
     return res.json({ ok: true, scheduleId: schedule.scheduleId, findings: findings.length });
   } catch (error) {
     console.error("[Scheduled discovery] callback failed", { name: error instanceof Error ? error.name : "unknown" });
