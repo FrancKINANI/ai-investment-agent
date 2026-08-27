@@ -45,7 +45,15 @@ export function validateOverlayBinding(binding: {
 export function loadLocalOverlay(): LocalOverlay {
   const raw = tryLoadYamlFile("local.yaml");
   if (raw == null) return {};
-  return localOverlaySchema.parse(raw);
+  const overlay = localOverlaySchema.parse(raw);
+  const attemptsActivation = overlay.mcpActivation === true
+    || overlay.featureFlags?.liveExecution === true
+    || overlay.featureFlags?.cexExecution === true
+    || overlay.featureFlags?.mcpActivation === true;
+  if (attemptsActivation) {
+    throw new Error("Local configuration cannot activate execution, MCP, or execution-permission bindings in a fail-closed Ledgerline build.");
+  }
+  return overlay;
 }
 
 export function writeLocalOverlay(overlay: LocalOverlay) {

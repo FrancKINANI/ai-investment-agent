@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateMandateParams } from "./sailorService";
+import { activateMandate, createMandate, listMandateTransactions, revokeMandate, validateMandateParams } from "./sailorService";
 
 describe("sailor mandate validation", () => {
   it("accepts valid mandate parameters", () => {
@@ -86,5 +86,21 @@ describe("sailor mandate safety contracts", () => {
   it("scope count is bounded to prevent over-authority", () => {
     const tooMany = Array(7).fill("swap") as ["swap", "swap", "swap", "swap", "swap", "swap", "swap"];
     expect(validateMandateParams({ scopes: tooMany, maxTransactionValue: "1", maxDailyValue: "1" }).valid).toBe(false);
+  });
+});
+
+describe("sailor mandate owner isolation", () => {
+  it("does not reveal or mutate another owner’s mandate", async () => {
+    const mandate = await createMandate(101, {
+      ownerAddress: "0x1111111111111111111111111111111111111111",
+      chainId: 1,
+      scopes: ["swap"],
+      maxTransactionValue: "1",
+      maxDailyValue: "1",
+    });
+
+    await expect(activateMandate(202, mandate.mandateId, "0x2222222222222222222222222222222222222222")).rejects.toThrow("Mandate not found.");
+    await expect(revokeMandate(202, mandate.mandateId)).rejects.toThrow("Mandate not found.");
+    expect(() => listMandateTransactions(202, mandate.mandateId)).toThrow("Mandate not found.");
   });
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router, sensitiveProcedure } from "./_core/trpc";
 import { listWalletMandates, getAuthorityState, recordLiveOrderApproval, listOperatorActions } from "./db";
 import { liveOrderApprovalHash } from "@shared/mandateAuthority";
 import { readBinanceTicker } from "./liveData";
@@ -12,6 +12,7 @@ import {
   cancelLiveOrder,
 } from "./liveAdapter";
 import { getPrice, getExchangeInfo } from "./binance";
+import { assertLiveVenueMutationsSealed } from "./liveExecutionBoundary";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────
 
@@ -80,7 +81,8 @@ export const liveRouter = router({
   }),
 
   /** Place a live order after mandate checks. */
-  placeOrder: protectedProcedure.input(orderSchema).mutation(async ({ ctx, input }) => {
+  placeOrder: sensitiveProcedure.input(orderSchema).mutation(async ({ ctx, input }) => {
+    assertLiveVenueMutationsSealed();
     // Find the active mandate for this venue
     const mandates = await listWalletMandates(ctx.user.id);
     const mandate = mandates.find((m) => m.venue === "binance" && m.status === "active") ?? null;
@@ -91,8 +93,11 @@ export const liveRouter = router({
       const balances = await getLiveBalances(ctx.user.id, input.platformKeyId);
       const usdtBalance = balances.find((b) => b.asset === "USDT" || b.asset === "BUSD" || b.asset === "USD");
       accountBalanceUsd = usdtBalance?.total ?? 0;
-    } catch {
-      // If we can't get balances, proceed with 0 (mandate check will catch if limits are set)
+    } catch (error) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `Live order refused because a verified balance is unavailable: ${error instanceof Error ? error.message : "unknown failure"}`,
+      });
     }
 
     try {
@@ -112,11 +117,12 @@ export const liveRouter = router({
   }),
 
   /** Cancel a live order. */
-  cancelOrder: protectedProcedure.input(z.object({
+  cancelOrder: sensitiveProcedure.input(z.object({
     platformKeyId: z.string().trim().min(1).max(64),
     symbol: z.string().trim().min(3).max(20),
     orderId: z.number().int().positive(),
   })).mutation(async ({ ctx, input }) => {
+    assertLiveVenueMutationsSealed();
     try {
       return await cancelLiveOrder(ctx.user.id, input.platformKeyId, input.symbol, input.orderId);
     } catch (error) {

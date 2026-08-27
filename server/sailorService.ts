@@ -21,6 +21,7 @@
 
 import { nanoid } from "nanoid";
 import { createOperatorAction, createSecurityAlert } from "./db";
+import { assertLiveVenueMutationAllowed } from "./liveExecutionBoundary";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,18 @@ export type MandateTransaction = {
 // This store simulates them for UI development.
 const mandates = new Map<string, SailorMandate>();
 const mandateTransactions = new Map<string, MandateTransaction[]>();
+
+/**
+ * Resolve a mandate only for its owner. Deliberately return the same generic
+ * error for missing and foreign identifiers to avoid cross-owner enumeration.
+ */
+function getOwnedMandate(userId: number, mandateId: string): SailorMandate {
+  const mandate = mandates.get(mandateId);
+  if (!mandate || mandate.userId !== userId) {
+    throw new Error("Mandate not found.");
+  }
+  return mandate;
+}
 
 // ─── Mandate Management ───────────────────────────────────────────────────
 
@@ -136,8 +149,7 @@ export async function activateMandate(
   mandateId: string,
   contractAddress: string,
 ): Promise<SailorMandate> {
-  const mandate = mandates.get(mandateId);
-  if (!mandate) throw new Error("Mandate not found.");
+  const mandate = getOwnedMandate(userId, mandateId);
   if (mandate.status !== "pending") throw new Error(`Mandate is ${mandate.status}, not pending.`);
 
   mandate.contractAddress = contractAddress;
@@ -171,8 +183,7 @@ export async function activateMandate(
  * Revocation is immediate and cannot be undone.
  */
 export async function revokeMandate(userId: number, mandateId: string): Promise<SailorMandate> {
-  const mandate = mandates.get(mandateId);
-  if (!mandate) throw new Error("Mandate not found.");
+  const mandate = getOwnedMandate(userId, mandateId);
   if (mandate.status === "revoked") throw new Error("Mandate is already revoked.");
 
   mandate.status = "revoked";
@@ -238,8 +249,11 @@ export async function executeMandateTransaction(
     chainId: number;
   },
 ): Promise<MandateTransaction> {
-  const mandate = mandates.get(mandateId);
-  if (!mandate) throw new Error("Mandate not found.");
+  // The interface remains available for simulation UI contracts, but any path
+  // that could later be connected to signing/broadcast is sealed at service
+  // level until a separately reviewed activation programme exists.
+  assertLiveVenueMutationAllowed();
+  const mandate = getOwnedMandate(userId, mandateId);
   if (mandate.status !== "active") throw new Error(`Mandate is ${mandate.status}, not active.`);
   if (mandate.revokedAt) throw new Error("Mandate has been revoked.");
 
@@ -292,7 +306,8 @@ export async function executeMandateTransaction(
 /**
  * Get transactions for a mandate.
  */
-export function listMandateTransactions(mandateId: string): MandateTransaction[] {
+export function listMandateTransactions(userId: number, mandateId: string): MandateTransaction[] {
+  getOwnedMandate(userId, mandateId);
   return mandateTransactions.get(mandateId) ?? [];
 }
 

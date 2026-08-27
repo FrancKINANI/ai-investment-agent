@@ -78,30 +78,21 @@ describe("security.alerts", () => {
     expect(db.countUnacknowledgedAlerts).toHaveBeenCalledWith(42);
   });
 
-  it("creates an alert with a generated id and returns it", async () => {
+  it("records a client-submitted alert only as a non-authoritative owner note", async () => {
     const caller = appRouter.createCaller(context());
-    const alert = await caller.security.alerts.create({
-      level: "warning",
-      category: "connection-issue",
-      title: "High latency detected",
-      detail: "The connection to the exchange experienced unusual latency.",
-    });
+    const alert = await caller.security.alerts.create({ detail: "The owner recorded a connection observation." });
     expect(db.createSecurityAlert).toHaveBeenCalledWith(42, expect.objectContaining({
-      level: "warning",
-      category: "connection-issue",
-      title: "High latency detected",
+      level: "info",
+      category: "owner-note",
+      title: "Owner security note",
+      detail: expect.stringContaining("not an authoritative security event"),
     }));
     expect(alert).toBeDefined();
   });
 
-  it("rejects alert creation with a category that is too short", async () => {
+  it("rejects a client note that is too short", async () => {
     const caller = appRouter.createCaller(context());
-    await expect(caller.security.alerts.create({
-      level: "info",
-      category: "x",
-      title: "Valid title here",
-      detail: "Valid detail text.",
-    })).rejects.toThrow();
+    await expect(caller.security.alerts.create({ detail: "bad" })).rejects.toThrow();
   });
 
   it("acknowledges an existing alert", async () => {
@@ -326,7 +317,7 @@ describe("security contracts", () => {
 
   it("every mutation produces an immutable operator action record", async () => {
     const caller = appRouter.createCaller(context());
-    await caller.security.alerts.create({ level: "info", category: "test", title: "Test title here", detail: "Test detail here." });
+    await caller.security.alerts.create({ detail: "Test owner note here." });
     await caller.security.platforms.addKey({
       platform: "binance",
       label: "Test key",

@@ -17,7 +17,12 @@ const sourceSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), label: z.s
 const sourceFileSchema = z.object({ schemaVersion: z.literal(1), sources: z.array(sourceSchema).min(1) }).strict();
 const mcpServerSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), label: z.string().min(1).max(120), type: z.literal("mcp_server"), state: z.literal("disabled"), registration: z.literal("declarative-only"), transport: z.literal("not-configured"), tags: z.array(z.string().min(1).max(40)).min(1), reason: z.string().min(20).max(800) }).strict();
 const mcpFileSchema = z.object({ schemaVersion: z.literal(1), servers: z.array(mcpServerSchema) }).strict();
-const bindingsFileSchema = z.object({ schemaVersion: z.literal(1), bindings: z.array(capabilityBindingDraftSchema).min(1) }).strict();
+const declaredBindingSchema = z.object({
+  capabilityId: z.string().regex(/^[a-z0-9.-]+$/),
+  roleKeys: z.array(z.string().regex(/^[a-z0-9_-]+$/)).min(1).max(64),
+  permission: z.enum(["research-only", "simulation-only", "execution"]),
+});
+const bindingsFileSchema = z.object({ schemaVersion: z.literal(1), bindings: z.array(declaredBindingSchema).min(1) }).strict();
 
 function loadYamlFile(relativePath: string): unknown {
   const path = resolve(process.cwd(), "config", relativePath);
@@ -41,6 +46,12 @@ export function loadPhase0Configuration() {
   const declaredCapabilityIds = new Set(registry.capabilities.map((capability) => capability.id));
   for (const source of sources.sources) if (!declaredCapabilityIds.has(source.capabilityId)) throw new Error(`Research source ${source.id} references a missing registry capability.`);
   for (const binding of bindings.bindings) {
+    if (binding.permission === "execution") {
+      if (defaults.featureFlags.liveExecution || defaults.featureFlags.cexExecution || defaults.executionBoundary !== "fail-closed") {
+        throw new Error(`Execution binding ${binding.capabilityId} is forbidden outside the fail-closed static declaration boundary.`);
+      }
+      continue;
+    }
     const validation = validateCapabilityBindingDraft(binding);
     if (!validation.valid) throw new Error(`Invalid protected binding ${binding.capabilityId}: ${validation.issues.join(" ")}`);
   }

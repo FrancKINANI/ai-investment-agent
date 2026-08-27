@@ -68,7 +68,10 @@ export class CEXExecutionBackend implements ExecutionBackend {
     // 2. Build mandate from request
     const mandate = request.mandate ? {
       mandateId: request.mandate.mandateId,
-      mode: request.mandate.mode,
+      // ExecutionRequest exposes the paper-mandate subset. The sealed live
+      // adapter still enforces actual authority/mandate state before it can
+      // perform any effect, so this compatibility value grants no authority.
+      mode: "real" as const,
       status: request.mandate.status,
       venue: request.mandate.venue,
       maxOrderBps: request.mandate.maxOrderBps,

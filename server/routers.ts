@@ -34,12 +34,9 @@ const proposalSchema = z.object({
   requestedScope: z.enum(["market.read", "portfolio.read", "chain.read", "proposal.write", "execution.request"]),
 });
 
-const actionSchema = z.object({
-  kind: z.enum(["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "agent_configured", "subagent_created", "subagent_retired", "chat_message", "watchlist_created", "watchlist_updated", "discovery_schedule_configured", "discovery_completed"]),
-  status: z.enum(["success", "review", "blocked"]),
+const ownerNoteSchema = z.object({
   subject: z.string().trim().min(1).max(160),
   detail: z.string().trim().min(1).max(2000),
-  payload: z.record(z.string(), z.unknown()).default({}),
 });
 
 const lineageSchema = z.object({
@@ -538,7 +535,14 @@ export const appRouter = router({
   }),
   history: router({
     list: protectedProcedure.query(({ ctx }) => listOperatorActions(ctx.user.id)),
-    record: protectedProcedure.input(actionSchema).mutation(({ ctx, input }) => createOperatorAction(ctx.user.id, { actionId: nanoid(), ...input })),
+    record: protectedProcedure.input(ownerNoteSchema).mutation(({ ctx, input }) => createOperatorAction(ctx.user.id, {
+      actionId: nanoid(),
+      kind: "owner_note",
+      status: "review",
+      subject: input.subject,
+      detail: input.detail,
+      payload: { origin: "owner-asserted-note", authoritative: false },
+    })),
     startSimulation: protectedProcedure.input(z.object({ policyVersion: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const runId = nanoid();
       const run = await createAgentRun(ctx.user.id, {

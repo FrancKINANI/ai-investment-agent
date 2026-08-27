@@ -4,15 +4,15 @@
 **Auditor:** Buffy (Codebuff)
 **Branch:** staging
 **Scope:** Full codebase — paper-first, authority-gated investment OS
-**Remediation:** August 27, 2026 (all findings fixed)
+**Remediation:** August 27, 2026 (initial findings fixed; venue mutations sealed by `fix/security-binance`)
 
 ---
 
 ## 1. Executive Summary
 
-Ledgerline v0.1 demonstrates **unusually strong security design** for a project at this stage. The authority state machine, server-derived gate inputs, fail-closed defaults, and owner-scoped DB queries form a solid foundation. The system correctly prevents agents from self-authorizing capital movement and keeps live execution disabled by default.
+Ledgerline v0.1 provides a paper-first, fail-closed foundation. The authority state machine, server-derived gate inputs, fail-closed defaults, and owner-scoped queries are controls under continued test—not evidence that the platform is ready to trade real capital.
 
-**All 10 findings have been remediated.** Verdict upgraded to **GO** for paper-only and **conditional GO** for real capital.
+The initial ten findings are recorded as remediated. The subsequent integration in `fix/security-binance` additionally seals every Binance, Sailor, and MCP mutation boundary, adds immutable idempotency/risk reservations, and requires owner-scoped controls. **Verdict: GO for research and paper simulation; NO-GO for real capital.** A future real-mode programme requires separate independent review and cannot be activated by configuration.
 
 ---
 
