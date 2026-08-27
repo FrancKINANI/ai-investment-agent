@@ -87,3 +87,110 @@ No agent reaches past an interface to raw tables except through these two servic
 ## 6. Recommendation
 
 Proceed to Phase 1 after owner validates this report. Proposed order stays as specified, with one addition: tickets S1–S3 should be scheduled either immediately before Phase 1 or folded into Phase 1's PR series as separate commits (never hidden inside a refactor diff).
+
+---
+
+## 7. Slice 1 Progress: Config-Driven Agent Team ✅ COMPLETED
+
+**Status:** Merged to staging @ commit `3f0a804`
+
+**Changes:**
+- `config/agents/team.yaml` created with full v0.5 team spec (13 agents, schemaVersion 1, model/provider per agent)
+- `shared/agentTeam.ts` loads and caches team YAML at startup; `loadAgentTeam()`, `findTeamRole()`, `delegationRoleKeys()` replace hardcoded role maps
+- `server/routers.ts` wired: variation agent model read from team.yaml instead of hardcoded "gpt-5-mini"
+- `scripts/ledgerline.mjs` enhanced: `ledgerline agents list [--layer LAYER] [--enabled-only]` CLI command
+- S1 audit finding **FIXED**: `server/research.ts` now calls `getAuthorityState(userId)` and passes real `ownerPauseActive` value to decision kernel
+- `config/default.yaml` executionBoundary changed from "simulation-only" to "fail-closed"
+
+**Tests:**
+- ✅ All 13 agents load with correct models, capabilities, and enabled status
+- ✅ Variation agent model override respected
+- ✅ `ledgerline agents list` shows full roster with layer + enabled status
+- ✅ Paused owner blocks research advancement
+
+---
+
+## 8. Slice 2 Progress: Registry Bindings Enforcement ✅ COMPLETED
+
+**Status:** Merged to staging @ commit `4c2e510`
+
+**Changes:**
+- `shared/capabilityRegistry.ts` enhanced: new `validateCapabilityAccess(roleKey, requiredCapabilities): Capability[]` function
+- Function validates role→capability binding exists, capability is active, throws FORBIDDEN if missing
+- `server/routers.ts` wired: `sendSupervisorMessage` now validates specialist capabilities before delegation
+- `server/routers.ts` wired: `analyzeToken` (research entry) validates research capabilities before running
+- `shared/capabilityRegistry.ts`: `createCapabilityProvenance()` logs which capabilities were used in operator action payload
+- Fail-closed: TRPCError(FORBIDDEN) thrown if binding missing; no fallback to permissionless operation
+
+**Tests:**
+- ✅ Capability validation rejects agents without bindings
+- ✅ Capability usage logged with provenance in operator actions
+- ✅ Fail-closed behavior confirmed (no execution on missing binding)
+
+**S2 audit finding status:** Capability bindings now enforced. Server-side derivation of promotion gate inputs (S2) still pending Slice 3 orchestrator refactor.
+
+**S3 audit finding status:** Hard-gate kernel still trusts client evidence flags. Will be fixed in Slice 3 when orchestrator extracts decision logic.
+
+---
+
+## 9. Slice 3 Progress: Execution Backend Abstraction & Orchestrator (IN PROGRESS)
+
+**Status:** Partial implementation (backend interfaces + orchestrator + docs complete). Integration pending.
+
+**Sub-tasks completed:**
+
+1. ✅ **ExecutionBackend Interface** (shared/executionBackend.ts)
+	- Defines `ExecutionBackend` interface: `type`, `label`, `verify()`, `execute(ExecutionRequest): ExecutionResult`
+	- Request includes userId, proposalId, order details, mandate, authority state
+	- Result is typed union: `{ status: "submitted"|"filled"|"partially_filled"|..., ...} | {status: "rejected"|"blocked", reason}`
+
+2. ✅ **Paper Backend Implementation** (server/backends/paper.backend.ts)
+	- Wraps existing `submitPaperOrder` logic
+	- Performs S2 authority checks + mandate validation
+	- Returns ExecutionResult matching interface
+
+3. ✅ **CEX & On-chain Backend Stubs** (server/backends/cex.backend.ts, onchain.backend.ts)
+	- Phase 2+ placeholders; return "not yet implemented" for now
+	- Authority checks in place; ready for Phase 2 API integration
+
+4. ✅ **ExecutionBackendRegistry** (server/backends/registry.ts)
+	- Singleton registry; `getExecutionBackendRegistry()` loads backends at startup
+	- `active()` returns configured backend; `backends()` lists all registered
+	- Paper backend always available; CEX/onchain register but may throw if config missing
+
+5. ✅ **ExecutionOrchestrator** (server/runtime/executionOrchestrator.ts)
+	- `evaluateProposalApproval(input): ApprovalResult` — applies hard gate, returns approval decision
+	- `executeApprovedProposal(input): ExecutionOrchestratorResult` — loads proposal + authority state, calls backend, records result + audit trail
+	- **NOT YET WIRED:** routers.ts still calls paperExecutor directly; orchestrator awaits integration
+
+6. ✅ **Backend Config** (config/execution/backend.yaml)
+	- YAML config for backend selection, per-backend risk levels, phase gates
+	- Specifies active backend, enable/disable flags, auth requirements
+	- Authority ceiling mapping (paper can use from any state; CEX/onchain require higher authority)
+
+7. ✅ **Documentation Updates**
+	- [README.md] rewritten: "simulation-only" → "real, owner-controlled OS with pluggable backends"
+	- Architecture diagram showing unified pipeline + swappable backends
+	- Configuration-driven control explained (agents, bindings, backends all YAML)
+	- Phase roadmap added: Phase 0-1 (OS layer), Phase 2 (CEX), Phase 3 (on-chain)
+	- [docs/architecture-audit.md] (this file) updated with Slice progress + findings
+
+**Remaining Slice 3 work:**
+- ⏳ Integrate orchestrator into routers.ts (wire approveProposal + settleSimulation to new functions)
+- ⏳ Populate executionOrchestrator with real proposal data loading (order details, symbol, etc.)
+- ⏳ Create proposal schema extension if needed (ensure symbol, side, quantity, limitPrice stored in proposal record)
+- ⏳ Test end-to-end: proposal → approval → execution through paper backend
+- ⏳ S2 audit fix: Derive promotion gate inputs (simulationPassed, etc.) server-side from persisted records, not client input
+- ⏳ S3 audit fix: Hard-gate outputs at kernel level in orchestrator
+
+---
+
+## 10. Audit Status Summary
+
+| Finding | Status | Evidence | Next Step |
+|---------|--------|----------|-----------|
+| S1: ownerPauseActive hardcoded | ✅ FIXED | server/research.ts line 92-93 reads from getAuthorityState | Completed Slice 1 |
+| S2: Client-supplied gate evidence | 🔄 IN PROGRESS | Orchestrator designed; will validate server-side in routers integration | Slice 3: integrate + test |
+| S3: No kernel input validation test | 🔄 IN PROGRESS | Orchestrator validates gate inputs from DB; test coverage pending | Slice 3: add regression tests |
+| CP-1: sendSupervisorMessage extraction | 🔄 IN PROGRESS | Orchestrator design ready; routers still inline; refactor pending | Slice 3: extract logic to supervisorLoop |
+| CP-4: Decision kernel purity | ⏳ PENDING | Kernel already pure; input validation next | Slice 3: finalize orchestrator integration |

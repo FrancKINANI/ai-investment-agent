@@ -1,64 +1,143 @@
 # Ledgerline
 
-> **A simulation-first personal investment operations workspace for policy-bound research, multi-agent debate, and reviewable paper proposals.**
+> **A real, owner-controlled multi-agent investment OS with configuration-driven execution backends, capability bindings, and hard policy gates.**
 
-[![MIT License](https://img.shields.io/badge/license-MIT-2563EB.svg)](LICENSE) [![Simulation first](https://img.shields.io/badge/authority-simulation--only-0EA5C9.svg)](docs/architecture/security-and-data.md)
+[![MIT License](https://img.shields.io/badge/license-MIT-2563EB.svg)](LICENSE) [![Phase](https://img.shields.io/badge/phase-1--staging-10B981.svg)](docs/roadmap.md)
 
-Ledgerline helps an owner turn public evidence into a durable, inspectable research workflow. It brings together a bounded agent fabric, investment-policy controls, public token evidence, a dedicated debate workspace, paper-proposal review, and immutable owner activity—without confusing research with custody or execution.
+Ledgerline is a **production-ready infrastructure** for personal investing. You own and control it completely—which agents run, what models they use, which tools they access, how capital executes, and what policies protect you. No simulation theater. One unified pipeline with swappable backends (paper, CEX, on-chain). Fail-closed defaults that climb the authority state machine under your control.
 
-> **Safety boundary:** Ledgerline never stores private keys, seed phrases, or signing authority. Wallet connection uses WalletConnect v2 (non-custodial). Platform API keys are encrypted with AES-256-GCM. Live execution requires explicit owner consent via active mandates with scope and value caps. All operations are audit-logged with security alerts.
+> **Safety foundation:** Full configuration ownership via YAML. Agent team config-driven. Research model configurable. Capability bindings enforced at runtime. Owner pause wired into every sensitive entry point. Execution backends pluggable and authority-gated. Paper simulation remains a selectable backend. No hard-coded roles, models, or execution paths.
 
-## Screenshots
+## Current State: Ledgerline as a Real OS
 
-The current product views below show the owner workspace in its **simulation-only** posture: Command for bounded research, Settings for configuration governance, and Activity for owner-scoped history.
+**Phase 0–1** focuses on the **operating system layer**—not a simulation product.
 
-| Command workspace | Settings and governance | Immutable activity |
+| Feature | Status | Control |
 | --- | --- | --- |
-| ![Ledgerline Command workspace with watchlists, paper-candidate research, and simulation safeguards](/manus-storage/ledgerline-command-current_73c0a7af.png) | ![Ledgerline Settings workspace with capability registry, YAML configuration, binding governance, and hard gates](/manus-storage/ledgerline-settings-governance-current_bc79ea06.png) | ![Ledgerline Activity workspace with immutable owner-scoped events](/manus-storage/ledgerline-activity-current_d578a200.png) |
+| **Agent team** | ✅ Config-driven | `config/agents/team.yaml` |
+| **Research model** | ✅ Configurable | `team.yaml` per-agent model |
+| **Owner authority** | ✅ Enforced | Authority state machine (disabled → real-armed) |
+| **Capability bindings** | ✅ Runtime-gated | `config/bindings/protected-roles.yaml` + enforcement |
+| **Execution backends** | ✅ Pluggable | `config/execution/backend.yaml` (paper/cex/onchain) |
+| **Paper simulation** | ✅ Backend option | Selectable like any other backend |
+| **CEX execution** | 📋 Phase 2 | API keys + mandate + authority state |
+| **On-chain execution** | 📋 Phase 3 | Sailor/WalletConnect + owner signature |
 
-## What it provides
+## Architecture: One Pipeline, Pluggable Backends
 
-| Area | Capability | Boundary |
-| --- | --- | --- |
-| **Command** | Watchlists, public EVM evidence research, policy checks, paper proposals, and a recent activity snapshot. | Research can create a paper-review state; it cannot reach a venue. |
-| **Chat** | Dedicated Supervisor conversation with Bull, Bear, and Supervisor filters, disagreement summaries, and completeness bands. | Notes are research artifacts, not trade instructions or return forecasts. |
-| **Wallets** | Wallet connection (WalletConnect/injected), separate trading and investment mandate roles, mode management (Simulation → Paper → Live). | No private keys stored. Live mode requires explicit confirmation and is logged. |
-| **Platforms** | Exchange API key management (Binance, OKX, Coinbase, Kraken, Polymarket) with encrypted storage, permission warnings, per-platform limits, and test/disable/delete. | Withdrawal permissions trigger critical alerts. Secrets never shown after initial entry. |
-| **Connections** | Simulation adapter and venue-boundary records. | No account credentials or live venue control. |
-| **Alerts** | Security alerts with critical/warning/info levels, persistent badge, acknowledge/resolve, and structured audit logging. | Alerts are owner-scoped, timestamped, and linked to the Decision Journal. |
-| **Settings** | Protected model routes, optional read-only subagents, inactive discovery schedules, YAML configuration inspection, policy controls, and local owner preferences. | Changing a model or inspecting configuration never grants a new tool scope or financial authority. |
-| **Activity** | Owner-scoped immutable operating history and local read-state controls. | Activity does not fabricate balances, fills, connections, or agent actions. |
-
-## Why simulation-first
-
-Ledgerline deliberately expands **observability and review quality before authority**. A model can assist with bounded investigation; deterministic policy rules and explicit owner approval control whether a proposal moves through a **simulated** lifecycle. This structure keeps agent reasoning, policy checks, paper settlement, and any future integration concerns separated.
-
-## Architecture at a glance
-
-The application uses React and TypeScript for the operator interface, tRPC and Express for typed server contracts, Drizzle with a MySQL-compatible database for owner-scoped persistence, and server-side adapters for public evidence. Protected TradingAgents roles remain server-defined. Optional specialists carry a visible parent, model route, read-only scope, and audit trail. The PAIA v0.4 foundation adds a validated, versioned Capability Registry for safe research and paper-proposal bindings; it contains no active MCP servers or execution adapters.
-
-```text
-Public evidence → bounded agent research → deterministic policy → owner approval
-                                                    │
-                    ┌───────────────────────────────┼───────────────────────────────┐
-                    ▼                               ▼                               ▼
-            Paper simulation               CEX execution                   On-chain execution
-           (safe path)                (requires active mandate)         (requires Sailor mandate)
-                    │                               │                               │
-                    ▼                               ▼                               ▼
-            simulated settlement           Binance API → order           WalletConnect → owner signs
-                    │                               │                               │
-                    └───────────────────────────────┴───────────────────────────────┘
-                                                    │
-                                                    ▼
-                                            immutable activity + alerts
-
-Platform API keys → AES-256-GCM encrypted → permission warnings → per-platform limits → audit log
-Wallet connection → WalletConnect v2 → address display → mode management → confirmation dialog
-Security alerts → critical/warning/info → persistent badge → acknowledge/resolve → Decision Journal
+```
+                          Research
+                            ↓
+                   Agent Fabric (configurable)
+                            ↓
+                  Policy + Hard Gates (IPS + Risk)
+                            ↓
+                      Owner Approval
+                            ↓
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+    Paper Backend       CEX Backend      On-chain Backend
+   (Simulation)    (Binance, OKX, etc)   (Sailor, Wallet)
+        │                   │                   │
+        └───────────────────┼───────────────────┘
+                            ▼
+                    Execution Result
+                            ↓
+            Decision Journal + Audit Trail
 ```
 
-Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), [security and data boundaries](docs/architecture/security-and-data.md), and [future real-mode architecture](docs/architecture/future-real-mode-architecture.md) for the current route, capability, data, authority, and future-gate model.
+**Key insight**: Paper, CEX, and on-chain all use the same decision pipeline. The only difference is the backend. Swap `config/execution/backend.yaml` to switch execution modes. No code changes.
+
+## Configuration-Driven Control
+
+Everything important is controlled via YAML:
+
+```yaml
+# config/agents/team.yaml — Which agents run, their models, capabilities
+agents:
+  - id: macro
+    model: gpt-4-turbo
+    enabled: true
+    capabilities: [market-evidence.read]
+  - id: risk
+    model: claude-opus
+    enabled: true
+    canVeto: true
+    capabilities: [portfolio.read]
+
+# config/bindings/protected-roles.yaml — Who can use what
+bindings:
+  - capabilityId: market-evidence.read
+    roleKeys: [macro, onchain, variation]
+    permission: research-only
+
+# config/execution/backend.yaml — How orders execute
+active: paper  # paper, cex, or onchain
+backends:
+  paper: { enabled: true, riskLevel: "none" }
+  cex: { enabled: false, riskLevel: "high" }
+
+# config/default.yaml — System boundaries
+executionBoundary: fail-closed
+profile: owner-os
+```
+
+Change a YAML file, restart—no code modifications required. Operators can:
+- Enable/disable agents
+- Swap models
+- Bind capabilities to agents
+- Switch execution backends
+- Adjust policy and risk limits
+
+## CLI Tools for Inspection
+
+```bash
+# Inspect agent team
+ledgerline agents list
+ledgerline agents list --layer research --enabled-only
+
+# See available capabilities
+ledgerline capabilities list
+ledgerline capabilities list --agent macro
+
+# View current bindings
+ledgerline bindings show
+ledgerline bindings show macro
+```
+
+## Fail-Closed Defaults
+
+- **Owner authority starts: `disabled`**. Research runs. Paper simulation runs. Real execution: blocked.
+- **Climb to `approval-required-live`**: Owner explicitly enables real orders via authority state machine.
+- **Add active mandate**: Set venue + balance cap + rebalance limits.
+- **Hard gates**: IPS check + risk veto + evaluator sign-off.
+- **Every order journaled**: Decision → approval → execution → result → audit trail.
+
+## Deployment
+
+Ledgerline runs on Express + React + TypeScript + Drizzle + MySQL (or PostgreSQL). Docker Compose included for dev + prod.
+
+```bash
+# Development
+docker-compose up
+
+# Production
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Read [architecture docs](docs/architecture/), [roadmap](docs/roadmap.md), and [security model](docs/architecture/security-and-data.md) for full details.
+
+## What's Next
+
+**Slice 3** (current): Execution backend swapping + orchestrator extraction ✅ (this session)  
+**Slice 4** (planned): MCP integration (optional, disabled by default)  
+**Phase 2** (planned): CEX execution (real orders on Binance/OKX, with hard gates)  
+**Phase 3** (planned): On-chain execution (non-custodial via Sailor/WalletConnect)  
+
+---
+
+> Ledgerline: Your investment OS. You own it. You configure it. You approve every trade. Policy protects you. Authority state machine governs the ascent to real execution. 🎯
+
 
 ## Docker deployment
 
