@@ -42,12 +42,12 @@ describe("scheduled discovery callback", () => {
     expect(res.json).toHaveBeenCalledWith({ error: "cron-only" });
   });
 
-  it("writes a source-bound, simulation-only candidate finding and immutable audit event", async () => {
+  it("writes a source-bound, candidate finding and immutable audit event", async () => {
     const res = response();
     await scheduledDiscoveryHandler({ originalUrl: "/api/scheduled/discovery" } as never, res as never);
-    expect(fabric.createDiscoveryFinding).toHaveBeenCalledWith(7, expect.objectContaining({ scheduleId: "schedule-1", watchlistItemId: "item-1", status: "candidate", confidence: "high", evidence: expect.arrayContaining(["schedule:simulation-only", "source:Blockscout public API", "source:DexScreener public API"]) }));
+    expect(fabric.createDiscoveryFinding).toHaveBeenCalledWith(7, expect.objectContaining({ scheduleId: "schedule-1", watchlistItemId: "item-1", status: "candidate", confidence: "high", evidence: expect.arrayContaining(["schedule:paper-only", "source:Blockscout public API", "source:DexScreener public API"]) }));
     expect(fabric.createEvolutionEvent).toHaveBeenCalledWith(7, expect.objectContaining({ state: "completed" }));
-    expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "discovery_completed", payload: expect.objectContaining({ execution: "simulation-only" }) }));
+    expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "discovery_completed", payload: expect.objectContaining({ execution: "paper-only" }) }));
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true, findings: 1 }));
   });
 

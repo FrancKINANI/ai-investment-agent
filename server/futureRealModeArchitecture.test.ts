@@ -7,7 +7,7 @@ const guide = readFileSync(fileURLToPath(new URL("../docs/architecture/future-re
 
 describe("future real-mode architecture documentation", () => {
   it("keeps the active simulation boundary separate from prospective gates and execution controls", () => {
-    expect(diagram).toContain("Active Ledgerline · simulation-only");
+    expect(diagram).toContain("Active Ledgerline · fail-closed");
     expect(diagram).toContain("Current enforced boundary");
     expect(diagram).toContain("Future real-mode activation program");
     expect(diagram).toContain("Future real-mode control plane · not implemented");

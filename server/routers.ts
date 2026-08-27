@@ -134,7 +134,7 @@ export const appRouter = router({
         kind: "policy_updated",
         status: "success",
         subject: `IPS ${policy?.name ?? normalized.name}`,
-        detail: "Owner updated a simulation-only Investment Policy Statement.",
+        detail: "Owner updated a owner-governed Investment Policy Statement.",
         payload: { version: policy?.version, allowedAssets: normalized.allowedAssets, executionMode: "simulation" },
       });
       return policy;
@@ -224,7 +224,7 @@ export const appRouter = router({
       const threadId = input.threadId ?? nanoid();
       if (!input.threadId) await createConversation(ctx.user.id, { threadId, title: input.message.slice(0, 120) });
       await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "owner", content: input.message, evidence: ["owner-message"] });
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "chat_message", status: "success", subject: "Owner message to supervisor", detail: "Owner initiated a simulation-only supervisor conversation.", payload: { threadId } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "chat_message", status: "success", subject: "Owner message to supervisor", detail: "Owner initiated a bounded supervisor conversation.", payload: { threadId } });
       const threadHistory = await listAgentMessages(ctx.user.id, threadId);
       const history = threadHistory.map((message) => ({ actor: message.actor, content: message.content }));
       const delegatedAgents = defaultDelegation.map((roleKey) => nodes.find((node) => node.roleKey === roleKey)).filter((agent): agent is NonNullable<typeof agent> => Boolean(agent));
@@ -275,7 +275,7 @@ export const appRouter = router({
   watchlists: router({
     lists: protectedProcedure.query(async ({ ctx }) => ({ lists: await listWatchlists(ctx.user.id), items: await listWatchlistItems(ctx.user.id), findings: await listDiscoveryFindings(ctx.user.id) })),
     create: protectedProcedure.input(watchlistSchema).mutation(async ({ ctx, input }) => {
-      const record = await createWatchlist(ctx.user.id, { watchlistId: nanoid(), name: input.name, criteria: { scope: "owner-defined", execution: "simulation-only" } });
+      const record = await createWatchlist(ctx.user.id, { watchlistId: nanoid(), name: input.name, criteria: { scope: "owner-defined", execution: "paper-only" } });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_created", status: "success", subject: `Watchlist: ${input.name}`, detail: "Owner created a bounded discovery universe.", payload: { watchlistId: record?.watchlistId } });
       return record;
     }),
@@ -291,7 +291,7 @@ export const appRouter = router({
       return record;
     }),
     updateScope: protectedProcedure.input(watchlistScopeSchema).mutation(async ({ ctx, input }) => {
-      const record = await updateWatchlistCriteria(ctx.user.id, input.watchlistId, { scope: "owner-defined", chains: input.chains, evidenceStandard: input.evidenceStandard, execution: "simulation-only" });
+      const record = await updateWatchlistCriteria(ctx.user.id, input.watchlistId, { scope: "owner-defined", chains: input.chains, evidenceStandard: input.evidenceStandard, execution: "paper-only" });
       if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist not found." });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_updated", status: "success", subject: `Watchlist scope: ${record.name}`, detail: "Owner changed the bounded discovery scope. No execution authority changed.", payload: { watchlistId: record.watchlistId, criteria: record.criteria } });
       return record;
@@ -323,10 +323,10 @@ export const appRouter = router({
       const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
       const cron = schedule.cadence === "daily" ? "0 0 9 * * *" : "0 0 */6 * * *";
       const job = schedule.scheduleCronTaskUid
-        ? await updateHeartbeatJob(schedule.scheduleCronTaskUid, { enable: true, cron, path: "/api/scheduled/discovery", description: `Ledgerline ${schedule.cadence} simulation-only watchlist discovery` }, sessionToken).then(() => ({ taskUid: schedule.scheduleCronTaskUid! }))
-        : await createHeartbeatJob({ name: `ledgerline-discovery-${schedule.scheduleId}`, cron, path: "/api/scheduled/discovery", payload: { schemaVersion: 1 }, description: `Ledgerline ${schedule.cadence} simulation-only watchlist discovery` }, sessionToken);
+        ? await updateHeartbeatJob(schedule.scheduleCronTaskUid, { enable: true, cron, path: "/api/scheduled/discovery", description: `Ledgerline ${schedule.cadence} watchlist discovery` }, sessionToken).then(() => ({ taskUid: schedule.scheduleCronTaskUid! }))
+        : await createHeartbeatJob({ name: `ledgerline-discovery-${schedule.scheduleId}`, cron, path: "/api/scheduled/discovery", payload: { schemaVersion: 1 }, description: `Ledgerline ${schedule.cadence} watchlist discovery` }, sessionToken);
       const active = await activateDiscoverySchedule(ctx.user.id, schedule.scheduleId, job.taskUid);
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "success", subject: `${schedule.cadence} discovery activated`, detail: "Owner activated an authenticated, simulation-only watchlist discovery job on the deployed site.", payload: { scheduleId: schedule.scheduleId, taskUid: job.taskUid, cadence: schedule.cadence, execution: "simulation-only" } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "success", subject: `${schedule.cadence} discovery activated`, detail: "Owner activated an authenticated, watchlist discovery job on the deployed site.", payload: { scheduleId: schedule.scheduleId, taskUid: job.taskUid, cadence: schedule.cadence,        execution: "paper-only" } });
       return active;
     }),
     pause: protectedProcedure.input(z.object({ scheduleId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
@@ -380,7 +380,7 @@ export const appRouter = router({
         kind: "research_completed",
         status: research.advancement.status === "allowed" ? "success" : research.advancement.status,
         subject: `Research report: ${research.evidence.asset.symbol}`,
-        detail: "The owner requested an evidence-bound, simulation-only token research report.",
+        detail: "The owner requested an evidence-bound, token research report.",
         payload: { runId, question: input.question, policy: research.policy, advancement: research.advancement, evidence: research.evidence, report: research.report, capabilityProvenance },
       });
       await createAwarenessRecord(ctx.user.id, {
@@ -394,7 +394,7 @@ export const appRouter = router({
       const proposal = await createAgentProposal(ctx.user.id, {
         proposalId: nanoid(), runId, walletRole: "trading", venue: "evm", status: proposalStatus, policyResult: research.policy.result,
         title: research.report.headline, rationale: research.report.thesis,
-        action: { kind: "token_research_paper_proposal", address: research.evidence.asset.address, nextStep: research.report.researchNextStep, execution: "simulation-only" },
+        action: { kind: "token_research_paper_proposal", address: research.evidence.asset.address, nextStep: research.report.researchNextStep, execution: "paper-only" },
       });
       await createOperatorAction(ctx.user.id, {
         actionId: nanoid(), kind: "proposal_created", status: proposalStatus === "review" ? "review" : "blocked", subject: `Paper proposal: ${research.evidence.asset.symbol}`,
@@ -421,24 +421,43 @@ export const appRouter = router({
         payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: { simulationPassed: input.simulationPassed, lineageCoverage: input.lineageCoverage, complexityPenalty: input.complexityPenalty, ownerPauseActive: input.ownerPauseActive }, rationale: input.rationale, decision: gate, simulationOnly: true },
         capabilityIds: ["paper-proposal.compose", "portfolio-snapshot.read"],
       });
-      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, executionBoundary: "simulation-only" as const };
+      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, executionBoundary: "fail-closed" as const };
     }),
     createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
       const mandate = await createWalletMandate(ctx.user.id, { mandateId: nanoid(), ...input, mode: "simulation", status: "active" });
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a simulation-only mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a paper mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
       return mandate;
     }),
     setMandateMode: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64), mode: z.enum(["simulation", "armed", "real", "paused"]) })).mutation(async ({ ctx, input }) => {
       if (input.mode === "real") {
-        await createOperatorAction(ctx.user.id, {
-          actionId: nanoid(),
-          kind: "scope_checked",
-          status: "blocked",
-          subject: "Blocked real-mode request",
-          detail: "Ledgerline blocked a request to enable real mode because no verified live adapter, owner arming ceremony, or execution gateway exists.",
-          payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "authority-boundary", executionBoundary: "simulation-only" },
-        });
-        throw new TRPCError({ code: "FORBIDDEN", message: "Real mode is not available: no verified live adapter, owner arming ceremony, or execution gateway exists." });
+        // Real mode requires: authority state allows orders + active mandate + IPS
+        const { getAuthorityState } = await import("./db");
+        const authorityState = await getAuthorityState(ctx.user.id);
+        const { canPlaceOrders } = await import("@shared/authorityState");
+        if (!canPlaceOrders(authorityState)) {
+          await createOperatorAction(ctx.user.id, {
+            actionId: nanoid(),
+            kind: "scope_checked",
+            status: "blocked",
+            subject: "Blocked real-mode request",
+            detail: `Authority state '${authorityState}' does not permit order placement. Climb the authority state machine first.`,
+            payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "authority-boundary", authorityState },
+          });
+          throw new TRPCError({ code: "FORBIDDEN", message: `Authority state '${authorityState}' does not permit real mode. Climb the authority state machine to 'approval-required-live' or 'limited-live' first.` });
+        }
+        const ips = await getInvestmentPolicy(ctx.user.id);
+        if (!ips) {
+          await createOperatorAction(ctx.user.id, {
+            actionId: nanoid(),
+            kind: "scope_checked",
+            status: "blocked",
+            subject: "Blocked real-mode request",
+            detail: "No active Investment Policy Statement. Real mode requires an approved IPS.",
+            payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "policy-required" },
+          });
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Real mode requires an active Investment Policy Statement. Create and approve an IPS first." });
+        }
+        // All checks passed — allow the transition
       }
       const mandate = await updateWalletMandateMode(ctx.user.id, input.mandateId, input.mode);
       if (!mandate) throw new TRPCError({ code: "NOT_FOUND", message: "Mandate not found." });
@@ -502,7 +521,7 @@ export const appRouter = router({
         layer: "action",
         subject: `Paper simulation ${runId}`,
         runId,
-        evidence: [`ips-version:${input.policyVersion}`, "simulation-only", "execution-sealed"],
+        evidence: [`ips-version:${input.policyVersion}`, "execution-sealed"],
         summary: "A paper simulation was initiated by the authenticated owner under the active IPS.",
       });
       return run;

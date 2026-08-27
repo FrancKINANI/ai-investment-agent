@@ -134,8 +134,8 @@ describe("authenticated persistence contracts", () => {
     expect(db.createVenueConnection).toHaveBeenCalledWith(7, expect.objectContaining({ venue: "binance", state: "simulation" }));
     expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "mandate_created" }));
     expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "venue_configured" }));
-    await expect(caller.autonomy.setMandateMode({ mandateId: "mandate-1", mode: "real" })).rejects.toThrow("Real mode is not available");
-    expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "scope_checked", status: "blocked", subject: "Blocked real-mode request", payload: expect.objectContaining({ alertCategory: "authority-boundary", executionBoundary: "simulation-only" }) }));
+    await expect(caller.autonomy.setMandateMode({ mandateId: "mandate-1", mode: "real" })).rejects.toThrow("Real mode requires");
+    expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "scope_checked", status: "blocked", subject: "Blocked real-mode request", payload: expect.objectContaining({ alertCategory: "policy-required" }) }));
   });
 
   it("records the owner decision through approval, rejection, and simulated settlement lifecycle events", async () => {
