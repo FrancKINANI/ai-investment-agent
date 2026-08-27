@@ -11,7 +11,7 @@
  */
 
 import { nanoid } from "nanoid";
-import { getAuthorityState, getAgentProposal, updateAgentProposalStatus, createOperatorAction, createAwarenessRecord, listWalletMandates } from "../db";
+import { getAuthorityState, getAgentProposal, updateAgentProposalStatus, createOperatorAction, createAwarenessRecord, createSecurityAlert, listWalletMandates } from "../db";
 import { evaluatePromotionGate } from "@shared/agentRuntime";
 import { getExecutionBackendRegistry } from "../backends/registry";
 import type { ExecutionRequest } from "@shared/executionBackend";
@@ -168,6 +168,17 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
     const isSuccess = result.status === "filled" || result.status === "submitted";
     const resultReason = "reason" in result ? result.reason : result.status;
 
+    // Alert on execution failure
+    if (!isSuccess) {
+      await createSecurityAlert(input.userId, {
+        alertId: nanoid(),
+        level: "warning",
+        category: "execution",
+        title: `Execution rejected: ${proposal.title}`,
+        detail: `Paper execution for ${symbol} was ${result.status}: ${resultReason}`,
+      });
+    }
+
     // Record result
     await createOperatorAction(input.userId, {
       actionId: nanoid(),
@@ -212,6 +223,15 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
       subject: `Execution failed: ${proposal.title}`,
       detail: reason,
       payload: { proposalId: input.proposalId },
+    });
+
+    // Critical alert on execution crash
+    await createSecurityAlert(input.userId, {
+      alertId: nanoid(),
+      level: "critical",
+      category: "execution",
+      title: `Execution crashed: ${proposal.title}`,
+      detail: `Paper execution for proposal ${input.proposalId} failed with: ${reason}`,
     });
 
     return {
