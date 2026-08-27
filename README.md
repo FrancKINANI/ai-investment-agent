@@ -4,13 +4,13 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-2563EB.svg)](LICENSE) [![Phase](https://img.shields.io/badge/phase-1--staging-10B981.svg)](docs/roadmap.md)
 
-Ledgerline is a **production-ready infrastructure** for personal investing. You own and control it completely—which agents run, what models they use, which tools they access, how capital executes, and what policies protect you. No simulation theater. One unified pipeline with swappable backends (paper, CEX, on-chain). Fail-closed defaults that climb the authority state machine under your control.
+Ledgerline is a **production infrastructure** for personal investing. You own and control it completely — which agents run, what models they use, which tools they access, how capital executes, and what policies protect you. One unified pipeline with swappable backends (paper, CEX, on-chain). Fail-closed defaults that climb the authority state machine under your control.
 
-> **Safety foundation:** Full configuration ownership via YAML. Agent team config-driven. Research model configurable. Capability bindings enforced at runtime. Owner pause wired into every sensitive entry point. Execution backends pluggable and authority-gated. Paper simulation remains a selectable backend. No hard-coded roles, models, or execution paths.
+> **Safety foundation:** Full configuration ownership via YAML. Agent team config-driven. Research model configurable. Capability bindings enforced at runtime. Owner pause wired into every sensitive entry point. Execution backends pluggable and authority-gated. No hard-coded roles, models, or execution paths.
 
-## Current State: Ledgerline as a Real OS
+## Current State
 
-**Phase 0–1** focuses on the **operating system layer**—not a simulation product.
+**Phase 0–1** focuses on the **operating system layer** — config-driven agents, enforced capability bindings, and a real execution pipeline with pluggable backends.
 
 | Feature | Status | Control |
 | --- | --- | --- |
@@ -19,7 +19,6 @@ Ledgerline is a **production-ready infrastructure** for personal investing. You 
 | **Owner authority** | ✅ Enforced | Authority state machine (disabled → real-armed) |
 | **Capability bindings** | ✅ Runtime-gated | `config/bindings/protected-roles.yaml` + enforcement |
 | **Execution backends** | ✅ Pluggable | `config/execution/backend.yaml` (paper/cex/onchain) |
-| **Paper simulation** | ✅ Backend option | Selectable like any other backend |
 | **CEX execution** | 📋 Phase 2 | API keys + mandate + authority state |
 | **On-chain execution** | 📋 Phase 3 | Sailor/WalletConnect + owner signature |
 
@@ -37,7 +36,7 @@ Ledgerline is a **production-ready infrastructure** for personal investing. You 
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
     Paper Backend       CEX Backend      On-chain Backend
-   (Simulation)    (Binance, OKX, etc)   (Sailor, Wallet)
+   (testing/audit)  (Binance, OKX, etc)   (Sailor, Wallet)
         │                   │                   │
         └───────────────────┼───────────────────┘
                             ▼
@@ -82,7 +81,7 @@ executionBoundary: fail-closed
 profile: owner-os
 ```
 
-Change a YAML file, restart—no code modifications required. Operators can:
+Change a YAML file, restart — no code modifications required. Operators can:
 - Enable/disable agents
 - Swap models
 - Bind capabilities to agents
@@ -107,7 +106,7 @@ ledgerline bindings show macro
 
 ## Fail-Closed Defaults
 
-- **Owner authority starts: `disabled`**. Research runs. Paper simulation runs. Real execution: blocked.
+- **Owner authority starts: `disabled`**. Research runs. Paper backend available. Real execution: blocked.
 - **Climb to `approval-required-live`**: Owner explicitly enables real orders via authority state machine.
 - **Add active mandate**: Set venue + balance cap + rebalance limits.
 - **Hard gates**: IPS check + risk veto + evaluator sign-off.
@@ -129,15 +128,14 @@ Read [architecture docs](docs/architecture/), [roadmap](docs/roadmap.md), and [s
 
 ## What's Next
 
-**Slice 3** (current): Execution backend swapping + orchestrator extraction ✅ (this session)  
-**Slice 4** (planned): MCP integration (optional, disabled by default)  
-**Phase 2** (planned): CEX execution (real orders on Binance/OKX, with hard gates)  
-**Phase 3** (planned): On-chain execution (non-custodial via Sailor/WalletConnect)  
+**Slice 3** ✅: Execution backend abstraction + orchestrator extraction
+**Slice 4** (planned): MCP integration (optional, disabled by default)
+**Phase 2** (planned): CEX execution (real orders on Binance/OKX, with hard gates)
+**Phase 3** (planned): On-chain execution (non-custodial via Sailor/WalletConnect)
 
 ---
 
 > Ledgerline: Your investment OS. You own it. You configure it. You approve every trade. Policy protects you. Authority state machine governs the ascent to real execution. 🎯
-
 
 ## Docker deployment
 
@@ -234,20 +232,20 @@ pnpm build
 | `pnpm test` | Runs server, policy, theme, accessibility-oriented loading, and UI regression tests. |
 | `pnpm check` | Runs TypeScript without emitting output. |
 | `pnpm build` | Produces the production client and server bundles. |
-| `pnpm ledgerline config validate` | Validates the safe, inspection-only Phase 0 YAML configuration. |
+| `pnpm ledgerline config validate` | Validates the YAML configuration. |
 
 ### Configure the environment
 
 Follow the [environment configuration guide](docs/maintainers/environment-configuration.md). Server secrets such as `DATABASE_URL` and `JWT_SECRET` belong only in the deployment platform's protected configuration store. Values with a `VITE_` prefix are browser-visible by design and must never contain credentials.
 
-## First safe workflow
+## First workflow
 
-1. Open **Command** and read the simulation-default authority strip.
+1. Open **Command** and read the authority strip.
 2. Review protected agent roles, inactive schedules, and policy controls in **Settings**.
-3. Start a bounded research brief in **Chat**; use the Bull and Bear filters to inspect disagreement.
+3. Start a research brief in **Chat**; use the Bull and Bear filters to inspect disagreement.
 4. Add a watchlist and use the Evidence Lab only with a public Ethereum contract address.
-5. Review paper-proposal states and the immutable **Activity** record. Owner approval can advance a proposal only to simulated settlement.
-6. Visit **Wallets** to connect a wallet and explore mode management (Simulation → Paper → Live).
+5. Review proposal states and the immutable **Activity** record.
+6. Visit **Wallets** to connect a wallet and explore mode management.
 7. Visit **Platforms & API Keys** to add an exchange API key with trading-only permissions.
 8. Check **Security Alerts** for any alerts generated by your actions.
 
@@ -257,12 +255,12 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 
 | Audience | Document | Purpose |
 | --- | --- | --- |
-| New contributors | [Getting started](docs/guides/getting-started.md) | Setup, verification, and a safe first workflow. |
+| New contributors | [Getting started](docs/guides/getting-started.md) | Setup, verification, and a first workflow. |
 | Operators | [Operator guide](docs/guides/operator-guide.md) | Day-to-day use of all workspaces. |
 | Developers | [System overview](docs/architecture/system-overview.md) | Routes, services, agents, and authority flow. |
 | Architecture contributors | [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md) | Capability registry, awareness mapping, phase gates, and execution exclusions. |
-| Future-program reviewers | [Future real-mode architecture](docs/architecture/future-real-mode-architecture.md) | Prospective trust boundaries, sequential activation gates, controls, adapters, and assurance. |
-| Configuration contributors | [Safe Phase 0 configuration and CLI](docs/guides/phase0-configuration-cli.md) | YAML layout, validation, supported inspection commands, and deferred authority. |
+| Future-program reviewers | [Future real-mode architecture](docs/architecture/future-real-mode-architecture.md) | Trust boundaries, sequential activation gates, controls, adapters, and assurance. |
+| Configuration contributors | [Safe Phase 0 configuration and CLI](docs/guides/phase0-configuration-cli.md) | YAML layout, validation, supported inspection commands. |
 | Security reviewers | [Security and data](docs/architecture/security-and-data.md) | Storage, privacy, and execution boundaries. |
 | Maintainers | [Engineering and operations](docs/maintainers/engineering-and-operations.md) | Tests, releases, tokens, and maintenance conventions. |
 | Deployers | [Environment configuration](docs/maintainers/environment-configuration.md) | Required configuration names and public/private treatment. |
@@ -273,13 +271,13 @@ Loading skeletons indicate a real pending request. Empty states indicate a compl
 
 ## Contributing
 
-Contributions that improve research review, simulation fidelity, accessibility, testing, and documentation are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The repository includes CI for tests, type checks, and production builds, plus pull request and issue templates.
+Contributions that improve research review, evidence quality, accessibility, testing, and documentation are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The repository includes CI for tests, type checks, and production builds, plus pull request and issue templates.
 
 Please do not commit credentials, personal data, database URLs, logs, generated builds, sample account data, venue secrets, private keys, or internal prompt materials. Do not add fabricated balances, fills, connected accounts, customer reviews, ratings, or execution results.
 
 ## Security
 
-Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md). Authentication bypasses, owner-data isolation failures, policy-bypass paths, secret exposure, and any UI behavior that implies live execution are security issues.
+Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md). Authentication bypasses, owner-data isolation failures, policy-bypass paths, secret exposure, and any UI behavior that misrepresents execution state are security issues.
 
 ## License and repository status
 
@@ -287,4 +285,4 @@ Ledgerline is licensed under the [MIT License](LICENSE). The GitHub repository c
 
 ## Roadmap
 
-The project prioritizes stronger evidence provenance, paper-simulation review, accessible operator ergonomics, and restricted future integrations. Any live capability would require a separate security, product, operational, and legal decision; it is not enabled by this repository.
+The project prioritizes stronger evidence provenance, accessible operator ergonomics, and restricted execution integrations. Any live capability requires a separate security, product, operational, and legal decision — governed by the authority state machine.

@@ -24,6 +24,7 @@ import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "
 import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft, validateCapabilityAccess, createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { getPhase0ConfigurationSummary } from "./phase0Config";
 import { findTeamRole, loadAgentTeam } from "@shared/agentTeam";
+import { executeApprovedProposal } from "./runtime/executionOrchestrator";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -469,13 +470,12 @@ export const appRouter = router({
       return updated;
     }),
     settleSimulation: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
-      const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
-      if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
-      if (proposal.status !== "approved") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only an owner-approved proposal can be settled in the simulator." });
-      const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "simulated");
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "simulation_settled", status: "success", subject: `Simulation settled: ${proposal.title}`, detail: "The simulated venue adapter recorded a paper outcome. No external order or transaction occurred.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, simulationOnly: true } });
-      await createAwarenessRecord(ctx.user.id, { layer: "result", subject: `Simulation settled: ${proposal.title}`, runId: proposal.runId ?? undefined, evidence: ["simulated-adapter", `venue:${proposal.venue}`, `proposal:${proposal.proposalId}`], summary: "An approved proposal completed the simulated adapter lifecycle without an external action." });
-      return updated;
+      // Route through the execution orchestrator (paper backend by default)
+      const result = await executeApprovedProposal({ userId: ctx.user.id, proposalId: input.proposalId });
+      if (result.status === "rejected") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: result.reason });
+      }
+      return result;
     }),
   }),
   history: router({
