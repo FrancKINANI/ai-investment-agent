@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
-import { parse as parseCookie } from "cookie";
+import { parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { securityRouter } from "./securityRouter";
 import { authorityRouter } from "./authorityRouter";

@@ -11,7 +11,8 @@ describe("security hardening baseline", () => {
   it("keeps audited runtime dependencies patched and removes the unused renderer tree", () => {
     expect(packageJson.dependencies.axios).toBe("^1.19.0");
     expect(packageJson.dependencies["drizzle-orm"]).toBe("^0.45.2");
-    expect(packageJson.dependencies.express).toBe("^4.22.2");
+    expect(packageJson.dependencies.express).toBe("^5.2.1");
+    expect(packageJson.dependencies.cookie).toBe("^2.0.1");
     expect(packageJson.dependencies.streamdown).toBeUndefined();
     expect(existsSync(fileURLToPath(new URL("../client/src/pages/ComponentShowcase.tsx", import.meta.url)))).toBe(false);
     expect(existsSync(fileURLToPath(new URL("../client/src/components/AIChatBox.tsx", import.meta.url)))).toBe(false);
