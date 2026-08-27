@@ -2,17 +2,17 @@
 
 > **Status: prospective architecture only.** This diagram describes the additional trust boundaries, gates, and operating controls Ledgerline would require before a future real-mode program could even be considered. It does **not** enable, configure, or authorize real trading today.
 
-The diagram separates the blue **active simulation-only** platform from orange **future-only** components. A paper proposal cannot enter any future execution path merely because a user changes a configuration value. It must first pass sequential product, legal, security, test/reconciliation, explicit owner-consent, and staged-rollout gates.
+The diagram separates the blue **active fail-closed** platform from orange **future-only** components. A paper proposal cannot enter any future execution path merely because a user changes a configuration value. It must first pass sequential product, legal, security, test/reconciliation, explicit owner-consent, and staged-rollout gates.
 
 The rendered diagram is intentionally high resolution so the five sequential gates, current boundary, future control plane, venue adapters, and assurance path remain legible when opened at full size. The companion Mermaid source is authoritative for future review and controlled design changes.
 
-![Prospective Ledgerline real-mode architecture: active simulation-only platform, sequential activation gates, future controls, adapters, and assurance](/manus-storage/ledgerline-future-real-mode-architecture_d930942a.png)
+![Prospective Ledgerline real-mode architecture: active fail-closed platform, sequential activation gates, future controls, adapters, and assurance](/manus-storage/ledgerline-future-real-mode-architecture_d930942a.png)
 
 ## Reading the architecture
 
 | Area | Purpose | Current status |
 | --- | --- | --- |
-| Active Ledgerline | Evidence, protected agents, IPS, paper proposals, simulation, immutable audit, doctor | Implemented; simulation-only |
+| Active Ledgerline | Evidence, protected agents, IPS, paper proposals, simulation, immutable audit, doctor | Implemented; fail-closed |
 | Activation program | Independent decision gates before any authority design is approved | Future-only |
 | Real-mode control plane | Identity, secret/signer boundary, risk, authorization, simulation, and kill switch | Future-only |
 | Execution adapters | CEX, on-chain, and prediction-market integrations behind narrow policies | Future-only |

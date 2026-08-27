@@ -1,6 +1,6 @@
 # Security Review Record — August 2026
 
-> **Scope:** application cleanup and simulation-only security hardening. This is an engineering review record, not a penetration-test certification and not authorization to introduce wallet custody, credentials, signing, venue access, or live execution.
+> **Scope:** application cleanup and fail-closed security hardening. This is an engineering review record, not a penetration-test certification and not authorization to introduce wallet custody, credentials, signing, venue access, or live execution.
 
 ## Completed controls
 

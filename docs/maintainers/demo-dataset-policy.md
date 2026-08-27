@@ -4,7 +4,7 @@ Ledgerline is a simulation-first workspace. Any sample data, fixture, developmen
 
 ## Allowed examples
 
-Use clearly labelled synthetic identifiers, neutral placeholder amounts where needed for a layout test, public contract addresses only when source attribution and timing are explicit, and deterministic test fixtures that cannot be mistaken for customer activity. Mark non-production material with language such as **sample**, **synthetic**, **fixture**, or **simulation-only**.
+Use clearly labelled synthetic identifiers, neutral placeholder amounts where needed for a layout test, public contract addresses only when source attribution and timing are explicit, and deterministic test fixtures that cannot be mistaken for customer activity. Mark non-production material with language such as **sample**, **synthetic**, **fixture**, or **fail-closed**.
 
 ## Prohibited examples
 

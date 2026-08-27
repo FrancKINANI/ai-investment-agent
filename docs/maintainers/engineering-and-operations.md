@@ -22,7 +22,7 @@ Only show a skeleton for an actual loading request. Use an empty state only afte
 
 ## Release checklist
 
-Verify light and dark themes, desktop and mobile layouts, keyboard focus, loading/empty/error states, and the simulation-only wording. Confirm no secret-handling or real-execution pathway was introduced. Save a checkpoint after validation; publish only through the project management interface.
+Verify light and dark themes, desktop and mobile layouts, keyboard focus, loading/empty/error states, and the fail-closed wording. Confirm no secret-handling or real-execution pathway was introduced. Save a checkpoint after validation; publish only through the project management interface.
 
 ## Client performance
 
