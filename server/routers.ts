@@ -14,7 +14,7 @@ import { listLLMModels } from "./_core/llm";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, getAuthorityState, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
+import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createSecurityAlert, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, getAuthorityState, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
@@ -448,6 +448,16 @@ export const appRouter = router({
         payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: gateInputs, rationale: input.rationale, decision: gate },
         capabilityIds: ["paper-proposal.compose", "portfolio-snapshot.read"],
       });
+      // Alert on gate block (especially owner pause)
+      if (gate.state === "block") {
+        await createSecurityAlert(ctx.user.id, {
+          alertId: nanoid(),
+          level: "warning",
+          category: "gate",
+          title: `Gate blocked: ${proposal.title}`,
+          detail: gate.reason,
+        });
+      }
       return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, inputs: gateInputs, executionBoundary: "fail-closed" as const };
     }),
     createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {

@@ -11,7 +11,7 @@
  */
 
 import { nanoid } from "nanoid";
-import { getAuthorityState, getAgentProposal, updateAgentProposalStatus, createOperatorAction, createAwarenessRecord, createSecurityAlert, listWalletMandates } from "../db";
+import { getAuthorityState, getAgentProposal, updateAgentProposalStatus, createOperatorAction, createAwarenessRecord, createSecurityAlert, createOutcomeRecord, listWalletMandates } from "../db";
 import { evaluatePromotionGate } from "@shared/agentRuntime";
 import { getExecutionBackendRegistry } from "../backends/registry";
 import type { ExecutionRequest } from "@shared/executionBackend";
@@ -206,6 +206,18 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
       evidence: [`backend:${backend.type}`, `status:${result.status}`, `venue:${proposal.venue}`],
       summary: `Order submitted through ${backend.label}: ${resultReason}`,
     });
+
+    // Record outcome for lineage tracking (expected vs realized)
+    if (isSuccess && proposal.runId) {
+      await createOutcomeRecord(input.userId, {
+        lineageId: proposal.runId,
+        runId: proposal.runId,
+        expectedBps: 0, // Will be refined when oracle prices are available
+        deviation: "inconclusive",
+        narrative: `Paper execution completed via ${backend.label}. Outcome tracking will be refined with real price data.`,
+        attribution: { backend: backend.type, venue: proposal.venue },
+      });
+    }
 
     return {
       status: isSuccess ? "approved" : "rejected",

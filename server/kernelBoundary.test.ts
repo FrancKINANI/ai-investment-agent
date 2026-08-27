@@ -16,6 +16,7 @@ const db = vi.hoisted(() => ({
   createAgentProposal: vi.fn(),
   createAwarenessRecord: vi.fn(),
   createOperatorAction: vi.fn(),
+  createSecurityAlert: vi.fn(),
   getAgentProposal: vi.fn(),
   getInvestmentPolicy: vi.fn(),
   getAuthorityState: vi.fn(),
@@ -69,6 +70,7 @@ beforeEach(() => {
   db.getInvestmentPolicy.mockResolvedValue(null);
   db.updateAgentProposalStatus.mockResolvedValue({ id: 1, proposalId: "p-1", status: "approved" });
   db.createOperatorAction.mockResolvedValue({ id: 1 });
+  db.createSecurityAlert.mockResolvedValue({ id: 1 });
   db.createAwarenessRecord.mockResolvedValue({ id: 1 });
   db.getAgentProposal.mockResolvedValue(null);
 });
