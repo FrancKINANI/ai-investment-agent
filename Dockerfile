@@ -2,7 +2,7 @@
 FROM node:24-alpine AS deps
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN pnpm install --frozen-lockfile
 FROM node:24-alpine AS builder
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 WORKDIR /app
 

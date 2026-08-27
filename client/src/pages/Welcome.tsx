@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, BookOpen, Bot, CheckCircle2, ChevronRight, Clock3, Github, Landmark, MessageSquareText, MonitorCog, Moon, ShieldCheck, Star, Sun, WalletCards } from "lucide-react";
+import { ArrowRight, BookOpen, Bot, CheckCircle2, ChevronRight, Clock3, GitFork, Landmark, MessageSquareText, MonitorCog, Moon, ShieldCheck, Star, Sun, WalletCards } from "lucide-react";
 import { useTheme, type ThemePreference } from "@/contexts/ThemeContext";
 import { prefetchRoute } from "@/lib/routePrefetch";
 
@@ -45,6 +45,6 @@ export default function Welcome() {
       </section>
     </main>
 
-    <footer className="welcome-footer"><span>MIT licensed · simulation-first by design</span><a href={repositoryUrl} target="_blank" rel="noreferrer"><Github size={15} /> Star on GitHub when the repository is public</a></footer>
+    <footer className="welcome-footer"><span>MIT licensed · simulation-first by design</span><a href={repositoryUrl} target="_blank" rel="noreferrer"><GitFork size={15} /> Star on GitHub when the repository is public</a></footer>
   </div>;
 }
