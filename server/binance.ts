@@ -68,6 +68,34 @@ export type BinanceExchangeInfo = {
   }>;
 };
 
+export type BinancePublicErrorCode = "BINANCE_AUTH_FAILED" | "BINANCE_RATE_LIMITED" | "BINANCE_TIMEOUT" | "BINANCE_UPSTREAM_REJECTED" | "BINANCE_UPSTREAM_UNAVAILABLE";
+
+/** Publicly safe classification; raw upstream bodies are intentionally never propagated. */
+export class BinanceApiError extends Error {
+  constructor(
+    public readonly code: BinancePublicErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "BinanceApiError";
+  }
+}
+
+function classifyBinanceStatus(status: number): BinanceApiError {
+  if (status === 401 || status === 403) return new BinanceApiError("BINANCE_AUTH_FAILED", "Binance authentication was refused.");
+  if (status === 418 || status === 429) return new BinanceApiError("BINANCE_RATE_LIMITED", "Binance request rate is temporarily limited.");
+  if (status >= 500) return new BinanceApiError("BINANCE_UPSTREAM_UNAVAILABLE", "Binance is temporarily unavailable.");
+  return new BinanceApiError("BINANCE_UPSTREAM_REJECTED", "Binance rejected the request.");
+}
+
+function redactRequestFailure(error: unknown): BinanceApiError {
+  if (error instanceof BinanceApiError) return error;
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return new BinanceApiError("BINANCE_TIMEOUT", "Binance did not respond before the request timeout.");
+  }
+  return new BinanceApiError("BINANCE_UPSTREAM_UNAVAILABLE", "Binance could not be reached.");
+}
+
 // ─── Rate Limiter ─────────────────────────────────────────────────────────
 
 const requestTimestamps: number[] = [];
@@ -91,7 +119,9 @@ function sign(queryString: string, secret: string): string {
 
 function verifySignature(queryString: string, signature: string, secret: string): boolean {
   const expected = sign(queryString, secret);
-  return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"));
+  const actualBytes = Buffer.from(signature, "hex");
+  const expectedBytes = Buffer.from(expected, "hex");
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 
 // ─── Request Helpers ──────────────────────────────────────────────────────
@@ -120,19 +150,22 @@ async function signedRequest<T>(
 
   const url = `${BASE_URL}${path}?${queryString}&signature=${signature}`;
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "X-MBX-APIKEY": apiKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        "X-MBX-APIKEY": apiKey,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw redactRequestFailure(error);
+  }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    const msg = (body as { msg?: string }).msg ?? `Binance API error: ${response.status}`;
-    throw new Error(msg);
+    throw classifyBinanceStatus(response.status);
   }
 
   return response.json() as Promise<T>;
@@ -144,15 +177,18 @@ async function publicRequest<T>(path: string, params: Record<string, string> = {
   const queryString = buildQueryString(params);
   const url = `${BASE_URL}${path}${queryString ? `?${queryString}` : ""}`;
 
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw redactRequestFailure(error);
+  }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    const msg = (body as { msg?: string }).msg ?? `Binance API error: ${response.status}`;
-    throw new Error(msg);
+    throw classifyBinanceStatus(response.status);
   }
 
   return response.json() as Promise<T>;

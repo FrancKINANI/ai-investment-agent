@@ -126,6 +126,8 @@ export const walletMandates = mysqlTable("walletMandates", {
   allowedAssets: json("allowedAssets").$type<string[]>().notNull(),
   maxOrderBps: int("maxOrderBps").notNull(),
   dailyCapBps: int("dailyCapBps").notNull(),
+  /** Incremented on every mode/state change so stale live intents fail closed. */
+  version: int("version").default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -276,6 +278,9 @@ export const authorityControls = mysqlTable("authorityControls", {
     "disabled", "sandbox-only", "read-only-live",
     "approval-required-live", "limited-live", "paused", "revoked",
   ]).default("disabled").notNull(),
+  /** Incremented on every persisted authority transition; invalidates stale live intents. */
+  version: int("version").default(1).notNull(),
+  /** Version of the transition protocol, not an authorization revision. */
   machineVersion: int("machineVersion").default(1).notNull(),
   updatedBy: varchar("updatedBy", { length: 120 }),
   reason: varchar("reason", { length: 800 }),
@@ -356,6 +361,8 @@ export const platformApiKeys = mysqlTable("platformApiKeys", {
   maxOrderUsd: int("maxOrderUsd"),
   allocatedCapitalUsd: int("allocatedCapitalUsd"),
   dailyTradeLimit: int("dailyTradeLimit"),
+  /** Bumped when a credential is rotated or disabled to invalidate stale intents. */
+  version: int("version").default(1).notNull(),
   lastTestedAt: timestamp("lastTestedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -410,7 +417,7 @@ export const executionLedger = mysqlTable("executionLedger", {
   quoteOrderQty: varchar("quoteOrderQty", { length: 40 }),
   seq: int("seq").notNull(), // monotonically increasing event sequence per orderId
   eventType: mysqlEnum("eventType", [
-    "proposed", "validated", "submitted", "filled", "rejected", "cancelled", "reconciled",
+    "proposed", "validated", "submitted", "acknowledged", "partially_filled", "filled", "rejected", "cancelled", "unknown", "reconciled",
   ]).notNull(),
   payload: json("payload").$type<Record<string, unknown>>().notNull(),
   mandateId: varchar("mandateId", { length: 64 }),
@@ -428,8 +435,21 @@ export const liveOrderIntents = mysqlTable("liveOrderIntents", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  /** Legacy Stage 5 identifier retained for historical rows; new intents use approvalDigest. */
   orderHash: varchar("orderHash", { length: 128 }).notNull(),
-  status: mysqlEnum("status", ["reserved", "submitted", "filled", "rejected"]).default("reserved").notNull(),
+  /** SHA-256 digest of the complete canonical approval payload for new intents. */
+  approvalDigest: varchar("approvalDigest", { length: 64 }),
+  /** Persisted exact payload for audit and byte-for-byte approval verification. */
+  canonicalPayload: text("canonicalPayload"),
+  platformKeyId: varchar("platformKeyId", { length: 64 }),
+  keyVersion: int("keyVersion"),
+  mandateId: varchar("mandateId", { length: 64 }),
+  mandateVersion: int("mandateVersion"),
+  authorityState: varchar("authorityState", { length: 40 }),
+  authorityVersion: int("authorityVersion"),
+  venueClientOrderId: varchar("venueClientOrderId", { length: 64 }),
+  venueOrderId: varchar("venueOrderId", { length: 64 }),
+  status: mysqlEnum("status", ["reserved", "submitted", "acknowledged", "partially_filled", "filled", "cancelled", "rejected", "unknown"]).default("reserved").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -499,13 +519,16 @@ export const walletSessions = mysqlTable("walletSessions", {
 
 export type WalletSessionRecord = typeof walletSessions.$inferSelect;
 
-/** Per-order owner approvals (Stage 5, approval-required-live). One exact-order hash per approval row. */
+/** Per-order owner approvals. Legacy hashes are preserved, new approvals use SHA-256 plus canonical payload. */
 export const liveOrderApprovals = mysqlTable("liveOrderApprovals", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  orderHash: varchar("orderHash", { length: 16 }).notNull(), // liveOrderApprovalHash output
+  orderHash: varchar("orderHash", { length: 16 }).notNull(), // legacy Stage 5 FNV-1a identifier only
+  approvalDigest: varchar("approvalDigest", { length: 64 }),
+  canonicalPayload: text("canonicalPayload"),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
   approvedBy: varchar("approvedBy", { length: 120 }).notNull(),
+  expiresAt: timestamp("expiresAt"),
   consumedAt: timestamp("consumedAt"), // set when an order executes against this approval
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

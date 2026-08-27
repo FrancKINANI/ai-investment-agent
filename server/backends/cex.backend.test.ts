@@ -98,18 +98,18 @@ describe("CEXExecutionBackend — v0.3 Binance live path", () => {
       },
     );
 
-    it("allows when authority state is approval-required-live", async () => {
+    it("still blocks a generic request when authority state is approval-required-live", async () => {
       const request = makeRequest({ authorityState: "approval-required-live" });
-      // Will fail at liveAdapter level (mocked), but should not be blocked by authority
       const result = await backend.execute(request);
-      // The result depends on liveAdapter mock — just verify it's not "blocked" by authority
-      expect(result.status).not.toBe("blocked");
+      expect(result.status).toBe("blocked");
+      expect(result.reason).toMatch(/server-derived live-order intent/i);
     });
 
-    it("allows when authority state is limited-live", async () => {
+    it("still blocks a generic request when authority state is limited-live", async () => {
       const request = makeRequest({ authorityState: "limited-live" });
       const result = await backend.execute(request);
-      expect(result.status).not.toBe("blocked");
+      expect(result.status).toBe("blocked");
+      expect(result.reason).toMatch(/server-derived live-order intent/i);
     });
   });
 
@@ -120,10 +120,8 @@ describe("CEXExecutionBackend — v0.3 Binance live path", () => {
       vi.mocked(listPlatformApiKeys).mockResolvedValue([]);
       const request = makeRequest();
       const result = await backend.execute(request);
-      expect(result.status).toBe("rejected");
-      if (result.status === "rejected") {
-        expect(result.reason).toContain("No active Binance API key");
-      }
+      expect(result.status).toBe("blocked");
+      expect(result.reason).toMatch(/server-derived live-order intent/i);
     });
 
     it("rejects when all Binance keys are disabled", async () => {
@@ -134,7 +132,7 @@ describe("CEXExecutionBackend — v0.3 Binance live path", () => {
       }] as any);
       const request = makeRequest();
       const result = await backend.execute(request);
-      expect(result.status).toBe("rejected");
+      expect(result.status).toBe("blocked");
     });
   });
 
@@ -161,7 +159,7 @@ describe("CEXExecutionBackend — v0.3 Binance live path", () => {
         },
       });
       const result = await backend.execute(request);
-      expect(result.status).toBe("rejected");
+      expect(result.status).toBe("blocked");
     });
 
     it("rejects when mandate venue is not binance", async () => {
@@ -177,7 +175,7 @@ describe("CEXExecutionBackend — v0.3 Binance live path", () => {
         },
       });
       const result = await backend.execute(request);
-      expect(result.status).toBe("rejected");
+      expect(result.status).toBe("blocked");
     });
   });
 
@@ -195,8 +193,7 @@ describe("CEXExecutionBackend — v0.3 Binance live path", () => {
       }] as any);
       const request = makeRequest();
       const result = await backend.execute(request);
-      // Should proceed (not blocked by withdrawal check at this level)
-      expect(result.status).not.toBe("blocked");
+      expect(result.status).toBe("blocked");
     });
   });
 

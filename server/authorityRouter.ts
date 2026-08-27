@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router, sensitiveProcedure } from "./_core/trpc";
-import { changeAuthorityState, getAuthorityState } from "./db";
+import { changeAuthorityState, getAuthoritySnapshot } from "./db";
 import {
   AUTHORITY_STATE_LABELS,
   AUTHORITY_STATE_MACHINE_VERSION,
@@ -26,11 +26,12 @@ const transitionSchema = z.object({
 export const authorityRouter = router({
   /** Current authority state + truthful label + allowed next states. */
   status: protectedProcedure.query(async ({ ctx }) => {
-    const state = await getAuthorityState(ctx.user.id);
+    const { state, version } = await getAuthoritySnapshot(ctx.user.id);
     return {
       state,
       label: AUTHORITY_STATE_LABELS[state],
       machineVersion: AUTHORITY_STATE_MACHINE_VERSION,
+      authorizationVersion: version,
       allowedTransitions: ALLOWED_TRANSITIONS[state],
       labels: AUTHORITY_STATE_LABELS,
     };

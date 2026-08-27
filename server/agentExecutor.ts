@@ -15,18 +15,12 @@
 
 import { nanoid } from "nanoid";
 import {
-  executeLiveOrder,
-  getLiveBalances,
-  getLiveTicker,
-  type LiveOrderRequest,
-} from "./liveAdapter";
-import {
   executeMandateTransaction,
   getMandate,
   type SailorMandate,
   type MandateScope,
 } from "./sailorService";
-import { createOperatorAction, createSecurityAlert, listWalletMandates, getPlatformApiKey } from "./db";
+import { createOperatorAction, createSecurityAlert, listWalletMandates } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -97,62 +91,19 @@ export async function executeCexOrder(
     return { success: false, type: "cex", error: `Mandate mode is "${mandate.mode}". Real mode required.` };
   }
 
-  // 2. Find API key
-  if (!platformKeyId) {
-    // Try to find an active Binance key
-    // ponytail: In production, query the DB directly
-    return { success: false, type: "cex", error: "No Binance API key specified." };
-  }
-
-  // 3. Get balance
-  let accountBalanceUsd = 0;
-  try {
-    const balances = await getLiveBalances(userId, platformKeyId);
-    const usdtBalance = balances.find((b) => b.asset === "USDT" || b.asset === "BUSD");
-    accountBalanceUsd = usdtBalance?.total ?? 0;
-  } catch {
-    // Balance unavailable — mandate check will catch if limits are set
-  }
-
-  // 4. Build order
-  const order: LiveOrderRequest = {
-    symbol: proposal.action.symbol ?? "BTCUSDT",
-    side: proposal.action.side ?? "BUY",
-    type: proposal.action.type ?? "MARKET",
-    quantity: proposal.action.quantity,
-    quoteOrderQty: proposal.action.quoteOrderQty,
-    price: proposal.action.price,
-  };
-
-  // 5. Execute
-  try {
-    const { result, mandateCheck } = await executeLiveOrder(
-      userId,
-      platformKeyId,
-      mandate,
-      order,
-      accountBalanceUsd,
-    );
-
-    return {
-      success: true,
-      type: "cex",
-      orderId: result.orderId,
-      mandateId: mandateCheck.mandateId,
-    };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "CEX execution failed.";
-
-    await createSecurityAlert(userId, {
-      alertId: nanoid(),
-      level: "warning",
-      category: "execution-failed",
-      title: `CEX order failed: ${order.symbol}`,
-      detail: `Agent CEX order failed: ${errorMsg}`,
-    });
-
-    return { success: false, type: "cex", error: errorMsg };
-  }
+  // Agent proposals are not owner-approved typed live intents. In particular,
+  // their symbol, quantity, balance, mandate/key versions, approval payload,
+  // and idempotency key must never be defaulted or accepted from the agent.
+  // The sealed adapter is intentionally not reachable from this path.
+  await createOperatorAction(userId, {
+    actionId: nanoid(),
+    kind: "simulation_blocked",
+    status: "blocked",
+    subject: `CEX order blocked: ${proposal.title}`,
+    detail: "Agent-proposed CEX execution requires a separately minted server-derived live-order intent and remains sealed.",
+    payload: { proposalId: proposal.proposalId, venue: proposal.venue, platformKeyProvided: Boolean(platformKeyId), mandateId: mandate.mandateId },
+  });
+  return { success: false, type: "cex", error: "CEX execution requires a server-derived owner intent and is sealed in this release.", mandateId: mandate.mandateId };
 }
 
 // ─── On-Chain Execution ───────────────────────────────────────────────────

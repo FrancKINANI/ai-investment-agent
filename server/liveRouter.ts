@@ -1,36 +1,22 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router, sensitiveProcedure } from "./_core/trpc";
-import { listWalletMandates, getAuthorityState, recordLiveOrderApproval, listOperatorActions } from "./db";
-import { liveOrderApprovalHash } from "@shared/mandateAuthority";
+import { getAuthorityState } from "./db";
 import { readBinanceTicker } from "./liveData";
 import {
   getLiveBalances,
   getLiveTicker,
   getLiveOpenOrders,
-  executeLiveOrder,
-  cancelLiveOrder,
 } from "./liveAdapter";
-import { getPrice, getExchangeInfo } from "./binance";
+import { BinanceApiError, getPrice, getExchangeInfo } from "./binance";
 import { assertLiveVenueMutationsSealed } from "./liveExecutionBoundary";
 
-// ─── Schemas ──────────────────────────────────────────────────────────────
-
-const orderSchema = z.object({
-  platformKeyId: z.string().trim().min(1).max(64),
-  symbol: z.string().trim().min(3).max(20),
-  side: z.enum(["BUY", "SELL"]),
-  type: z.enum(["LIMIT", "MARKET"]),
-  quantity: z.number().positive().optional(),
-  quoteOrderQty: z.number().positive().optional(),
-  price: z.number().positive().optional(),
-  timeInForce: z.enum(["GTC", "IOC", "FOK"]).default("GTC"),
-  /** Stage 5: required for live orders; duplicates return the original outcome without re-submission. */
-  idempotencyKey: z.string().trim().min(8).max(128),
-}).refine(
-  (data) => (data.type === "MARKET" ? data.quantity || data.quoteOrderQty : data.quantity && data.price),
-  { message: "Market orders need quantity or quoteOrderQty. Limit orders need quantity and price." },
-);
+function liveReadError(error: unknown, fallbackCode: "BINANCE_READ_UNAVAILABLE" | "LIVE_ACCOUNT_READ_UNAVAILABLE") {
+  return new TRPCError({
+    code: "BAD_GATEWAY",
+    message: error instanceof BinanceApiError ? error.code : fallbackCode,
+  });
+}
 
 // ─── Router ───────────────────────────────────────────────────────────────
 
@@ -40,7 +26,7 @@ export const liveRouter = router({
     try {
       return await getPrice(input.symbol);
     } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Failed to fetch price." });
+      throw liveReadError(error, "BINANCE_READ_UNAVAILABLE");
     }
   }),
 
@@ -49,7 +35,7 @@ export const liveRouter = router({
     try {
       return await getLiveBalances(ctx.user.id, input.platformKeyId);
     } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Failed to fetch balances." });
+      throw liveReadError(error, "LIVE_ACCOUNT_READ_UNAVAILABLE");
     }
   }),
 
@@ -58,7 +44,7 @@ export const liveRouter = router({
     try {
       return await getLiveTicker(input.symbol);
     } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Failed to fetch ticker." });
+      throw liveReadError(error, "BINANCE_READ_UNAVAILABLE");
     }
   }),
 
@@ -76,58 +62,18 @@ export const liveRouter = router({
     try {
       return await getLiveOpenOrders(ctx.user.id, input.platformKeyId, input.symbol);
     } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Failed to fetch open orders." });
+      throw liveReadError(error, "LIVE_ACCOUNT_READ_UNAVAILABLE");
     }
   }),
 
-  /** Place a live order after mandate checks. */
-  placeOrder: sensitiveProcedure.input(orderSchema).mutation(async ({ ctx, input }) => {
+  /** No client-composed order is accepted while the compile-time seal is active. */
+  placeOrder: sensitiveProcedure.mutation(async () => {
     assertLiveVenueMutationsSealed();
-    // Find the active mandate for this venue
-    const mandates = await listWalletMandates(ctx.user.id);
-    const mandate = mandates.find((m) => m.venue === "binance" && m.status === "active") ?? null;
-
-    // Get account balance for limit checking
-    let accountBalanceUsd = 0;
-    try {
-      const balances = await getLiveBalances(ctx.user.id, input.platformKeyId);
-      const usdtBalance = balances.find((b) => b.asset === "USDT" || b.asset === "BUSD" || b.asset === "USD");
-      accountBalanceUsd = usdtBalance?.total ?? 0;
-    } catch (error) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: `Live order refused because a verified balance is unavailable: ${error instanceof Error ? error.message : "unknown failure"}`,
-      });
-    }
-
-    try {
-      return await executeLiveOrder(ctx.user.id, input.platformKeyId, mandate, {
-        symbol: input.symbol,
-        side: input.side,
-        type: input.type,
-        quantity: input.quantity,
-        quoteOrderQty: input.quoteOrderQty,
-        price: input.price,
-        timeInForce: input.timeInForce,
-        idempotencyKey: input.idempotencyKey,
-      }, accountBalanceUsd);
-    } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Order failed." });
-    }
   }),
 
-  /** Cancel a live order. */
-  cancelOrder: sensitiveProcedure.input(z.object({
-    platformKeyId: z.string().trim().min(1).max(64),
-    symbol: z.string().trim().min(3).max(20),
-    orderId: z.number().int().positive(),
-  })).mutation(async ({ ctx, input }) => {
+  /** No client-composed cancellation is accepted while the compile-time seal is active. */
+  cancelOrder: sensitiveProcedure.mutation(async () => {
     assertLiveVenueMutationsSealed();
-    try {
-      return await cancelLiveOrder(ctx.user.id, input.platformKeyId, input.symbol, input.orderId);
-    } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Cancel failed." });
-    }
   }),
 
   /** Get exchange info (symbol rules, filters). */
@@ -135,7 +81,7 @@ export const liveRouter = router({
     try {
       return await getExchangeInfo();
     } catch (error) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Failed to fetch exchange info." });
+      throw liveReadError(error, "BINANCE_READ_UNAVAILABLE");
     }
   }),
 });

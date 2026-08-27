@@ -49,13 +49,10 @@ function LiveTradingSection({ binanceKeys }: { binanceKeys: BinKey[] }) {
   );
   const placeOrderMutation = trpc.live.placeOrder.useMutation({
     onSuccess: () => {
-      balanceQuery.refetch();
       setShowOrderConfirm(false);
-      setQuantity("");
-      setPrice("");
-      toast.success("Order placed successfully.");
+      toast.error("Live venue mutations remain sealed.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: () => toast.error("Live venue mutations remain sealed; no order was sent."),
   });
 
   const ticker = tickerQuery.data;
@@ -71,17 +68,7 @@ function LiveTradingSection({ binanceKeys }: { binanceKeys: BinKey[] }) {
   };
 
   const confirmOrder = () => {
-    placeOrderMutation.mutate({
-      platformKeyId: selectedKey,
-      symbol,
-      side: orderSide,
-      type: orderType,
-      quantity: quantity ? Number(quantity) : undefined,
-      quoteOrderQty: orderType === "MARKET" && !quantity ? Number(price) : undefined,
-      price: orderType === "LIMIT" ? Number(price) : undefined,
-      // Stage 5: caller-supplied idempotency key; retries of this exact submission reuse it.
-      idempotencyKey: `web-${crypto.randomUUID()}`,
-    });
+    placeOrderMutation.mutate();
   };
 
   return (

@@ -12,6 +12,7 @@
  */
 
 import { ENV } from "./_core/env";
+import { LIVE_VENUE_MUTATIONS_SEALED } from "./liveExecutionBoundary";
 
 // ─── Environment Validation ───────────────────────────────────────────────
 
@@ -40,14 +41,6 @@ export function validateEnvironment(): EnvValidationResult {
   // Required for real mode
   if (!process.env.ENCRYPTION_KEY) {
     warnings.push("ENCRYPTION_KEY not set — using dev fallback (NOT safe for production)");
-  }
-
-  // Binance API (optional but needed for live trading)
-  if (!process.env.BINANCE_API_KEY) {
-    warnings.push("BINANCE_API_KEY not set — live trading will be unavailable");
-  }
-  if (!process.env.BINANCE_API_SECRET) {
-    warnings.push("BINANCE_API_SECRET not set — live trading will be unavailable");
   }
 
   // Production-specific checks
@@ -114,16 +107,12 @@ export async function getHealthCheck(): Promise<HealthCheckResult> {
     overallStatus = "unhealthy";
   }
 
-  // Binance API check (optional)
-  if (process.env.BINANCE_API_KEY) {
-    try {
-      subsystems.binance = { status: "healthy", message: "API key configured" };
-    } catch {
-      subsystems.binance = { status: "degraded", message: "API key invalid" };
-      if (overallStatus === "healthy") overallStatus = "degraded";
-    }
+  // Never use environment Binance material as a live-execution capability.
+  // The compile-time seal governs venue mutations regardless of configuration.
+  if (LIVE_VENUE_MUTATIONS_SEALED) {
+    subsystems.binance = { status: "degraded", message: "Venue mutations sealed" };
   } else {
-    subsystems.binance = { status: "degraded", message: "Not configured" };
+    subsystems.binance = { status: "degraded", message: "Separate live-execution programme required" };
   }
 
   return {

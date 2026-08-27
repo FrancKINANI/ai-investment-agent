@@ -118,7 +118,7 @@ describe("CEX execution pipeline", () => {
     vi.mocked(db.getPlatformApiKey).mockResolvedValue(activeApiKey as any);
   });
 
-  it("executes a CEX order when mandate and API key exist", async () => {
+  it("blocks an agent CEX proposal even when a mandate and key reference exist", async () => {
     vi.mocked(liveAdapter.executeLiveOrder).mockResolvedValue({
       result: { orderId: 12345, symbol: "BTCUSDT", side: "BUY", type: "MARKET", status: "FILLED", price: "60000", quantity: "0.001", executedQty: "0.001" },
       mandateCheck: { allowed: true, mandateId: "mandate-binance-1", mode: "real" },
@@ -126,16 +126,16 @@ describe("CEX execution pipeline", () => {
 
     const result = await executeCexOrder(42, cexProposal, "key-1");
 
-    expect(result.success).toBe(true);
-    expect(result.orderId).toBe(12345);
+    expect(result.success).toBe(false);
     expect(result.type).toBe("cex");
-    expect(liveAdapter.executeLiveOrder).toHaveBeenCalled();
+    expect(result.error).toMatch(/server-derived owner intent.*sealed/i);
+    expect(liveAdapter.executeLiveOrder).not.toHaveBeenCalled();
   });
 
   it("rejects order when no API key is specified", async () => {
     const result = await executeCexOrder(42, cexProposal);
     expect(result.success).toBe(false);
-    expect(result.error).toContain("No Binance API key");
+    expect(result.error).toMatch(/server-derived owner intent.*sealed/i);
   });
 
   it("rejects order in simulation mode", async () => {
@@ -149,7 +149,7 @@ describe("CEX execution pipeline", () => {
     expect(result.error).toContain("simulation");
   });
 
-  it("allows order in armed mode", async () => {
+  it("blocks an agent proposal in armed mode pending a server-derived owner intent", async () => {
     vi.mocked(db.listWalletMandates).mockResolvedValue([{
       ...activeBinanceMandate,
       mode: "armed",
@@ -160,7 +160,9 @@ describe("CEX execution pipeline", () => {
     });
 
     const result = await executeCexOrder(42, cexProposal, "key-1");
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/server-derived owner intent.*sealed/i);
+    expect(liveAdapter.executeLiveOrder).not.toHaveBeenCalled();
   });
 
   it("blocks order in paused mandate", async () => {
@@ -183,13 +185,14 @@ describe("CEX execution pipeline", () => {
     }));
   });
 
-  it("emits alert on execution failure", async () => {
+  it("records the sealed block rather than reporting a venue execution failure", async () => {
     vi.mocked(liveAdapter.executeLiveOrder).mockRejectedValue(new Error("Network timeout"));
 
     await executeCexOrder(42, cexProposal, "key-1");
-    expect(db.createSecurityAlert).toHaveBeenCalledWith(42, expect.objectContaining({
-      level: "warning",
-      category: "execution-failed",
+    expect(db.createSecurityAlert).not.toHaveBeenCalled();
+    expect(db.createOperatorAction).toHaveBeenCalledWith(42, expect.objectContaining({
+      kind: "simulation_blocked",
+      status: "blocked",
     }));
   });
 });

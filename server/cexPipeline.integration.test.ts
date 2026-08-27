@@ -346,7 +346,7 @@ describe("CEX backend integration with orchestrator", () => {
       state: "active",
     }] as any);
 
-    // The backend should not be blocked by authority
+    // Generic orchestrator payloads cannot be promoted into live intent data.
     const result = await backend.execute({
       userId: 1,
       proposalId: "proposal-1",
@@ -366,8 +366,8 @@ describe("CEX backend integration with orchestrator", () => {
       metadata: { policyVersion: 1 },
     });
 
-    // Should not be blocked by authority (may fail at liveAdapter level due to mocks)
-    expect(result.status).not.toBe("blocked");
+    expect(result.status).toBe("blocked");
+    expect(result.reason).toMatch(/server-derived live-order intent/i);
   });
 
   it("CEX backend rejects when authority is disabled", async () => {
@@ -413,6 +413,7 @@ describe("CEX backend integration with orchestrator", () => {
       metadata: { policyVersion: 1 },
     });
 
-    expect(result.status).toBe("rejected");
+    expect(result.status).toBe("blocked");
+    expect(result.reason).toMatch(/server-derived live-order intent/i);
   });
 });

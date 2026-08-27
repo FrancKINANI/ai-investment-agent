@@ -23,13 +23,17 @@ import {
   type BinanceTimeInForce,
 } from "./binance";
 import { decryptSecret } from "./kms";
-import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval, listWalletMandates, claimLiveOrderIntent, reserveLiveDailyRisk, updateLiveOrderIntentStatus } from "./db";
+import { getAuthorityState, getAuthoritySnapshot, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval, listWalletMandates, claimLiveOrderIntent, reserveLiveDailyRisk, updateLiveOrderIntentStatus } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
-import { reconcileLiveExecution, liveOrderApprovalHash, type LegacyMandateMode } from "@shared/mandateAuthority";
+import { reconcileLiveExecution, type LegacyMandateMode } from "@shared/mandateAuthority";
 import { ledgerSeq } from "@shared/paperExecution";
 import { readBinanceTicker } from "./liveData";
 import { getLiveOrderByIdempotencyKey, appendLedgerEvent } from "./db";
 import { assertLiveVenueMutationAllowed } from "./liveExecutionBoundary";
+import { buildLiveApprovalBinding } from "./liveOrderAuthorization";
+import type { ServerDerivedLiveOrderIntent } from "./liveOrderIntent";
+import { initialLiveLedgerSeq, mapBinanceOrderStatus } from "@shared/liveLedger";
+import { BinanceApiError } from "./binance";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -240,21 +244,26 @@ export async function getLiveOpenOrders(userId: number, platformKeyId: string, s
  */
 export async function executeLiveOrder(
   userId: number,
-  platformKeyId: string,
-  mandate: {
-    mandateId: string;
-    mode: string;
-    status: string;
-    venue: string;
-    maxOrderBps: number;
-    dailyCapBps: number;
-    allowedAssets: string[];
-  } | null,
-  order: LiveOrderRequest,
-  accountBalanceUsd: number,
+  intent: ServerDerivedLiveOrderIntent,
 ): Promise<{ result: LiveOrderResult; mandateCheck: MandateCheck }> {
   // 0. Authority state machine gate (fail closed). Dominates mandate checks.
-  const authorityState = await getAuthorityState(userId);
+  const authoritySnapshot = await getAuthoritySnapshot(userId);
+  const authorityState = authoritySnapshot.state;
+  const platformKeyId = intent.platformKeyId;
+  const order: LiveOrderRequest = {
+    symbol: intent.order.symbol,
+    side: intent.order.side,
+    type: intent.order.type,
+    quantity: intent.order.quantity ?? undefined,
+    quoteOrderQty: intent.order.quoteOrderQty ?? undefined,
+    price: intent.order.price ?? undefined,
+    timeInForce: intent.order.timeInForce,
+    idempotencyKey: intent.idempotencyKey,
+  };
+  const accountBalanceUsd = intent.verifiedBalance.availableUsd;
+  if (authoritySnapshot.version !== intent.authorityVersion || authorityState !== intent.authorityState) {
+    throw new AuthorityBlockedError(authorityState, "place-order", "Live order intent authority state is stale or has changed.");
+  }
   try {
     assertAuthorityAllows(authorityState, "place-order");
   } catch (error) {
@@ -268,6 +277,10 @@ export async function executeLiveOrder(
       payload: { order, authorityState, reason },
     });
     throw error;
+  }
+  const mandate = (await listWalletMandates(userId)).find((candidate) => candidate.mandateId === intent.mandateId) ?? null;
+  if (!mandate || mandate.version !== intent.mandateVersion || mandate.venue !== "binance") {
+    throw new AuthorityBlockedError(authorityState, "place-order", "Live order intent mandate is missing, stale, or not a Binance mandate.");
   }
 
   // 0a2. Live idempotency (Stage 5) — checked BEFORE approvals/freshness so a network retry
@@ -359,40 +372,86 @@ export async function executeLiveOrder(
     throw new Error(`Order blocked: ${mandateCheck.reason}`);
   }
 
-  // 0b2. Per-order owner approval (Stage 5): mandatory in approval-required-live.
-  if (authorityState === "approval-required-live" && mandate) {
-    const orderHash = liveOrderApprovalHash({
-      symbol: order.symbol,
-      side: order.side,
-      quantity: order.quantity ?? null,
-      quoteOrderQty: order.quoteOrderQty ?? null,
-      price: order.price ?? null,
-      idempotencyKey: order.idempotencyKey!,
+  const keyAtAuthorization = await getPlatformApiKey(userId, platformKeyId);
+  if (!keyAtAuthorization || keyAtAuthorization.state !== "active" || keyAtAuthorization.version !== intent.keyVersion) {
+    throw new Error("Live order intent platform key is missing, disabled, or has changed.");
+  }
+  const approvalBinding = buildLiveApprovalBinding({
+    venue: "binance",
+    platformKeyId,
+    keyVersion: intent.keyVersion,
+    symbol: order.symbol,
+    side: order.side,
+    type: order.type,
+    quantity: order.quantity ?? null,
+    quoteOrderQty: order.quoteOrderQty ?? null,
+    price: order.price ?? null,
+    timeInForce: order.timeInForce ?? "GTC",
+    idempotencyKey: order.idempotencyKey!,
+    mandateId: mandate.mandateId,
+    mandateVersion: mandate.version,
+    authorityState,
+    authorityVersion: authoritySnapshot.version,
+    expiresAtMs: intent.approvalExpiresAtMs,
+  });
+
+  // Acquire the durable unique reservation before approval consumption or risk
+  // reservation. A racing caller can therefore neither consume the same
+  // approval nor consume a second daily-risk allocation.
+  const reservation = await claimLiveOrderIntent({
+    userId,
+    idempotencyKey: order.idempotencyKey!,
+    approvalDigest: approvalBinding.approvalDigest,
+    canonicalPayload: approvalBinding.canonicalPayload,
+    platformKeyId,
+    keyVersion: intent.keyVersion,
+    mandateId: mandate.mandateId,
+    mandateVersion: mandate.version,
+    authorityState,
+    authorityVersion: authoritySnapshot.version,
+  });
+  if (!reservation.claimed) {
+    const detail = `Live order idempotency key is already reserved (${reservation.status}); Binance was not called again.`;
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "scope_checked",
+      status: "review",
+      subject: `Live order duplicate reservation suppressed: ${order.symbol} ${order.side}`,
+      detail,
+      payload: { order, intentStatus: reservation.status },
     });
-    const approved = await consumeLiveOrderApproval(userId, orderHash, order.idempotencyKey!);
+    return {
+      result: { orderId: 0, symbol: order.symbol, side: order.side, type: order.type, status: "submitted-unknown-outcome", price: "", quantity: "", executedQty: "" },
+      mandateCheck: { ...mandateCheck, reason: detail },
+    };
+  }
+
+  // Per-order owner approval remains single-use and is bound to the full
+  // canonical payload, not a weak compact hash.
+  if (authorityState === "approval-required-live") {
+    const approved = await consumeLiveOrderApproval(userId, approvalBinding.approvalDigest, approvalBinding.canonicalPayload, order.idempotencyKey!);
     if (!approved) {
-      const detail = `Order ${order.symbol} ${order.side} requires per-order owner approval (authority state: approval-required-live). Approve the exact order hash ${orderHash}; approval is single-use and expires in 10 minutes.`;
+      const detail = `Order ${order.symbol} ${order.side} requires a fresh single-use owner approval for its exact canonical payload.`;
       await createOperatorAction(userId, {
         actionId: nanoid(),
         kind: "simulation_blocked",
-        status: "blocked",
+       status: "blocked",
         subject: `Live order awaiting owner approval: ${order.symbol} ${order.side}`,
         detail,
-        payload: { order, orderHash },
+        payload: { order, approvalDigest: approvalBinding.approvalDigest },
       });
+      await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, "rejected");
       throw new AuthorityBlockedError(authorityState, "place-order", detail);
     }
   }
 
-  // 2. Get API key
-  const key = await getPlatformApiKey(userId, platformKeyId);
-  if (!key) throw new Error("API key is required for live orders.");
-  if (key.state !== "active") throw new Error("API key is not verified for live use.");
+  // 2. The authorization-time key has already been owner-scoped and version-checked.
+  const key = keyAtAuthorization;
   const orderValueUsd = getOrderNotionalUsd(orderForRisk);
   if (orderValueUsd === null) throw new Error("A verified order value is required for live use.");
   assertPlatformKeyLimits(key, orderValueUsd);
   const notionalCentsNumber = Math.round(orderValueUsd * 100);
-  const mandateDailyCentsNumber = Math.floor(accountBalanceUsd * (mandate!.dailyCapBps / 10_000) * 100);
+  const mandateDailyCentsNumber = Math.floor(accountBalanceUsd * (mandate.dailyCapBps / 10_000) * 100);
   const keyAllocationCentsNumber = Math.floor(key.allocatedCapitalUsd! * 100);
   if (![notionalCentsNumber, mandateDailyCentsNumber, keyAllocationCentsNumber].every(Number.isSafeInteger)) {
     throw new Error("Live risk limit exceeds exact fixed-unit precision.");
@@ -417,34 +476,8 @@ export async function executeLiveOrder(
       detail,
       payload: { order, accountBalanceUsd, dailyTradeLimit: key.dailyTradeLimit },
     });
+    await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, "rejected");
     throw new Error(detail);
-  }
-
-  // Acquire the durable unique reservation immediately before the first
-  // submission record or venue request. A racing caller cannot acquire it.
-  const orderHash = liveOrderApprovalHash({
-    symbol: order.symbol,
-    side: order.side,
-    quantity: order.quantity ?? null,
-    quoteOrderQty: order.quoteOrderQty ?? null,
-    price: order.price ?? null,
-    idempotencyKey: order.idempotencyKey!,
-  });
-  const intent = await claimLiveOrderIntent(userId, order.idempotencyKey!, orderHash);
-  if (!intent.claimed) {
-    const detail = `Live order idempotency key is already reserved (${intent.status}); Binance was not called again.`;
-    await createOperatorAction(userId, {
-      actionId: nanoid(),
-      kind: "scope_checked",
-      status: "review",
-      subject: `Live order duplicate reservation suppressed: ${order.symbol} ${order.side}`,
-      detail,
-      payload: { order, intentStatus: intent.status },
-    });
-    return {
-      result: { orderId: 0, symbol: order.symbol, side: order.side, type: order.type, status: "submitted-unknown-outcome", price: "", quantity: "", executedQty: "" },
-      mandateCheck: { ...mandateCheck, reason: detail },
-    };
   }
 
   const clientOrderId = `ll-${nanoid(12)}`;
@@ -477,9 +510,16 @@ export async function executeLiveOrder(
     payload: { order, mandateId: mandateCheck.mandateId, platformKeyId, mode: mandateCheck.mode },
   });
 
-  // 4. Place the order
-  const apiKey = decryptSecret(key.apiKeyEncrypted);
-  const apiSecret = decryptSecret(key.secretEncrypted);
+  // 4. Final owner-scoped key/version check immediately before the
+  // decrypt/sign boundary. A disable, deletion, or rotation invalidates the
+  // authorization derived above and no secret is decrypted.
+  const keyAtSubmit = await getPlatformApiKey(userId, platformKeyId);
+  if (!keyAtSubmit || keyAtSubmit.state !== "active" || keyAtSubmit.version !== intent.keyVersion) {
+    await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, "rejected");
+    throw new Error("Live order refused because the platform key was disabled, deleted, rotated, or changed before submission.");
+  }
+  const apiKey = decryptSecret(keyAtSubmit.apiKeyEncrypted);
+  const apiSecret = decryptSecret(keyAtSubmit.secretEncrypted);
   let response;
   try {
     response = await binancePlaceOrder(apiKey, apiSecret, {
@@ -493,7 +533,13 @@ export async function executeLiveOrder(
       newClientOrderId: clientOrderId,
     });
   } catch (error) {
-    // Reconciliation: venue call failed after submission intent was recorded.
+    // A transport timeout or unavailable upstream means the venue may have
+    // accepted the request. Preserve the uncertainty; do not write a false
+    // rejection or fill. Only a classified explicit venue rejection is final.
+    const isExplicitRejection = error instanceof BinanceApiError && error.code === "BINANCE_UPSTREAM_REJECTED";
+    const lifecycle = isExplicitRejection
+      ? { eventType: "rejected" as const, intentStatus: "rejected" as const }
+      : { eventType: "unknown" as const, intentStatus: "unknown" as const };
     await appendLedgerEvent(userId, {
       orderId: order.idempotencyKey!,
       idempotencyKey: order.idempotencyKey!,
@@ -502,15 +548,17 @@ export async function executeLiveOrder(
       symbol: order.symbol,
       side: order.side,
       orderType: order.type,
-      seq: ledgerSeq("rejected"),
-      eventType: "rejected",
-      payload: { clientOrderId, outcome: { status: "REJECTED", reason: error instanceof Error ? error.message : "unknown" } },
+      seq: initialLiveLedgerSeq(lifecycle.eventType),
+      eventType: lifecycle.eventType,
+      payload: { clientOrderId, outcome: { status: lifecycle.eventType.toUpperCase(), code: error instanceof BinanceApiError ? error.code : "BINANCE_UPSTREAM_UNAVAILABLE" } },
       mandateId: mandateCheck.mandateId ?? null,
     });
-    await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, "rejected");
+    await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, lifecycle.intentStatus, { venueClientOrderId: clientOrderId });
     throw error;
   }
-  // Reconciliation: record the authoritative venue outcome.
+  // Record the reported venue state without converting an acknowledgement or
+  // partial fill into a filled order.
+  const lifecycle = mapBinanceOrderStatus(response.status);
   await appendLedgerEvent(userId, {
     orderId: order.idempotencyKey!,
     idempotencyKey: order.idempotencyKey!,
@@ -522,12 +570,15 @@ export async function executeLiveOrder(
     quantity: order.quantity?.toString() ?? null,
     price: order.price?.toString() ?? null,
     quoteOrderQty: order.quoteOrderQty?.toString() ?? null,
-    seq: response.status === "REJECTED" ? ledgerSeq("rejected") : ledgerSeq("filled"),
-    eventType: response.status === "REJECTED" ? "rejected" : "filled",
+    seq: initialLiveLedgerSeq(lifecycle.eventType),
+    eventType: lifecycle.eventType,
     payload: { clientOrderId, outcome: { orderId: response.orderId, status: response.status, price: response.price, origQty: response.origQty, executedQty: response.cummulativeQuoteQty } },
     mandateId: mandateCheck.mandateId ?? null,
   });
-  await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, response.status === "REJECTED" ? "rejected" : "filled");
+  await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, lifecycle.intentStatus, {
+    venueClientOrderId: clientOrderId,
+    venueOrderId: String(response.orderId),
+  });
 
   // 5. Log the result
   const resultStatus = response.status === "FILLED" ? "success" : response.status === "REJECTED" ? "blocked" : "review";
@@ -593,6 +644,9 @@ export async function cancelLiveOrder(
   symbol: string,
   orderId: number,
 ) {
+  // Physical safety boundary: no database, key, KMS, or Binance work may
+  // occur while venue mutations remain compile-time sealed.
+  assertLiveVenueMutationAllowed();
   // Cancellation is a signed Binance mutation. It follows the same global
   // authority and mandate reconciliation as placement so paused/revoked
   // authority dominates every venue-side effect.
@@ -626,10 +680,6 @@ export async function cancelLiveOrder(
     });
     throw error;
   }
-
-  // No decryption or venue request is permitted in the sealed release.
-  assertLiveVenueMutationAllowed();
-
   const key = await getPlatformApiKey(userId, platformKeyId);
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");

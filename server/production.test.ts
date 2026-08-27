@@ -13,10 +13,9 @@ describe("environment validation", () => {
     expect(result.warnings.some(w => w.includes("ENCRYPTION_KEY"))).toBe(true);
   });
 
-  it("warns about missing Binance API keys", () => {
+  it("does not treat environment Binance keys as a live-execution prerequisite", () => {
     const result = validateEnvironment();
-    expect(result.warnings.some(w => w.includes("BINANCE_API_KEY"))).toBe(true);
-    expect(result.warnings.some(w => w.includes("BINANCE_API_SECRET"))).toBe(true);
+    expect(result.warnings.some(w => w.includes("BINANCE_API_KEY") || w.includes("BINANCE_API_SECRET"))).toBe(false);
   });
 
   it("returns valid when required vars are set", () => {
@@ -43,6 +42,7 @@ describe("health check", () => {
     const health = await getHealthCheck();
     expect(health.subsystems.database).toBeDefined();
     expect(health.subsystems.encryption).toBeDefined();
+    expect(health.subsystems.binance).toEqual({ status: "degraded", message: "Venue mutations sealed" });
   });
 
   it("reports degraded when using dev encryption fallback", async () => {

@@ -6,6 +6,9 @@ import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { nanoid } from "nanoid";
 import { AUTHORITY_STATE_MACHINE_VERSION, AuthorityState, evaluateAuthorityTransition } from "@shared/authorityState";
 import type { LedgerEventType } from "@shared/paperExecution";
+import type { LiveLedgerEventType } from "@shared/liveLedger";
+
+type ExecutionLedgerEventType = LedgerEventType | LiveLedgerEventType;
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -191,7 +194,12 @@ export async function listWalletMandates(userId: number) {
 export async function updateWalletMandateMode(userId: number, mandateId: string, mode: "simulation" | "armed" | "real" | "paused") {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.update(walletMandates).set({ mode, status: mode === "paused" ? "paused" : "active", updatedAt: new Date() }).where(and(eq(walletMandates.userId, userId), eq(walletMandates.mandateId, mandateId)));
+  await db.update(walletMandates).set({
+    mode,
+    status: mode === "paused" ? "paused" : "active",
+    version: sql`${walletMandates.version} + 1`,
+    updatedAt: new Date(),
+  }).where(and(eq(walletMandates.userId, userId), eq(walletMandates.mandateId, mandateId)));
   const saved = await db.select().from(walletMandates).where(and(eq(walletMandates.userId, userId), eq(walletMandates.mandateId, mandateId))).limit(1);
   return saved[0] ?? null;
 }
@@ -408,7 +416,7 @@ export async function getPlatformApiKey(userId: number, keyId: string) {
 export async function updatePlatformApiKeyState(userId: number, keyId: string, state: "active" | "disabled" | "testing") {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.update(platformApiKeys).set({ state, updatedAt: new Date() }).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
+  await db.update(platformApiKeys).set({ state, version: sql`${platformApiKeys.version} + 1`, updatedAt: new Date() }).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
   return getPlatformApiKey(userId, keyId);
 }
 
@@ -419,7 +427,7 @@ export async function updatePlatformApiKeyLimits(userId: number, keyId: string, 
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.update(platformApiKeys).set({ ...limits, updatedAt: new Date() }).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
+  await db.update(platformApiKeys).set({ ...limits, version: sql`${platformApiKeys.version} + 1`, updatedAt: new Date() }).where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
   return getPlatformApiKey(userId, keyId);
 }
 
@@ -440,6 +448,18 @@ export async function getAuthorityState(userId: number): Promise<AuthorityState>
   if (!db) return "disabled";
   const result = await db.select().from(authorityControls).where(eq(authorityControls.userId, userId)).limit(1);
   return AuthorityState.parse(result[0]?.state ?? "disabled");
+}
+
+/** Server-derived authority snapshot used to invalidate stale future live intents. */
+export async function getAuthoritySnapshot(userId: number): Promise<{ state: AuthorityState; version: number }> {
+  const db = await getDb();
+  if (!db) return { state: "disabled", version: 0 };
+  const result = await db.select().from(authorityControls).where(eq(authorityControls.userId, userId)).limit(1);
+  const record = result[0];
+  return {
+    state: AuthorityState.parse(record?.state ?? "disabled"),
+    version: record?.version ?? 0,
+  };
 }
 
 export type AuthorityChangeResult =
@@ -464,9 +484,16 @@ export async function changeAuthorityState(
 
   await db
     .insert(authorityControls)
-    .values({ userId, state: to, machineVersion: AUTHORITY_STATE_MACHINE_VERSION, updatedBy: initiatedBy, reason })
+    .values({ userId, state: to, version: 1, machineVersion: AUTHORITY_STATE_MACHINE_VERSION, updatedBy: initiatedBy, reason })
     .onDuplicateKeyUpdate({
-      set: { state: to, machineVersion: AUTHORITY_STATE_MACHINE_VERSION, updatedBy: initiatedBy, reason, updatedAt: new Date() },
+      set: {
+        state: to,
+        version: sql`${authorityControls.version} + 1`,
+        machineVersion: AUTHORITY_STATE_MACHINE_VERSION,
+        updatedBy: initiatedBy,
+        reason,
+        updatedAt: new Date(),
+      },
     });
 
   await createOperatorAction(userId, {
@@ -475,7 +502,7 @@ export async function changeAuthorityState(
     status: "success",
     subject: `Authority ${from} → ${to}`,
     detail: `Owner-initiated authority transition (${initiatedBy}): ${reason}`,
-    payload: { from, to, initiatedBy, machineVersion: AUTHORITY_STATE_MACHINE_VERSION },
+    payload: { from, to, initiatedBy, machineVersion: AUTHORITY_STATE_MACHINE_VERSION, authorizationRevision: "incremented" },
   });
 
   return { ok: true, from, to };
@@ -506,7 +533,7 @@ export async function appendLedgerEvent(userId: number, event: {
   price?: string | null;
   quoteOrderQty?: string | null;
   seq: number;
-  eventType: LedgerEventType;
+  eventType: ExecutionLedgerEventType;
   payload: Record<string, unknown>;
   mandateId?: string | null;
 }) {
@@ -570,7 +597,7 @@ export async function updatePlatformApiKeyMaterial(
   const db = await getDb();
   if (!db) throw new Error("Database unavailable; refusing to rotate key (fail closed).");
   await db.update(platformApiKeys)
-    .set({ ...material, state: "testing", updatedAt: new Date() })
+    .set({ ...material, state: "testing", version: sql`${platformApiKeys.version} + 1`, updatedAt: new Date() })
     .where(and(eq(platformApiKeys.userId, userId), eq(platformApiKeys.keyId, keyId)));
   return getPlatformApiKey(userId, keyId);
 }
@@ -610,15 +637,33 @@ export async function getLiveOrderByIdempotencyKey(
  * uniqueness constraint is the concurrency boundary; duplicate callers never
  * receive a second reservation.
  */
-export async function claimLiveOrderIntent(userId: number, idempotencyKey: string, orderHash: string) {
+export type ClaimLiveOrderIntentInput = {
+  userId: number;
+  idempotencyKey: string;
+  approvalDigest: string;
+  canonicalPayload: string;
+  platformKeyId: string;
+  keyVersion: number;
+  mandateId: string;
+  mandateVersion: number;
+  authorityState: string;
+  authorityVersion: number;
+};
+
+export async function claimLiveOrderIntent(input: ClaimLiveOrderIntentInput) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable; refusing live order reservation (fail closed).");
   try {
-    await db.insert(liveOrderIntents).values({ userId, idempotencyKey, orderHash, status: "reserved" });
+    await db.insert(liveOrderIntents).values({
+      ...input,
+      // Retained only for the legacy column. New authorization always uses approvalDigest.
+      orderHash: "legacy-disabled",
+      status: "reserved",
+    });
     return { claimed: true as const };
   } catch (error) {
     const existing = await db.select().from(liveOrderIntents)
-      .where(and(eq(liveOrderIntents.userId, userId), eq(liveOrderIntents.idempotencyKey, idempotencyKey)))
+      .where(and(eq(liveOrderIntents.userId, input.userId), eq(liveOrderIntents.idempotencyKey, input.idempotencyKey)))
       .limit(1);
     if (existing[0]) return { claimed: false as const, status: existing[0].status };
     throw error;
@@ -628,11 +673,12 @@ export async function claimLiveOrderIntent(userId: number, idempotencyKey: strin
 export async function updateLiveOrderIntentStatus(
   userId: number,
   idempotencyKey: string,
-  status: "submitted" | "filled" | "rejected",
+  status: "submitted" | "acknowledged" | "partially_filled" | "filled" | "cancelled" | "rejected" | "unknown",
+  venueRefs?: { venueClientOrderId?: string; venueOrderId?: string },
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable; refusing live order status update (fail closed).");
-  await db.update(liveOrderIntents).set({ status, updatedAt: new Date() })
+  await db.update(liveOrderIntents).set({ ...venueRefs, status, updatedAt: new Date() })
     .where(and(eq(liveOrderIntents.userId, userId), eq(liveOrderIntents.idempotencyKey, idempotencyKey)));
 }
 
@@ -671,32 +717,34 @@ export async function reserveLiveDailyRisk(args: {
 // ─── Per-order owner approvals (Stage 5) ───────────────────────────────────
 
 export async function recordLiveOrderApproval(userId: number, args: {
-  orderHash: string;
+  approvalDigest: string;
+  canonicalPayload: string;
   idempotencyKey: string;
   approvedBy: string;
+  expiresAt: Date;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable; refusing to record approval (fail closed).");
-  await db.insert(liveOrderApprovals).values({ userId, ...args });
+  await db.insert(liveOrderApprovals).values({ userId, ...args, orderHash: "legacy" });
 }
 
 /**
  * Consume a fresh, unconsumed approval for the exact order hash. Returns null
  * when no matching unconsumed approval exists within the freshness window.
  */
-export async function consumeLiveOrderApproval(userId: number, orderHash: string, idempotencyKey: string, maxAgeMs = 10 * 60_000): Promise<boolean> {
+export async function consumeLiveOrderApproval(userId: number, approvalDigest: string, canonicalPayload: string, idempotencyKey: string, now = new Date()): Promise<boolean> {
   const db = await getDb();
   if (!db) return false; // fail closed
   const rows = await db.select().from(liveOrderApprovals)
-    .where(and(eq(liveOrderApprovals.userId, userId), eq(liveOrderApprovals.orderHash, orderHash), eq(liveOrderApprovals.idempotencyKey, idempotencyKey)))
+    .where(and(eq(liveOrderApprovals.userId, userId), eq(liveOrderApprovals.approvalDigest, approvalDigest), eq(liveOrderApprovals.idempotencyKey, idempotencyKey)))
     .orderBy(desc(liveOrderApprovals.createdAt))
     .limit(1);
   const approval = rows[0];
-  if (!approval || approval.consumedAt) return false; // already used for its one execution
-  if (Date.now() - new Date(approval.createdAt).getTime() > maxAgeMs) return false; // stale approval
+  if (!approval || approval.consumedAt || !approval.canonicalPayload || !approval.expiresAt) return false;
+  if (approval.canonicalPayload !== canonicalPayload || new Date(approval.expiresAt).getTime() <= now.getTime()) return false;
   const result = await db.update(liveOrderApprovals)
     .set({ consumedAt: new Date() })
-    .where(and(eq(liveOrderApprovals.id, approval.id), isNull(liveOrderApprovals.consumedAt), eq(liveOrderApprovals.orderHash, orderHash), eq(liveOrderApprovals.idempotencyKey, idempotencyKey)));
+    .where(and(eq(liveOrderApprovals.id, approval.id), isNull(liveOrderApprovals.consumedAt), eq(liveOrderApprovals.approvalDigest, approvalDigest), eq(liveOrderApprovals.idempotencyKey, idempotencyKey)));
   const affectedRows = Array.isArray(result) ? result[0]?.affectedRows : undefined;
   return affectedRows === 1;
 }
