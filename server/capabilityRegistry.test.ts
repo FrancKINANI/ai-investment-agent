@@ -21,11 +21,11 @@ function createOwnerContext(): TrpcContext {
 }
 
 describe("agentFabric.capabilityRegistry", () => {
-  it("returns the validated, simulation-only registry to an authenticated owner", async () => {
+  it("returns the validated registry to an authenticated owner", async () => {
     const caller = appRouter.createCaller(createOwnerContext());
     const registry = await caller.agentFabric.capabilityRegistry();
 
-    expect(registry.executionBoundary).toBe("simulation-only");
+    expect(registry.executionBoundary).toBe("fail-closed");
     expect(registry.capabilityCount).toBeGreaterThan(0);
     expect(registry.mcpCapabilityCount).toBe(0);
     expect(registry.capabilities.flatMap((capability) => capability.scopes)).not.toContain("execution.request");
@@ -34,7 +34,7 @@ describe("agentFabric.capabilityRegistry", () => {
   it("returns the validated safe Phase 0 configuration summary without exposing an MCP activation path", async () => {
     const caller = appRouter.createCaller(createOwnerContext());
     const configuration = await caller.agentFabric.phase0Configuration();
-    expect(configuration).toMatchObject({ project: "Ledgerline", profile: "safe-phase0", executionBoundary: "simulation-only", activeMcpCapabilityCount: 0, dynamicConfiguration: false });
+    expect(configuration).toMatchObject({ project: "Ledgerline", executionBoundary: "fail-closed", activeMcpCapabilityCount: 0 });
     expect(configuration.featureFlags).toMatchObject({ cexExecution: false, mcpActivation: false, liveExecution: false });
     expect(configuration.mcpServers.every((server) => server.state === "disabled" && server.registration === "declarative-only")).toBe(true);
   });

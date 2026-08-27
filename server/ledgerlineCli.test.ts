@@ -10,10 +10,10 @@ function run(...args: string[]) {
 }
 
 describe("ledgerline Phase 0 CLI", () => {
-  it("validates configuration and reports the no-active-MCP, simulation-only contract", () => {
+  it("validates configuration and reports the no-active-MCP, fail-closed contract", () => {
     const result = run("config", "validate");
     expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ valid: true, executionBoundary: "simulation-only", activeMcpServers: 0 });
+    expect(JSON.parse(result.stdout)).toMatchObject({ valid: true, executionBoundary: "fail-closed", activeMcpServers: 0 });
   });
 
   it("lists declarative disabled MCP entries but refuses mutation or activation verbs", () => {
@@ -29,7 +29,7 @@ describe("ledgerline Phase 0 CLI", () => {
     const result = run("doctor");
     expect(result.status).toBe(0);
     const report = JSON.parse(result.stdout);
-    expect(report).toMatchObject({ healthy: true, executionBoundary: "simulation-only" });
+    expect(report).toMatchObject({ healthy: true, executionBoundary: "fail-closed" });
     expect(report.checks).toEqual(expect.arrayContaining([expect.objectContaining({ id: "authority-flags", status: "pass" }), expect.objectContaining({ id: "mcp-declarations", status: "pass" })]));
     expect(report.note).toContain("never opens a network connection");
   });
