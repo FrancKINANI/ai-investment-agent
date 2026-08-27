@@ -51,13 +51,13 @@ export default function Home() {
     const metricKey = `${tokenQuery.data.token.address}:${tokenQuery.data.fetchedAt}`;
     if (lastRecordedMetric.current === metricKey) return;
     lastRecordedMetric.current = metricKey;
-    actionMutation.mutate({ kind: "onchain_viewed", status: "success", subject: `${tokenQuery.data.token.symbol} public token view`, detail: "Owner loaded public token metrics from read-only sources.", payload: { address: tokenQuery.data.token.address, sources: tokenQuery.data.sources, fetchedAt: tokenQuery.data.fetchedAt } });
+    actionMutation.mutate({ subject: `${tokenQuery.data.token.symbol} public token view`, detail: "Owner recorded that public token metrics were loaded from read-only sources. This note is not an authoritative execution or security event." });
   }, [tokenQuery.data, isAuthenticated]);
 
   const policyReady = Boolean(policyQuery.data);
   const runCount = runsQuery.data?.length ?? 0;
-  const record = (kind: "simulation_blocked" | "scope_checked", status: "review" | "blocked" | "success", subject: string, detail: string) => {
-    if (isAuthenticated) actionMutation.mutate({ kind, status, subject, detail, payload: {} });
+  const record = (_kind: "simulation_blocked" | "scope_checked", _status: "review" | "blocked" | "success", subject: string, detail: string) => {
+    if (isAuthenticated) actionMutation.mutate({ subject, detail: `${detail} This is an owner-asserted note, not an authoritative control event.` });
   };
 
   const addAsset = () => {

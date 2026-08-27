@@ -33,10 +33,10 @@ const requireUser = t.middleware(async opts => {
  */
 const rateLimitMiddleware = t.middleware(async opts => {
   const { ctx, next } = opts;
-  const userId = ctx.user?.id;
-  if (userId == null) {
+  if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
+  const userId = ctx.user.id;
   const result = checkRateLimit(`user:${userId}`);
   if (!result.allowed) {
     throw new TRPCError({
@@ -44,13 +44,32 @@ const rateLimitMiddleware = t.middleware(async opts => {
       message: `Rate limit exceeded. Retry after ${Math.ceil(result.retryAfterMs / 1000)}s.`,
     });
   }
-  return next({ ctx });
+  return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-/**
- * LL-SEC-008 FIX: Admin middleware that revalidates role from DB.
- * Prevents stale admin role if revoked mid-session.
- */
+/** Extra boundary for mutations that alter authority, credentials, mandates or venue state. */
+const requireSensitiveRequestBoundary = t.middleware(async opts => {
+  const { ctx, path, next } = opts;
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  const origin = ctx.req.headers.origin;
+  const host = ctx.req.headers.host;
+  if (typeof origin === "string" && typeof host === "string") {
+    const expectedOrigin = `${ctx.req.protocol}://${host}`;
+    if (origin !== expectedOrigin) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Cross-origin sensitive mutation rejected." });
+    }
+  }
+  const limit = checkRateLimit(`sensitive:${ctx.user.id}:${path}`, { maxRequests: 12, windowMs: 60_000 });
+  if (!limit.allowed) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: `Sensitive mutation rate limit exceeded. Retry after ${Math.ceil(limit.retryAfterMs / 1_000)} seconds.`,
+    });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+/** Revalidates the administrator role from persistent storage on every call. */
 const requireAdminFresh = t.middleware(async opts => {
   const { ctx, next } = opts;
 
@@ -79,9 +98,10 @@ const requireAdminFresh = t.middleware(async opts => {
 });
 
 export const protectedProcedure = t.procedure.use(requireUser).use(rateLimitMiddleware);
+export const sensitiveProcedure = protectedProcedure.use(requireSensitiveRequestBoundary);
 
 /**
  * Admin procedure: revalidates role from DB on every call (LL-SEC-008).
  * Use for critical operations: approval, authority transitions, binding changes.
  */
-export const adminProcedure = t.procedure.use(requireUser).use(rateLimitMiddleware).use(requireAdminFresh);
+export const adminProcedure = protectedProcedure.use(requireAdminFresh);

@@ -68,7 +68,7 @@ export const systemRouter = router({
         kind: "agent_configured",
         status: "success",
         subject: `Execution backend: ${target.label}`,
-        detail: `Owner switched execution backend from ${previous} to ${input.backend}. ${input.backend === "cex" ? "Live Binance orders are now possible when authority + mandate + key conditions are met." : "Paper execution mode. No real capital at risk."}`,
+        detail: `Owner switched execution backend from ${previous} to ${input.backend}. ${input.backend === "cex" ? "CEX adapter selected; venue mutations remain sealed in this release." : "Paper execution mode. No real capital at risk."}`,
         payload: { previous, current: input.backend, label: target.label },
       });
 

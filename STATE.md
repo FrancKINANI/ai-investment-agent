@@ -22,27 +22,27 @@
 - `ExecutionBackend` interface: paper, cex, onchain
 - `ExecutionOrchestrator`: evaluateProposalApproval + executeApprovedProposal
 - Paper backend wraps existing paperExecutor with authority + mandate checks
-- CEX and onchain backends are stubs (Phase 2/3)
+- CEX and onchain adapters remain unavailable for external mutation in the current sealed release
 - `settleSimulation` routed through orchestrator
 - README rewritten: real OS, not simulation product
 
 **Slice 4 — MCP server manager** (`bd84fe1`)
 - `McpServerManager` class: spawn, tool discovery (JSON-RPC over stdio), lifecycle
 - Failure isolation per server
-- Gated behind `featureFlags.mcpActivation`
+- Present for future design work but sealed against activation in this release
 - CLI: `mcp status`, `mcp start`, `mcp stop`
 - Schema supports command/url/env for active servers
 
 **Refactor — Simulation cleanup** (`be58b16`)
 - All UI-facing "simulation-only" strings replaced with "paper-only", "fail-closed", or "owner-governed"
-- `setMandateMode("real")` now checks authority state + IPS instead of blanket rejection
+- Authority-state and mandate validation are retained as defence-in-depth, while the venue service boundary remains sealed
 - 16 files updated across server, client, and docs
 
 **Security Audit & Remediation** (`65cf015` + `e842231`)
 - Full security audit: 10 findings across auth, secrets, registry, rate limiting, MCP, audit trail
 - All HIGH and MEDIUM findings fixed (LL-SEC-001 through LL-SEC-005)
 - 21 regression tests added for security fixes
-- Verdict: GO for paper-only, GO conditionnel for real capital
+- Verdict: GO for research and paper simulation; **NO-GO for real capital**
 
 ### Security Findings Fixed (all 10/10)
 
@@ -66,10 +66,9 @@
 - MCP SSRF protection doesn't cover DNS rebinding
 
 ### Test Status
-- **53/53 test files pass**
-- **384/384 tests pass**
-- **21 security regression tests** across 4 test files
-- Remaining "simulation-only" references are only in functional enum/type definitions
+- Run the complete suite on the integrated staging commit before any promotion.
+- Security boundaries are covered by authority, owner-scoping, sealed-mutation, capability, MCP, and sensitive-procedure tests.
+- Remaining "simulation-only" references are only in functional enum/type definitions.
 
 ### Git Status
 - **19 commits** on `staging` since work began (all pushed to `origin/staging`)
@@ -78,18 +77,11 @@
 
 ---
 
-**v0.3 — First real CEX path (Binance only)** (latest)
-- `CEXExecutionBackend` uses `liveAdapter` for real Binance order submission
-- Authority state machine gate: only `approval-required-live` or `limited-live`
-- Mandate validation: mode, status, venue, asset allowance, order limits
-- Per-order owner approval in `approval-required-live` state
-- Pre-trade price freshness for market orders
-- Idempotency via proposalId (server-generated)
-- Full ledger lifecycle: submitted → filled/rejected
-- Alerts on fill/reject
-- Config: `setActive("cex")` to switch from paper to live
-- **Default: paper** — live requires explicit owner action
-- 16 new tests (authority gates, credentials, mandate checks, happy path)
+**v0.3 — Historical CEX design (sealed in current integration)**
+- The CEX adapter, authority state machine, mandate model, approval record, price checks, and ledger design remain available for future engineering review.
+- `fix/security-binance` blocks Binance placement and cancellation before secret decryption or network I/O; it also seals Sailor mutations and MCP activation.
+- The database migration adds bounded idempotency and daily-risk reservation structures but does not constitute live authority.
+- No feature flag, local overlay, CLI call, or procedure can activate real execution in this integration.
 
 ---
 

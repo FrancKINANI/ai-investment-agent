@@ -36,7 +36,7 @@ export async function scheduledDiscoveryHandler(req: Request, res: Response) {
     const findings = [];
     for (const item of items) {
       const findingId = `${schedule.scheduleId}-${item.itemId}-${bucket}`;
-      if (await getDiscoveryFindingById(findingId)) continue;
+      if (await getDiscoveryFindingById(schedule.userId, findingId)) continue;
       let status: "candidate" | "review" | "blocked" = !policy || !item.address ? "review" : allowed.has(item.address.toLowerCase()) ? "candidate" : "blocked";
       let score = status === "candidate" ? 70 : status === "review" ? 45 : 0;
       let confidence: "low" | "medium" | "high" = item.address ? "medium" : "low";

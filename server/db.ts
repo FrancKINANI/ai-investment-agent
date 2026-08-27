@@ -1,6 +1,6 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { agentProfiles, agentProposals, agentRuns, authorityControls, liveOrderApprovals, awarenessRecords, bindingChangeRequests, executionLedger, InsertUser, securityAlerts, paperOrders, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
+import { agentProfiles, agentProposals, agentRuns, authorityControls, liveOrderApprovals, liveOrderIntents, liveDailyRiskBuckets, awarenessRecords, bindingChangeRequests, executionLedger, InsertUser, securityAlerts, paperOrders, platformApiKeys, investmentPolicies, operatorActions, outcomeRecords, strategyEvaluations, strategyLineages, users, venueConnections, walletMandates } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { nanoid } from "nanoid";
@@ -107,7 +107,7 @@ export async function saveInvestmentPolicy(userId: number, values: PolicyValues)
 
 export type OperatorActionInput = {
   actionId: string;
-  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled" | "agent_configured" | "subagent_created" | "subagent_retired" | "chat_message" | "watchlist_created" | "watchlist_updated" | "discovery_schedule_configured" | "discovery_completed" | "platform_key_added" | "platform_key_removed" | "platform_key_disabled" | "wallet_connected" | "wallet_disconnected" | "mode_changed" | "authority_changed" | "alert_created" | "alert_acknowledged";
+  kind: "policy_updated" | "simulation_started" | "simulation_blocked" | "onchain_viewed" | "scope_checked" | "outcome_recorded" | "promotion_changed" | "research_completed" | "mandate_created" | "mandate_mode_changed" | "venue_configured" | "proposal_created" | "proposal_approved" | "proposal_rejected" | "simulation_settled" | "agent_configured" | "subagent_created" | "subagent_retired" | "chat_message" | "watchlist_created" | "watchlist_updated" | "discovery_schedule_configured" | "discovery_completed" | "platform_key_added" | "platform_key_removed" | "platform_key_disabled" | "wallet_connected" | "wallet_disconnected" | "mode_changed" | "authority_changed" | "alert_created" | "alert_acknowledged" | "owner_note";
   status: "success" | "review" | "blocked";
   subject: string;
   detail: string;
@@ -313,7 +313,7 @@ export async function createOutcomeRecord(userId: number, record: {
   runId?: string;
   expectedBps: number;
   realizedBps?: number;
-  attribution: Record<string, number>;
+  attribution: Record<string, string | number | boolean | null>;
   deviation: "on_track" | "underperforming" | "outperforming" | "inconclusive";
   narrative: string;
 }) {
@@ -383,6 +383,7 @@ export async function createPlatformApiKey(userId: number, key: {
   await db.insert(platformApiKeys).values({
     userId,
     ...key,
+    state: "testing",
     maxOrderUsd: key.maxOrderUsd ?? null,
     allocatedCapitalUsd: key.allocatedCapitalUsd ?? null,
     dailyTradeLimit: key.dailyTradeLimit ?? null,
@@ -604,6 +605,69 @@ export async function getLiveOrderByIdempotencyKey(
   return null;
 }
 
+/**
+ * Reserve a live idempotency key before an external venue call. The database
+ * uniqueness constraint is the concurrency boundary; duplicate callers never
+ * receive a second reservation.
+ */
+export async function claimLiveOrderIntent(userId: number, idempotencyKey: string, orderHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing live order reservation (fail closed).");
+  try {
+    await db.insert(liveOrderIntents).values({ userId, idempotencyKey, orderHash, status: "reserved" });
+    return { claimed: true as const };
+  } catch (error) {
+    const existing = await db.select().from(liveOrderIntents)
+      .where(and(eq(liveOrderIntents.userId, userId), eq(liveOrderIntents.idempotencyKey, idempotencyKey)))
+      .limit(1);
+    if (existing[0]) return { claimed: false as const, status: existing[0].status };
+    throw error;
+  }
+}
+
+export async function updateLiveOrderIntentStatus(
+  userId: number,
+  idempotencyKey: string,
+  status: "submitted" | "filled" | "rejected",
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing live order status update (fail closed).");
+  await db.update(liveOrderIntents).set({ status, updatedAt: new Date() })
+    .where(and(eq(liveOrderIntents.userId, userId), eq(liveOrderIntents.idempotencyKey, idempotencyKey)));
+}
+
+/** Atomically reserve the day’s live notional and request count before I/O. */
+export async function reserveLiveDailyRisk(args: {
+  userId: number;
+  dayKey: string;
+  notionalCents: number;
+  maxNotionalCents: number;
+  maxTradeCount: number;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable; refusing live risk reservation (fail closed).");
+  const { userId, dayKey, notionalCents, maxNotionalCents, maxTradeCount } = args;
+  if (!Number.isSafeInteger(notionalCents) || notionalCents <= 0 || !Number.isSafeInteger(maxNotionalCents) || maxNotionalCents <= 0 || !Number.isSafeInteger(maxTradeCount) || maxTradeCount <= 0) {
+    throw new Error("Invalid live risk reservation limits.");
+  }
+  await db.insert(liveDailyRiskBuckets).values({ userId, dayKey, reservedNotionalCents: 0, reservedTradeCount: 0 })
+    .onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+  const result = await db.update(liveDailyRiskBuckets)
+    .set({
+      reservedNotionalCents: sql`${liveDailyRiskBuckets.reservedNotionalCents} + ${notionalCents}`,
+      reservedTradeCount: sql`${liveDailyRiskBuckets.reservedTradeCount} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(liveDailyRiskBuckets.userId, userId),
+      eq(liveDailyRiskBuckets.dayKey, dayKey),
+      sql`${liveDailyRiskBuckets.reservedNotionalCents} + ${notionalCents} <= ${maxNotionalCents}`,
+      sql`${liveDailyRiskBuckets.reservedTradeCount} + 1 <= ${maxTradeCount}`,
+    ));
+  const affectedRows = Array.isArray(result) ? result[0]?.affectedRows : undefined;
+  return affectedRows === 1;
+}
+
 // ─── Per-order owner approvals (Stage 5) ───────────────────────────────────
 
 export async function recordLiveOrderApproval(userId: number, args: {
@@ -620,18 +684,19 @@ export async function recordLiveOrderApproval(userId: number, args: {
  * Consume a fresh, unconsumed approval for the exact order hash. Returns null
  * when no matching unconsumed approval exists within the freshness window.
  */
-export async function consumeLiveOrderApproval(userId: number, orderHash: string, maxAgeMs = 10 * 60_000): Promise<boolean> {
+export async function consumeLiveOrderApproval(userId: number, orderHash: string, idempotencyKey: string, maxAgeMs = 10 * 60_000): Promise<boolean> {
   const db = await getDb();
   if (!db) return false; // fail closed
   const rows = await db.select().from(liveOrderApprovals)
-    .where(and(eq(liveOrderApprovals.userId, userId), eq(liveOrderApprovals.orderHash, orderHash)))
+    .where(and(eq(liveOrderApprovals.userId, userId), eq(liveOrderApprovals.orderHash, orderHash), eq(liveOrderApprovals.idempotencyKey, idempotencyKey)))
     .orderBy(desc(liveOrderApprovals.createdAt))
     .limit(1);
   const approval = rows[0];
   if (!approval || approval.consumedAt) return false; // already used for its one execution
   if (Date.now() - new Date(approval.createdAt).getTime() > maxAgeMs) return false; // stale approval
-  await db.update(liveOrderApprovals)
+  const result = await db.update(liveOrderApprovals)
     .set({ consumedAt: new Date() })
-    .where(eq(liveOrderApprovals.id, approval.id));
-  return true;
+    .where(and(eq(liveOrderApprovals.id, approval.id), isNull(liveOrderApprovals.consumedAt), eq(liveOrderApprovals.orderHash, orderHash), eq(liveOrderApprovals.idempotencyKey, idempotencyKey)));
+  const affectedRows = Array.isArray(result) ? result[0]?.affectedRows : undefined;
+  return affectedRows === 1;
 }
