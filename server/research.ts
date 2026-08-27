@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { decideProposal, type PolicyResult } from "@shared/agentRuntime";
+import { isBlockedByDominantState } from "@shared/authorityState";
 import { invokeLLM } from "./_core/llm";
 import { getEthereumTokenMetrics } from "./onchain";
+import { getAuthorityState } from "./db";
 
 export const researchRequestSchema = z.object({
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Enter a valid Ethereum token contract address."),
@@ -74,13 +76,22 @@ function compactEvidence(metrics: Awaited<ReturnType<typeof getEthereumTokenMetr
   };
 }
 
-export async function runTokenResearch(input: z.infer<typeof researchRequestSchema>, policyContext: ResearchPolicy) {
+export async function runTokenResearch(
+  input: z.infer<typeof researchRequestSchema>,
+  policyContext: ResearchPolicy,
+  userId: number,
+  options?: { model?: string }
+) {
   const metrics = await getEthereumTokenMetrics(input.address);
   const evidence = compactEvidence(metrics);
   const policyAssessment = assessResearchPolicy(metrics.token.address, policyContext);
 
+  // S1: Wire authority state check for owner pause
+  const authorityState = await getAuthorityState(userId);
+  const ownerPauseActive = isBlockedByDominantState(authorityState);
+
   const completion = await invokeLLM({
-    model: "gpt-5-mini",
+    model: options?.model ?? "gpt-5-mini",
     maxTokens: 1_800,
     messages: [
       {
@@ -129,7 +140,7 @@ export async function runTokenResearch(input: z.infer<typeof researchRequestSche
   const advancement = decideProposal({
     policyResult: policyAssessment.result,
     simulationOnly: true,
-    ownerPauseActive: false,
+    ownerPauseActive,
     requestedScope: "proposal.write",
   });
 

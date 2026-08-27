@@ -1,0 +1,65 @@
+schemaVersion: 1
+revision: ledgerline-v0.5-owner-os
+executionBoundary: fail-closed
+capabilities:
+  - id: market-evidence.read
+    version: 1.0.0
+    kind: data_source
+    label: Public market evidence
+    scopes: [market.read]
+    tags: [research, evidence, public]
+    state: active
+  - id: chain-evidence.read
+    version: 1.0.0
+    kind: data_source
+    label: Public on-chain evidence
+    scopes: [chain.read]
+    tags: [research, evidence, on-chain]
+    state: active
+  - id: portfolio-snapshot.read
+    version: 1.0.0
+    kind: tool
+    label: Portfolio snapshot
+    scopes: [portfolio.read]
+    tags: [policy, read-only]
+    state: active
+  - id: paper-proposal.compose
+    version: 1.0.0
+    kind: tool
+    label: Paper proposal composer
+    scopes: [proposal.write]
+    tags: [paper, policy-gated]
+    state: active
+  - id: execution.adapter
+    version: 1.0.0
+    kind: tool
+    label: Execution adapter
+    scopes: [proposal.write]
+    tags: [execution, owner-armed]
+    state: active
+  - id: memory.journal
+    version: 1.0.0
+    kind: memory
+    label: Decision journal
+    scopes: [portfolio.read]
+    tags: [memory, lineage, audit]
+    state: active
+bindings:
+  - capabilityId: market-evidence.read
+    roleKeys: [supervisor, macro, onchain, fundamental, sentiment, technical, news, variation, bull, bear, decision, trader, risk, risk_guardians]
+    permission: research-only
+  - capabilityId: chain-evidence.read
+    roleKeys: [supervisor, onchain, fundamental, variation, bull, bear, risk, risk_guardians]
+    permission: research-only
+  - capabilityId: portfolio-snapshot.read
+    roleKeys: [decision, trader, risk, risk_guardians, evaluator, fund_manager, memory]
+    permission: research-only
+  - capabilityId: paper-proposal.compose
+    roleKeys: [supervisor, variation, decision, trader, evaluator, fund_manager]
+    permission: simulation-only
+  - capabilityId: execution.adapter
+    roleKeys: [execution]
+    permission: execution
+  - capabilityId: memory.journal
+    roleKeys: [memory, evaluator, fund_manager]
+    permission: research-only

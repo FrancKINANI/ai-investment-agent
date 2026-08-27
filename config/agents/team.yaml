@@ -1,0 +1,138 @@
+schemaVersion: 1
+defaultModel: gpt-5-mini
+defaultProvider: openai
+agents:
+  - id: supervisor
+    name: Supervisor
+    layer: coordination
+    enabled: true
+    delegate: false
+    canVeto: false
+    canExecute: false
+    capabilities: [market-evidence.read, chain-evidence.read, paper-proposal.compose]
+    tools: [market.read, chain.read, proposal.write]
+  - id: macro
+    name: Macro / Regime
+    layer: analysts
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    capabilities: [market-evidence.read]
+    tools: [market.read]
+  - id: onchain
+    name: On-chain / Fundamentals
+    layer: analysts
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    aliases: [fundamental]
+    capabilities: [market-evidence.read, chain-evidence.read]
+    tools: [market.read, chain.read]
+  - id: sentiment
+    name: Sentiment analyst
+    layer: analysts
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    capabilities: [market-evidence.read]
+    tools: [market.read]
+  - id: technical
+    name: Technical analyst
+    layer: analysts
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    capabilities: [market-evidence.read]
+    tools: [market.read]
+  - id: news
+    name: News analyst
+    layer: analysts
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    capabilities: [market-evidence.read]
+    tools: [market.read]
+  - id: variation
+    name: Strategy researcher / Variation
+    layer: research
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    capabilities: [market-evidence.read, chain-evidence.read, paper-proposal.compose]
+    tools: [market.read, chain.read, proposal.write]
+  - id: bull
+    name: Bull researcher
+    layer: research
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    parent: variation
+    debate: bull
+    capabilities: [market-evidence.read, chain-evidence.read]
+    tools: [market.read, chain.read]
+  - id: bear
+    name: Bear researcher
+    layer: research
+    enabled: true
+    delegate: true
+    canVeto: false
+    canExecute: false
+    parent: variation
+    debate: bear
+    capabilities: [market-evidence.read, chain-evidence.read]
+    tools: [market.read, chain.read]
+  - id: risk
+    name: Risk
+    layer: risk
+    enabled: true
+    delegate: true
+    canVeto: true
+    canExecute: false
+    aliases: [risk_guardians]
+    capabilities: [market-evidence.read, chain-evidence.read, portfolio-snapshot.read]
+    tools: [market.read, portfolio.read, chain.read]
+  - id: evaluator
+    name: Evaluator
+    layer: approval
+    enabled: true
+    delegate: false
+    canVeto: true
+    canExecute: false
+    aliases: [fund_manager]
+    capabilities: [portfolio-snapshot.read, paper-proposal.compose]
+    tools: [portfolio.read, proposal.write]
+  - id: decision
+    name: Decision
+    layer: decision
+    enabled: true
+    delegate: false
+    canVeto: false
+    canExecute: false
+    aliases: [trader]
+    capabilities: [market-evidence.read, portfolio-snapshot.read, paper-proposal.compose]
+    tools: [market.read, portfolio.read, proposal.write]
+  - id: execution
+    name: Execution
+    layer: execution
+    enabled: true
+    delegate: false
+    canVeto: false
+    canExecute: true
+    capabilities: [execution.adapter]
+    tools: [proposal.write]
+  - id: memory
+    name: Memory & Lineage
+    layer: memory
+    enabled: true
+    delegate: false
+    canVeto: false
+    canExecute: false
+    capabilities: [memory.journal]
+    tools: [portfolio.read]
