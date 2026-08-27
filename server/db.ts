@@ -57,10 +57,11 @@ export async function createAgentRun(userId: number, run: {
   policyResult: "pass" | "review" | "block";
   summary: string;
   evidence: string[];
+  simulationOnly?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.insert(agentRuns).values({ userId, ...run, simulationOnly: true });
+  await db.insert(agentRuns).values({ userId, ...run, simulationOnly: run.simulationOnly ?? true });
   const saved = await db.select().from(agentRuns).where(eq(agentRuns.runId, run.runId)).limit(1);
   return saved[0];
 }
