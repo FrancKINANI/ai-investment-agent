@@ -6,7 +6,7 @@
  * Used for research, simulation, and testing.
  */
 
-import { submitPaperOrder, type SubmitPaperOrderArgs } from "./paperExecutor";
+import { submitPaperOrder, type SubmitPaperOrderArgs } from "../paperExecutor";
 import type { ExecutionBackend, ExecutionRequest, ExecutionResult, ExecutionBackendType } from "@shared/executionBackend";
 import { canPlaceOrders, isBlockedByDominantState } from "@shared/authorityState";
 import type { ReferencePrice } from "@shared/paperExecution";
@@ -49,22 +49,21 @@ export class PaperExecutionBackend implements ExecutionBackend {
 
     // Build paper order from execution request
     const referencePrice: ReferencePrice | null = request.order.limitPrice
-      ? { source: "owner-supplied", price: request.order.limitPrice, timestamp: Date.now() }
+      ? { price: request.order.limitPrice, timestampMs: Date.now() }
       : null;
 
     const args: SubmitPaperOrderArgs = {
       userId: request.userId,
       input: {
         idempotencyKey: request.proposalId,
+        venue: request.venue as any,
         symbol: request.order.symbol,
-        side: request.order.side as "buy" | "sell",
-        orderType: "limit",
-        timeInForce: "GTC",
+        side: request.order.side.toUpperCase() as "BUY" | "SELL",
+        orderType: request.order.limitPrice ? "LIMIT" : "MARKET",
         quantity: request.order.quantity,
-        limitPrice: request.order.limitPrice ?? 0,
+        price: request.order.limitPrice,
       },
       mandate: request.mandate,
-      mandateBalanceUsd: request.mandate.balanceUsd,
       referencePrice,
     };
 
@@ -73,9 +72,8 @@ export class PaperExecutionBackend implements ExecutionBackend {
 
       switch (result.status) {
         case "filled":
-        case "partially_filled":
           return {
-            status: result.status === "filled" ? "filled" : "partially_filled",
+            status: "filled",
             orderId: result.orderId,
             executedQty: result.executedQty,
             fillPrice: result.fillPrice,
@@ -94,9 +92,6 @@ export class PaperExecutionBackend implements ExecutionBackend {
             reason: result.reason,
             timestamp: Date.now(),
           };
-        default:
-          const _exhaustive: never = result;
-          return _exhaustive;
       }
     } catch (error) {
       return {

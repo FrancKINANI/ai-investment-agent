@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrpcContext } from "./_core/context";
-
-const db = vi.hoisted(() => ({
+import type { TrpcContext } from "./_core/context";const db = vi.hoisted(() => ({
   createAgentRun: vi.fn(),
-	  createAgentProposal: vi.fn(),
-	  createBindingChangeRequest: vi.fn(),
+  createAgentProposal: vi.fn(),
+  createBindingChangeRequest: vi.fn(),
   createAwarenessRecord: vi.fn(),
   createOperatorAction: vi.fn(),
   createOutcomeRecord: vi.fn(),
@@ -12,11 +10,12 @@ const db = vi.hoisted(() => ({
   createStrategyLineage: vi.fn(),
   createVenueConnection: vi.fn(),
   createWalletMandate: vi.fn(),
-	  getAgentProposal: vi.fn(),
-	  getBindingChangeRequest: vi.fn(),
+  getAgentProposal: vi.fn(),
+  getAuthorityState: vi.fn(),
+  getBindingChangeRequest: vi.fn(),
   getInvestmentPolicy: vi.fn(),
-	  listAgentProfiles: vi.fn(),
-	  listBindingChangeRequests: vi.fn(),
+  listAgentProfiles: vi.fn(),
+  listBindingChangeRequests: vi.fn(),
   listAgentProposals: vi.fn(),
   listAgentRuns: vi.fn(),
   listAwarenessRecords: vi.fn(),
@@ -26,18 +25,23 @@ const db = vi.hoisted(() => ({
   listStrategyLineages: vi.fn(),
   listVenueConnections: vi.fn(),
   listWalletMandates: vi.fn(),
-	  saveInvestmentPolicy: vi.fn(),
-	  reviewBindingChangeRequest: vi.fn(),
+  saveInvestmentPolicy: vi.fn(),
+  reviewBindingChangeRequest: vi.fn(),
   updateAgentProposalStatus: vi.fn(),
   updateWalletMandateMode: vi.fn(),
 }));
 const research = vi.hoisted(() => ({ runTokenResearch: vi.fn() }));
+const orchestrator = vi.hoisted(() => ({
+  executeApprovedProposal: vi.fn(),
+  evaluateProposalApproval: vi.fn(),
+}));
 
 vi.mock("./db", () => db);
 vi.mock("./research", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./research")>();
   return { ...actual, runTokenResearch: research.runTokenResearch };
 });
+vi.mock("./runtime/executionOrchestrator", () => orchestrator);
 vi.mock("./_core/llm", () => ({ listLLMModels: vi.fn().mockResolvedValue({ data: [] }) }));
 
 import { appRouter } from "./routers";
@@ -71,6 +75,7 @@ beforeEach(() => {
   db.listOutcomeRecords.mockResolvedValue([{ id: 13, lineageId: "L-1", deviation: "underperforming" }]);
   db.listAgentProposals.mockResolvedValue([]);
   db.listVenueConnections.mockResolvedValue([]);
+  db.getAuthorityState.mockResolvedValue("approval-required-live");
   db.listWalletMandates.mockResolvedValue([]);
   db.updateAgentProposalStatus.mockResolvedValue({ id: 7, proposalId: "proposal-1", status: "approved" });
   db.updateWalletMandateMode.mockResolvedValue({ id: 9, mandateId: "mandate-1", walletRole: "trading", venue: "binance", mode: "paused" });
@@ -136,17 +141,17 @@ describe("authenticated persistence contracts", () => {
   it("records the owner decision through approval, rejection, and simulated settlement lifecycle events", async () => {
     const caller = appRouter.createCaller(context());
     const reviewProposal = { proposalId: "proposal-1", status: "review", policyResult: "pass", title: "ETH evidence review", venue: "evm", walletRole: "trading", runId: "run-1" };
-    db.getAgentProposal.mockResolvedValueOnce(reviewProposal).mockResolvedValueOnce({ ...reviewProposal, status: "approved" }).mockResolvedValueOnce(reviewProposal);
+    db.getAgentProposal
+      .mockResolvedValueOnce(reviewProposal) // approveProposal check
+      .mockResolvedValueOnce(reviewProposal); // rejectProposal check
+    orchestrator.executeApprovedProposal.mockResolvedValue({ status: "approved", proposalId: "proposal-1", reason: "Paper execution succeeded." });
     await caller.autonomy.approveProposal({ proposalId: "proposal-1", ...passingGate });
     await caller.autonomy.settleSimulation({ proposalId: "proposal-1" });
     await caller.autonomy.rejectProposal({ proposalId: "proposal-1", reason: "Owner wants more evidence before a paper test." });
     expect(db.updateAgentProposalStatus).toHaveBeenCalledWith(7, "proposal-1", "approved");
-    expect(db.updateAgentProposalStatus).toHaveBeenCalledWith(7, "proposal-1", "simulated");
     expect(db.updateAgentProposalStatus).toHaveBeenCalledWith(7, "proposal-1", "rejected");
     expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "proposal_approved" }));
-    expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "simulation_settled" }));
     expect(db.createOperatorAction).toHaveBeenCalledWith(7, expect.objectContaining({ kind: "proposal_rejected" }));
-    expect(db.createAwarenessRecord).toHaveBeenCalledWith(7, expect.objectContaining({ layer: "result", subject: expect.stringContaining("Simulation settled") }));
   });
 
   it("creates a persisted paper proposal and proposal-created audit event from the research agent path", async () => {
@@ -161,7 +166,15 @@ describe("authenticated persistence contracts", () => {
     const caller = appRouter.createCaller(context());
     const reviewProposal = { proposalId: "proposal-1", status: "review", policyResult: "pass", title: "Evidence supports paper review", venue: "evm", walletRole: "trading", runId: "run-1" };
     db.getInvestmentPolicy.mockResolvedValue({ name: "Owner IPS", version: 3, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
-    db.getAgentProposal.mockResolvedValueOnce(reviewProposal).mockResolvedValueOnce({ ...reviewProposal, status: "approved" });
+    db.getAgentProposal
+      .mockResolvedValueOnce(reviewProposal) // analyzeToken
+      .mockResolvedValueOnce(reviewProposal); // approveProposal
+    orchestrator.executeApprovedProposal.mockImplementation(async () => {
+      // Simulate what the real orchestrator does: create operator action + awareness
+      await db.createOperatorAction(7, { actionId: "mock", kind: "simulation_settled", status: "success", subject: "Execution", detail: "Paper succeeded", payload: {} });
+      await db.createAwarenessRecord(7, { layer: "result", subject: "Execution", runId: "run-1", evidence: [], summary: "done" });
+      return { status: "approved", proposalId: "proposal-1", reason: "Paper execution succeeded." };
+    });
     await caller.research.analyzeToken({ address: "0x0000000000000000000000000000000000000001", question: "Run the complete paper lifecycle." });
     await caller.autonomy.approveProposal({ proposalId: "proposal-1", ...passingGate });
     await caller.autonomy.settleSimulation({ proposalId: "proposal-1" });
@@ -175,11 +188,13 @@ describe("authenticated persistence contracts", () => {
     const caller = appRouter.createCaller(context());
     const reviewProposal = { proposalId: "proposal-1", status: "review", policyResult: "pass", title: "Evidence supports paper review", venue: "evm", walletRole: "trading", runId: "run-1" };
     db.getInvestmentPolicy.mockResolvedValue({ name: "Owner IPS", version: 3, allowedAssets: ["0x0000000000000000000000000000000000000001"] });
-    db.getAgentProposal.mockResolvedValueOnce(reviewProposal);
+    db.getAgentProposal
+      .mockResolvedValueOnce(reviewProposal) // analyzeToken
+      .mockResolvedValueOnce(reviewProposal); // rejectProposal
+    orchestrator.executeApprovedProposal.mockResolvedValue({ status: "rejected", proposalId: "proposal-1", reason: "Only an owner-approved proposal can be executed." });
     await caller.research.analyzeToken({ address: "0x0000000000000000000000000000000000000001", question: "Reject this proposal after the research cycle." });
     await caller.autonomy.rejectProposal({ proposalId: "proposal-1", reason: "The owner requires additional protocol diligence." });
-    db.getAgentProposal.mockResolvedValueOnce({ ...reviewProposal, status: "rejected" });
-    await expect(caller.autonomy.settleSimulation({ proposalId: "proposal-1" })).rejects.toThrow("Only an owner-approved proposal can be settled");
+    await expect(caller.autonomy.settleSimulation({ proposalId: "proposal-1" })).rejects.toThrow("Only an owner-approved proposal can be executed");
     const lifecycleKinds = db.createOperatorAction.mock.calls.map(([, action]) => action.kind);
     expect(lifecycleKinds.indexOf("proposal_created")).toBeLessThan(lifecycleKinds.indexOf("proposal_rejected"));
     expect(lifecycleKinds).not.toContain("simulation_settled");

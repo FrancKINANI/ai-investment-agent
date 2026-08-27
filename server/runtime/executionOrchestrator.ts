@@ -11,9 +11,9 @@
  */
 
 import { nanoid } from "nanoid";
-import { getAuthorityState, getAgentProposal, updateAgentProposalStatus, createOperatorAction, createAwarenessRecord } from "./db";
+import { getAuthorityState, getAgentProposal, updateAgentProposalStatus, createOperatorAction, createAwarenessRecord, listWalletMandates } from "../db";
 import { evaluatePromotionGate } from "@shared/agentRuntime";
-import { getExecutionBackendRegistry } from "./backends/registry";
+import { getExecutionBackendRegistry } from "../backends/registry";
 import type { ExecutionRequest } from "@shared/executionBackend";
 
 export type ApprovalInput = {
@@ -97,9 +97,7 @@ export async function evaluateProposalApproval(input: ApprovalInput): Promise<Ap
  *   5. Update proposal status
  */
 export async function executeApprovedProposal(input: ExecutionInput): Promise<ExecutionOrchestratorResult> {
-  const proposal = await getAgentProposal(input.userId, input.proposalId);
-
-  if (!proposal) {
+  const proposal = await getAgentProposal(input.userId, input.proposalId);  if (!proposal) {
     return {
       status: "rejected",
       proposalId: input.proposalId,
@@ -119,44 +117,64 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
     // Get authority state
     const authorityState = await getAuthorityState(input.userId);
 
+    // Load mandate (server-side, not client-supplied)
+    const mandates = await listWalletMandates(input.userId);
+    const mandate = mandates.find((m: any) => m.walletRole === proposal.walletRole && m.venue === proposal.venue);
+
+    // Extract order details from proposal.action
+    let symbol = "UNKNOWN";
+    let strategyId: string | undefined;
+    if (
+      typeof proposal.action === "object" && proposal.action !== null &&
+      "kind" in proposal.action && proposal.action.kind === "token_research_paper_proposal" &&
+      "address" in proposal.action
+    ) {
+      // Token research proposal: use the token address
+      // TODO: In Phase 2+, resolve token address → symbol via on-chain call
+      symbol = String(proposal.action.address).slice(0, 42);
+      strategyId = String(proposal.action.address);
+    }
+
     // Get active backend
     const backendRegistry = getExecutionBackendRegistry();
     const backend = backendRegistry.active();
     await backend.verify();
 
     // Build execution request
-    // TODO: Load mandate from proposal.walletRole + proposal.venue
-    // TODO: Extract order details from proposal
     const executionRequest: ExecutionRequest = {
       userId: input.userId,
       proposalId: input.proposalId,
       venue: proposal.venue,
       walletRole: proposal.walletRole,
       order: {
-        symbol: proposal.symbol ?? "UNKNOWN",
-        side: (proposal.side as any) ?? "buy",
-        quantity: proposal.quantity ?? 0,
-        limitPrice: proposal.limitPrice,
+        symbol,
+        side: "buy", // Default for research proposals; Phase 2 will make this configurable
+        quantity: 1, // Placeholder; Phase 2 will drive from mandate + allocation
+        limitPrice: undefined, // Phase 2: derive from oracle
       },
-      mandate: null, // TODO: Load from DB
+      mandate: mandate ?? null,
       authorityState,
       metadata: {
-        policyVersion: 1, // TODO: Track policy version in proposal
-        lineageId: proposal.runId,
+        policyVersion: 1, // TODO: Track policy version in agentProposals
+        lineageId: proposal.runId ?? undefined,
+        strategyId,
       },
     };
 
     // Execute through backend
     const result = await backend.execute(executionRequest);
 
+    // Determine success vs failure from result variant
+    const isSuccess = result.status === "filled" || result.status === "submitted";
+    const resultReason = "reason" in result ? result.reason : result.status;
+
     // Record result
     await createOperatorAction(input.userId, {
       actionId: nanoid(),
-      kind: "execution_submitted",
-      status:
-        result.status === "filled" || result.status === "submitted" ? "success" : "blocked",
+      kind: "simulation_settled",
+      status: isSuccess ? "success" : "blocked",
       subject: `Execution: ${proposal.title}`,
-      detail: `Order submitted to ${backend.label}: ${result.reason || result.status}`,
+      detail: `Order submitted to ${backend.label}: ${resultReason}`,
       payload: {
         proposalId: input.proposalId,
         backend: backend.type,
@@ -165,10 +183,7 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
     });
 
     // Update proposal status
-    const nextStatus =
-      result.status === "submitted" || result.status === "filled" || result.status === "partially_filled"
-        ? "executed"
-        : "rejected";
+    const nextStatus = isSuccess ? "simulated" : "rejected";
 
     await updateAgentProposalStatus(input.userId, input.proposalId, nextStatus);
 
@@ -176,15 +191,15 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
     await createAwarenessRecord(input.userId, {
       layer: "result",
       subject: `Execution: ${proposal.title}`,
-      runId: proposal.runId,
+      runId: proposal.runId ?? undefined,
       evidence: [`backend:${backend.type}`, `status:${result.status}`, `venue:${proposal.venue}`],
-      summary: `Order submitted through ${backend.label}: ${result.reason || result.status}`,
+      summary: `Order submitted through ${backend.label}: ${resultReason}`,
     });
 
     return {
-      status: nextStatus === "executed" ? "approved" : "rejected",
+      status: isSuccess ? "approved" : "rejected",
       proposalId: input.proposalId,
-      reason: result.reason || result.status,
+      reason: resultReason,
       detail: `Execution result: ${result.status}`,
     };
   } catch (error) {
@@ -192,7 +207,7 @@ export async function executeApprovedProposal(input: ExecutionInput): Promise<Ex
 
     await createOperatorAction(input.userId, {
       actionId: nanoid(),
-      kind: "execution_failed",
+      kind: "simulation_blocked",
       status: "blocked",
       subject: `Execution failed: ${proposal.title}`,
       detail: reason,
