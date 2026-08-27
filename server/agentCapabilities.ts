@@ -80,11 +80,17 @@ export async function resolveAgentEvidence(
       const authorityState = await getAuthorityState(userId);
       const ticker = await readBinanceTicker({ symbol: "ETHUSDT", authorityState });
       if (ticker.ok) {
+        const price = Number(ticker.data.price);
+        const change24h = Number(ticker.data.change24h ?? 0);
+        const volume24h = Number(ticker.data.volume ?? 0);
+        if (!Number.isFinite(price) || !Number.isFinite(change24h) || !Number.isFinite(volume24h)) {
+          throw new Error("Public market evidence returned non-numeric values.");
+        }
         packet.market = {
           symbol: "ETHUSDT",
-          price: ticker.data.price,
-          change24h: ticker.data.change24h ?? 0,
-          volume24h: ticker.data.volume ?? 0,
+          price,
+          change24h,
+          volume24h,
           source: "Binance public ticker",
         };
       }
@@ -100,8 +106,10 @@ export async function resolveAgentEvidence(
       if (metrics) {
         packet.chain = {
           address: tokenAddress,
-          holders: metrics.holders ?? undefined,
-          totalSupply: metrics.totalSupply ?? undefined,
+          holders: metrics.token.holders ?? undefined,
+          // The selected public provider does not return a verifiable total
+          // supply field; omit it rather than inventing an on-chain fact.
+          totalSupply: undefined,
           source: "Blockscout public API",
         };
       }

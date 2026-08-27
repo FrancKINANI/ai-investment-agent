@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { roleMayUseCapability, validateCapabilityAccess } from "@shared/capabilityRegistry";
 
 function createOwnerContext(): TrpcContext {
   return {
@@ -43,5 +44,10 @@ describe("agentFabric.capabilityRegistry", () => {
     const caller = appRouter.createCaller(createOwnerContext());
     await expect(caller.agentFabric.validateCapabilityBinding({ capabilityId: "market-evidence.read", roleKeys: ["fundamental"], permission: "research-only" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.autonomy.reviewHardGate({ proposalId: "paper-proposal-1", rationale: "Evidence packet reviewed for the gate." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("does not grant an execution binding while the registry is fail-closed", () => {
+    expect(roleMayUseCapability("execution", "execution.adapter")).toBe(false);
+    expect(() => validateCapabilityAccess("execution", ["execution.adapter"])).toThrow(/not bound/i);
   });
 });

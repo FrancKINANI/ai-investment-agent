@@ -1,4 +1,4 @@
-import { boolean, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, int, json, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /** Core identity table managed by the Manus OAuth workflow. */
 export const users = mysqlTable("users", {
@@ -90,7 +90,7 @@ export const outcomeRecords = mysqlTable("outcomeRecords", {
   runId: varchar("runId", { length: 64 }),
   expectedBps: int("expectedBps").notNull(),
   realizedBps: int("realizedBps"),
-  attribution: json("attribution").$type<Record<string, number>>().notNull(),
+  attribution: json("attribution").$type<Record<string, string | number | boolean | null>>().notNull(),
   deviation: mysqlEnum("deviation", ["on_track", "underperforming", "outperforming", "inconclusive"]).default("inconclusive").notNull(),
   narrative: text("narrative").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -297,7 +297,7 @@ export const operatorActions = mysqlTable("operatorActions", {
     "platform_key_added", "platform_key_removed", "platform_key_disabled",
     "wallet_connected", "wallet_disconnected", "mode_changed",
     "authority_changed",
-    "alert_created", "alert_acknowledged",
+    "alert_created", "alert_acknowledged", "owner_note",
   ]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
@@ -350,7 +350,9 @@ export const platformApiKeys = mysqlTable("platformApiKeys", {
   secretEncrypted: varchar("secretEncrypted", { length: 512 }).notNull(),
   permissions: json("permissions").$type<string[]>().notNull(),
   hasWithdrawPermission: boolean("hasWithdrawPermission").default(false).notNull(),
-  state: mysqlEnum("state", ["active", "disabled", "testing"]).default("active").notNull(),
+  // A newly ingested credential must pass a signed read-only verification
+  // before it can be used by any signed venue request.
+  state: mysqlEnum("state", ["active", "disabled", "testing"]).default("testing").notNull(),
   maxOrderUsd: int("maxOrderUsd"),
   allocatedCapitalUsd: int("allocatedCapitalUsd"),
   dailyTradeLimit: int("dailyTradeLimit"),
@@ -416,6 +418,39 @@ export const executionLedger = mysqlTable("executionLedger", {
 });
 
 export type ExecutionLedgerEvent = typeof executionLedger.$inferSelect;
+
+/**
+ * A single writer reservation for a live venue order. This is intentionally
+ * separate from the append-only ledger: the unique key is acquired before any
+ * external request, closing the concurrent read-then-submit race.
+ */
+export const liveOrderIntents = mysqlTable("liveOrderIntents", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  orderHash: varchar("orderHash", { length: 128 }).notNull(),
+  status: mysqlEnum("status", ["reserved", "submitted", "filled", "rejected"]).default("reserved").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("live_order_intent_user_idempotency_unique").on(table.userId, table.idempotencyKey),
+]);
+
+export type LiveOrderIntent = typeof liveOrderIntents.$inferSelect;
+
+/** Atomic, per-owner daily risk budget reserved before a live venue call. */
+export const liveDailyRiskBuckets = mysqlTable("liveDailyRiskBuckets", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  dayKey: varchar("dayKey", { length: 10 }).notNull(),
+  // MySQL INT would overflow around $21.47m when values are stored as cents.
+  // BIGINT preserves fixed-unit arithmetic for the configured policy ranges.
+  reservedNotionalCents: bigint("reservedNotionalCents", { mode: "number" }).default(0).notNull(),
+  reservedTradeCount: int("reservedTradeCount").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("live_daily_risk_user_day_unique").on(table.userId, table.dayKey),
+]);
 
 /** Current derived order state (projection of ledger events). Mutable projection, source of truth is the ledger. */
 export const paperOrders = mysqlTable("paperOrders", {

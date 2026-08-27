@@ -43,8 +43,19 @@ export const capabilityManifestSchema = z.object({
 export type CapabilityRegistry = z.infer<typeof capabilityManifestSchema>;
 export type CapabilityBindingDraft = z.infer<typeof bindingSchema>;
 
+function bindingRespectsBoundary(
+  registry: CapabilityRegistry,
+  binding: CapabilityBindingDraft,
+  capability: { scopes: string[] },
+) {
+  if (binding.permission === "execution") return false;
+  if (capability.scopes.includes("proposal.write") && binding.permission !== "simulation-only") return false;
+  return registry.executionBoundary === "simulation-only" || registry.executionBoundary === "fail-closed";
+}
+
 export const capabilityBindingDraftSchema = bindingSchema.extend({
   roleKeys: z.array(z.string().regex(/^[a-z0-9_-]+$/)).min(1).max(64),
+  permission: z.enum(["research-only", "simulation-only"]),
 });
 
 export type CapabilityProvenance = {
@@ -93,7 +104,7 @@ export function roleMayUseCapability(roleKey: string, capabilityId: string) {
   const registry = loadCapabilityRegistry();
   const capability = capabilitiesById().get(capabilityId);
   if (!capability || capability.state !== "active") return false;
-  return registry.bindings.some((binding) => binding.capabilityId === capabilityId && binding.roleKeys.includes(roleKey));
+  return registry.bindings.some((binding) => binding.capabilityId === capabilityId && binding.roleKeys.includes(roleKey) && bindingRespectsBoundary(registry, binding, capability));
 }
 
 export function assertRoleMayUseCapability(roleKey: string, capabilityId: string) {
@@ -182,7 +193,7 @@ export function validateCapabilityAccess(roleKey: string, requiredCapabilities: 
       throw new Error(`Capability ${capId} (${capability.label}) is not active.`);
     }
     const hasBinding = registry.bindings.some(
-      (binding) => binding.capabilityId === capId && binding.roleKeys.includes(roleKey)
+      (binding) => binding.capabilityId === capId && binding.roleKeys.includes(roleKey) && bindingRespectsBoundary(registry, binding, capability)
     );
     if (!hasBinding) {
       throw new Error(`Role ${roleKey} is not bound to capability ${capId}.`);

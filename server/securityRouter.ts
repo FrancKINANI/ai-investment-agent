@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router, sensitiveProcedure } from "./_core/trpc";
 import {
   createSecurityAlert,
   listSecurityAlerts,
@@ -18,14 +18,8 @@ import {
 
 // ─── Schemas ──────────────────────────────────────────────────────────────
 
-const alertLevelSchema = z.enum(["critical", "warning", "info"]);
-
-const createAlertSchema = z.object({
-  level: alertLevelSchema,
-  category: z.string().trim().min(2).max(80),
-  title: z.string().trim().min(4).max(160),
+const createOwnerSecurityNoteSchema = z.object({
   detail: z.string().trim().min(4).max(2000),
-  actionRef: z.string().trim().max(64).optional(),
 });
 
 /**
@@ -79,14 +73,17 @@ export const securityRouter = router({
   alerts: router({
     list: protectedProcedure.query(({ ctx }) => listSecurityAlerts(ctx.user.id)),
     unacknowledgedCount: protectedProcedure.query(({ ctx }) => countUnacknowledgedAlerts(ctx.user.id)),
-    create: protectedProcedure.input(createAlertSchema).mutation(async ({ ctx, input }) => {
+    create: sensitiveProcedure.input(createOwnerSecurityNoteSchema).mutation(async ({ ctx, input }) => {
       const alert = await createSecurityAlert(ctx.user.id, {
         alertId: nanoid(),
-        ...input,
+        level: "info",
+        category: "owner-note",
+        title: "Owner security note",
+        detail: `Owner-asserted note; not an authoritative security event: ${input.detail}`,
       });
       return alert;
     }),
-    acknowledge: protectedProcedure.input(z.object({ alertId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+    acknowledge: sensitiveProcedure.input(z.object({ alertId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
       const updated = await acknowledgeSecurityAlert(ctx.user.id, input.alertId);
       if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Alert not found." });
       return updated;
@@ -96,7 +93,7 @@ export const securityRouter = router({
   // ── Platform API Keys ─────────────────────────────────────────────────
   platforms: router({
     listKeys: protectedProcedure.query(({ ctx }) => listPlatformApiKeys(ctx.user.id)),
-    addKey: protectedProcedure.input(addApiKeySchema).mutation(async ({ ctx, input }) => {
+    addKey: sensitiveProcedure.input(addApiKeySchema).mutation(async ({ ctx, input }) => {
       // Hard-reject withdrawal authority. Never stored, never "saved with alert".
       if (input.hasWithdrawPermission) {
         await createSecurityAlert(ctx.user.id, {
@@ -148,7 +145,7 @@ export const securityRouter = router({
 
       return key;
     }),
-    testConnection: protectedProcedure.input(z.object({ keyId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+    testConnection: sensitiveProcedure.input(z.object({ keyId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
       const key = await getPlatformApiKey(ctx.user.id, input.keyId);
       if (!key) throw new TRPCError({ code: "NOT_FOUND", message: "API key not found." });
 
@@ -185,7 +182,7 @@ export const securityRouter = router({
     }),
 
     /** Rotation: replace key material in place; old secrets are overwritten atomically. */
-    rotate: protectedProcedure.input(z.object({
+    rotate: sensitiveProcedure.input(z.object({
       keyId: z.string().trim().min(1).max(64),
       apiKey: z.string().trim().min(8).max(200),
       apiSecret: z.string().trim().min(8).max(200),
@@ -211,7 +208,7 @@ export const securityRouter = router({
       });
       return updated;
     }),
-    disable: protectedProcedure.input(z.object({ keyId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+    disable: sensitiveProcedure.input(z.object({ keyId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
       const key = await getPlatformApiKey(ctx.user.id, input.keyId);
       if (!key) throw new TRPCError({ code: "NOT_FOUND", message: "API key not found." });
       const updated = await updatePlatformApiKeyState(ctx.user.id, input.keyId, "disabled");
@@ -225,7 +222,7 @@ export const securityRouter = router({
       });
       return updated;
     }),
-    delete: protectedProcedure.input(z.object({ keyId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+    delete: sensitiveProcedure.input(z.object({ keyId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
       const key = await deletePlatformApiKey(ctx.user.id, input.keyId);
       if (!key) throw new TRPCError({ code: "NOT_FOUND", message: "API key not found." });
       await createOperatorAction(ctx.user.id, {
@@ -238,7 +235,7 @@ export const securityRouter = router({
       });
       return key;
     }),
-    updateLimits: protectedProcedure.input(updateLimitsSchema).mutation(async ({ ctx, input }) => {
+    updateLimits: sensitiveProcedure.input(updateLimitsSchema).mutation(async ({ ctx, input }) => {
       const key = await getPlatformApiKey(ctx.user.id, input.keyId);
       if (!key) throw new TRPCError({ code: "NOT_FOUND", message: "API key not found." });
       const updated = await updatePlatformApiKeyLimits(ctx.user.id, input.keyId, {

@@ -86,7 +86,13 @@ export class McpServerManager {
    * Does NOT spawn any processes — call startAll() explicitly.
    */
   initialize(featureFlags: { mcpActivation: boolean }): void {
-    this.mcpActivation = featureFlags.mcpActivation;
+    // This build intentionally has no approved MCP execution environment.
+    // Never turn this into an environment/configuration toggle: such a toggle
+    // could re-enable process execution or SSRF without a security release.
+    this.mcpActivation = false;
+    if (featureFlags.mcpActivation) {
+      throw new Error("MCP activation is sealed in this fail-closed Ledgerline build.");
+    }
     const config = this.loadConfig();
 
     for (const server of config.servers) {
@@ -379,7 +385,21 @@ export class McpServerManager {
    */
   private loadConfig() {
     const raw = loadYamlFile("capabilities/mcp-servers.yaml");
-    return mcpConfigFileSchema.parse(raw);
+    const config = mcpConfigFileSchema.parse(raw);
+    for (const server of config.servers) {
+      if (
+        server.state !== "disabled"
+        || server.registration !== "declarative-only"
+        || server.transport !== "not-configured"
+        || server.command
+        || server.args?.length
+        || server.url
+        || (server.env && Object.keys(server.env).length > 0)
+      ) {
+        throw new Error(`MCP server ${server.id} is not permitted in this sealed build.`);
+      }
+    }
+    return config;
   }
 }
 
