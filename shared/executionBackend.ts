@@ -96,6 +96,9 @@ export interface ExecutionBackendRegistry {
   /** Get the active backend for this deployment */
   active(): ExecutionBackend;
 
+  /** Select an already registered backend. Venue mutations remain governed by their own fail-closed boundary. */
+  setActive(type: ExecutionBackendType): void;
+
   /** Register a backend (for testing or dynamic config) */
   register(backend: ExecutionBackend): void;
 }
