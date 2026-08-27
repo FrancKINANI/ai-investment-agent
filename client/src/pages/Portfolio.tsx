@@ -1,0 +1,15 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
+import { ArrowRight, Landmark, LockKeyhole, ShieldCheck, WalletCards } from "lucide-react";
+import { useLocation } from "wouter";
+
+export default function Portfolio() {
+  const { isAuthenticated } = useAuth();
+  const navigate = useLocation()[1];
+  const connectionsQuery = trpc.autonomy.connections.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const policyQuery = trpc.policy.current.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const connections = connectionsQuery.data ?? [];
+
+  return <div className="mission-subpage"><header className="mission-subpage-header"><span className="mission-kicker"><WalletCards size={14} /> PORTFOLIO POSTURE</span><h1>Account context,<br /><em>without pretending.</em></h1><p>Ledgerline distinguishes simulated records, configured connections, and independently verified account data. It never invents a balance or implies trade authority.</p></header>{!isAuthenticated ? <section className="mission-auth-card"><LockKeyhole size={20} /><div><strong>Sign in to view portfolio posture.</strong><span>Connection and policy records are private to the owner.</span></div><Button onClick={() => navigate("/chat")}>Sign in</Button></section> : <><section className="mission-posture-detail"><article><Landmark size={19} /><span>CONFIGURED CONNECTIONS</span><strong>{connections.length}</strong><small>{connections.length ? "Connection records are listed below. Balance retrieval belongs to a future verified read-only integration." : "No venue has been connected."}</small></article><article><ShieldCheck size={19} /><span>AUTHORITY</span><strong>Simulation · sealed</strong><small>No connection in this release grants wallet signing, withdrawal, custody, or venue mutation authority.</small></article><article><WalletCards size={19} /><span>POLICY CONTEXT</span><strong>{policyQuery.data ? `IPS v${policyQuery.data.version}` : "No active IPS"}</strong><small>{policyQuery.data ? policyQuery.data.name : "Create an Investment Policy Statement before paper proposals can advance."}</small></article></section><section className="mission-connection-list"><header><div><span className="mission-label">VENUE RECORDS</span><h2>Configured, not assumed</h2></div><Button variant="outline" onClick={() => navigate("/settings")}>Configure <ArrowRight size={14} /></Button></header>{connectionsQuery.isLoading ? <p className="mission-quiet-empty">Loading connection records…</p> : connections.length ? connections.map((connection) => <article key={connection.connectionId}><span><Landmark size={16} /></span><div><strong>{connection.venue}</strong><small>{connection.state} · {connection.capabilities.join(", ")}</small></div><em>Simulation record</em></article>) : <div className="mission-quiet-empty"><WalletCards size={18} /> No account is connected. Configure a venue only when its read-only scope and revocation path are clear.</div>}</section></>}</div>;
+}
