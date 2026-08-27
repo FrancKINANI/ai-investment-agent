@@ -326,6 +326,47 @@ export async function createOutcomeRecord(userId: number, record: {
 
 // ─── Security Alerts ───────────────────────────────────────────────────────
 
+function isMissingSecurityAlertsTable(error: unknown) {
+  const queue = [error];
+
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (!candidate || typeof candidate !== "object") continue;
+
+    const databaseError = candidate as {
+      code?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+
+    if (databaseError.code === "ER_NO_SUCH_TABLE") return true;
+
+    if (
+      typeof databaseError.message === "string" &&
+      /(?:unknown table|doesn't exist).*securityAlerts|securityAlerts.*(?:unknown table|doesn't exist)/i.test(databaseError.message)
+    ) {
+      return true;
+    }
+
+    if (databaseError.cause) queue.push(databaseError.cause);
+  }
+
+  return false;
+}
+
+export async function readSecurityAlertsOrFallback<T>(
+  read: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    if (!isMissingSecurityAlertsTable(error)) throw error;
+
+    console.warn("[Security alerts] Alert table is unavailable; returning an empty owner-scoped result.");
+    return fallback;
+  }
+}
 
 export async function createSecurityAlert(userId: number, alert: {
   alertId: string;
@@ -345,7 +386,10 @@ export async function createSecurityAlert(userId: number, alert: {
 export async function listSecurityAlerts(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(securityAlerts).where(eq(securityAlerts.userId, userId)).orderBy(desc(securityAlerts.createdAt)).limit(100);
+  return readSecurityAlertsOrFallback(
+    () => db.select().from(securityAlerts).where(eq(securityAlerts.userId, userId)).orderBy(desc(securityAlerts.createdAt)).limit(100),
+    [],
+  );
 }
 
 export async function acknowledgeSecurityAlert(userId: number, alertId: string) {
@@ -359,7 +403,10 @@ export async function acknowledgeSecurityAlert(userId: number, alertId: string) 
 export async function countUnacknowledgedAlerts(userId: number) {
   const db = await getDb();
   if (!db) return 0;
-  const result = await db.select().from(securityAlerts).where(and(eq(securityAlerts.userId, userId), eq(securityAlerts.acknowledged, false)));
+  const result = await readSecurityAlertsOrFallback(
+    () => db.select().from(securityAlerts).where(and(eq(securityAlerts.userId, userId), eq(securityAlerts.acknowledged, false))),
+    [],
+  );
   return result.length;
 }
 
