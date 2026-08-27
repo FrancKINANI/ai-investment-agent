@@ -21,7 +21,7 @@ import { researchRequestSchema, runTokenResearch } from "./research";
 import { calculateResearchNoteConfidence, composeFundManagerDisagreementSummary, composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
 import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
-import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft } from "@shared/capabilityRegistry";
+import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft, validateCapabilityAccess, createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { getPhase0ConfigurationSummary } from "./phase0Config";
 import { findTeamRole, loadAgentTeam } from "@shared/agentTeam";
 
@@ -227,6 +227,25 @@ export const appRouter = router({
       const threadHistory = await listAgentMessages(ctx.user.id, threadId);
       const history = threadHistory.map((message) => ({ actor: message.actor, content: message.content }));
       const delegatedAgents = defaultDelegation.map((roleKey) => nodes.find((node) => node.roleKey === roleKey)).filter((agent): agent is NonNullable<typeof agent> => Boolean(agent));
+      
+      // Slice 2: Verify each delegated agent has access to required capabilities
+      const usedCapabilities = new Set<string>();
+      for (const agent of delegatedAgents) {
+        try {
+          const agentCapabilities = validateCapabilityAccess(agent.roleKey, ["market-evidence.read"]);
+          agentCapabilities.forEach((cap) => usedCapabilities.add(cap));
+          if (["onchain", "fundamental", "bull", "bear"].includes(agent.roleKey)) {
+            const chainCaps = validateCapabilityAccess(agent.roleKey, ["chain-evidence.read"]);
+            chainCaps.forEach((cap) => usedCapabilities.add(cap));
+          }
+        } catch (error) {
+          throw new TRPCError({ 
+            code: "FORBIDDEN", 
+            message: `Agent ${agent.name} cannot be delegated: ${error instanceof Error ? error.message : "capability check failed"}`
+          });
+        }
+      }
+      
       for (const agent of delegatedAgents) await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "delegated", summary: `${agent.name} was delegated a bounded research perspective.`, evidence: ["supervisor-delegation", `model:${agent.model}`, "execution-sealed"] });
       const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, output: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history }) })));
       const specialistReports: { role: string; name: string; output: string; confidence?: number }[] = [];
@@ -334,6 +353,9 @@ export const appRouter = router({
       const variationAgent = findTeamRole("variation");
       const researchModel = variationAgent?.model ?? loadAgentTeam().defaultModel;
       
+      // Slice 2: Verify variation agent has research capabilities
+      const researchCapabilities = validateCapabilityAccess("variation", ["market-evidence.read", "chain-evidence.read"]);
+      
       const research = await runTokenResearch(input, policy, ctx.user.id, { model: researchModel });
       const runId = nanoid();
       const runStatus = research.advancement.status === "allowed" ? "passed" : research.advancement.status;
@@ -351,13 +373,14 @@ export const appRouter = router({
         summary: research.report.headline,
         evidence,
       });
+      const capabilityProvenance = createCapabilityProvenance(researchCapabilities);
       await createOperatorAction(ctx.user.id, {
         actionId: nanoid(),
         kind: "research_completed",
         status: research.advancement.status === "allowed" ? "success" : research.advancement.status,
         subject: `Research report: ${research.evidence.asset.symbol}`,
         detail: "The owner requested an evidence-bound, simulation-only token research report.",
-        payload: { runId, question: input.question, policy: research.policy, advancement: research.advancement, evidence: research.evidence, report: research.report },
+        payload: { runId, question: input.question, policy: research.policy, advancement: research.advancement, evidence: research.evidence, report: research.report, capabilityProvenance },
       });
       await createAwarenessRecord(ctx.user.id, {
         layer: "justification",
