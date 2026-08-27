@@ -100,7 +100,7 @@ Proceed to Phase 1 after owner validates this report. Proposed order stays as sp
 - `server/routers.ts` wired: variation agent model read from team.yaml instead of hardcoded "gpt-5-mini"
 - `scripts/ledgerline.mjs` enhanced: `ledgerline agents list [--layer LAYER] [--enabled-only]` CLI command
 - S1 audit finding **FIXED**: `server/research.ts` now calls `getAuthorityState(userId)` and passes real `ownerPauseActive` value to decision kernel
-- `config/default.yaml` executionBoundary changed from "simulation-only" to "fail-closed"
+- `config/default.yaml` executionBoundary changed from "fail-closed" to "fail-closed"
 
 **Tests:**
 - ✅ All 13 agents load with correct models, capabilities, and enabled status
@@ -169,7 +169,7 @@ Proceed to Phase 1 after owner validates this report. Proposed order stays as sp
 	- Authority ceiling mapping (paper can use from any state; CEX/onchain require higher authority)
 
 7. ✅ **Documentation Updates**
-	- [README.md] rewritten: "simulation-only" → "real, owner-controlled OS with pluggable backends"
+	- [README.md] rewritten: "fail-closed" → "real, owner-controlled OS with pluggable backends"
 	- Architecture diagram showing unified pipeline + swappable backends
 	- Configuration-driven control explained (agents, bindings, backends all YAML)
 	- Phase roadmap added: Phase 0-1 (OS layer), Phase 2 (CEX), Phase 3 (on-chain)

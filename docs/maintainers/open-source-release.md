@@ -16,4 +16,4 @@ Before making the repository public, search the complete history and current tre
 
 ## Release posture
 
-Production deployment should inject secrets only through the host environment. Use the default simulation-only configuration, keep discovery schedules inactive until a documented owner action, and retain the server-side real-mandate block. Contributors should never add secrets, real balances, fabricated trades, or credential handling to fixtures or examples.
+Production deployment should inject secrets only through the host environment. Use the default fail-closed configuration, keep discovery schedules inactive until a documented owner action, and retain the server-side real-mandate block. Contributors should never add secrets, real balances, fabricated trades, or credential handling to fixtures or examples.

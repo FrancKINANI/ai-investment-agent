@@ -8,7 +8,7 @@ The application must not accept, retain, reveal, or derive wallet seed phrases, 
 
 ## Permitted capabilities
 
-Ledgerline may read public evidence, persist owner-scoped policy and research records, create simulation-only proposal states, record immutable activity, render capability boundaries, manage encrypted platform API keys, surface security alerts, connect wallets via WalletConnect v2, execute on-chain transactions via Sailor mandates, and trade on CEXs via encrypted API keys.
+Ledgerline may read public evidence, persist owner-scoped policy and research records, create fail-closed proposal states, record immutable activity, render capability boundaries, manage encrypted platform API keys, surface security alerts, connect wallets via WalletConnect v2, execute on-chain transactions via Sailor mandates, and trade on CEXs via encrypted API keys.
 
 ## KMS — Key Management Service
 

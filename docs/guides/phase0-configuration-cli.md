@@ -1,6 +1,6 @@
 # Safe Phase 0 Configuration and CLI
 
-Ledgerline’s Phase 0 configuration makes the current **simulation-only** posture inspectable without converting configuration into financial authority. The YAML documents under `config/` are versioned project configuration: they are not a secret store, connection profile, credential vault, or execution recipe.
+Ledgerline’s Phase 0 configuration makes the current **fail-closed** posture inspectable without converting configuration into financial authority. The YAML documents under `config/` are versioned project configuration: they are not a secret store, connection profile, credential vault, or execution recipe.
 
 > **Phase 0 boundary:** all declared MCP servers are disabled and declarative only. The CLI never launches a local command, contacts an MCP endpoint, stores a token, signs a message, connects a wallet, or sends a market order.
 
@@ -33,7 +33,7 @@ pnpm ledgerline mcp list
 pnpm ledgerline doctor
 ```
 
-All commands print read-only JSON. `pnpm ledgerline doctor` summarizes YAML parsing, the simulation-only boundary, disabled authority flags, declarative MCP posture, static research sources, and protected bindings. It does not open a network connection, invoke an MCP server, mutate configuration, or grant authority. The command intentionally refuses unsupported mutating verbs such as `mcp add`, `mcp enable`, `bind`, `unbind`, `flags enable`, `venues enable`, or any execution command.
+All commands print read-only JSON. `pnpm ledgerline doctor` summarizes YAML parsing, the fail-closed boundary, disabled authority flags, declarative MCP posture, static research sources, and protected bindings. It does not open a network connection, invoke an MCP server, mutate configuration, or grant authority. The command intentionally refuses unsupported mutating verbs such as `mcp add`, `mcp enable`, `bind`, `unbind`, `flags enable`, `venues enable`, or any execution command.
 
 ## Binding-change approval workflow
 

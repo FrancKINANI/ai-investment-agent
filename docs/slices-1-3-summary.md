@@ -188,7 +188,7 @@ backends:
 - Change `active: paper` → `active: cex` to swap backends (Phase 2)
 
 **7. Documentation Overhaul**
-- **[README.md]** rewritten: "simulation-only" → "real, owner-controlled OS with pluggable backends"
+- **[README.md]** rewritten: "fail-closed" → "real, owner-controlled OS with pluggable backends"
 - Architecture diagram shows unified pipeline + swappable backends
 - Configuration-driven control section explains agent/binding/backend YAML
 - Phase roadmap: Phase 0-1 (OS layer), Phase 2 (CEX), Phase 3 (on-chain)

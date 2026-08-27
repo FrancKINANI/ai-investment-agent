@@ -58,7 +58,7 @@ pnpm build
 
 ## First safe workflow
 
-1. Open **Command** and read the simulation-only authority strip.
+1. Open **Command** and read the fail-closed authority strip.
 2. Open **Settings** to review protected agent routes, optional specialists, and inactive discovery schedules. Changing a model route does not add a tool scope or financial authority.
 3. Use **Chat** to give the supervisor a research brief. Bull and Bear views are evidence discussion, not trade instructions.
 4. Create a watchlist in **Command** and use the Evidence Lab only with a valid public Ethereum contract address.
