@@ -47,21 +47,41 @@ const rateLimitMiddleware = t.middleware(async opts => {
   return next({ ctx });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser).use(rateLimitMiddleware);
+/**
+ * LL-SEC-008 FIX: Admin middleware that revalidates role from DB.
+ * Prevents stale admin role if revoked mid-session.
+ */
+const requireAdminFresh = t.middleware(async opts => {
+  const { ctx, next } = opts;
 
-export const adminProcedure = t.procedure.use(
-  t.middleware(async opts => {
-    const { ctx, next } = opts;
+  if (!ctx.user || ctx.user.role !== 'admin') {
+    throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+  }
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
-      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+  // Re-fetch user from DB to catch mid-session role revocation
+  try {
+    const { getUserByOpenId } = await import("../db");
+    const freshUser = await getUserByOpenId(ctx.user.openId);
+    if (!freshUser || freshUser.role !== 'admin') {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Admin role has been revoked. Please sign in again." });
     }
-
     return next({
       ctx: {
         ...ctx,
-        user: ctx.user,
+        user: freshUser,
       },
     });
-  }),
-).use(rateLimitMiddleware);
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    // If DB is unavailable, fail closed — don't grant admin
+    throw new TRPCError({ code: "FORBIDDEN", message: "Unable to verify admin role. Please try again." });
+  }
+});
+
+export const protectedProcedure = t.procedure.use(requireUser).use(rateLimitMiddleware);
+
+/**
+ * Admin procedure: revalidates role from DB on every call (LL-SEC-008).
+ * Use for critical operations: approval, authority transitions, binding changes.
+ */
+export const adminProcedure = t.procedure.use(requireUser).use(rateLimitMiddleware).use(requireAdminFresh);

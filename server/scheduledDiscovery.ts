@@ -13,7 +13,19 @@ function runBucket(cadence: "daily" | "six_hour") {
 
 export async function scheduledDiscoveryHandler(req: Request, res: Response) {
   try {
-    const caller = await sdk.authenticateRequest(req);
+    let caller;
+    try {
+      caller = await sdk.authenticateRequest(req);
+    } catch (authError) {
+      // LL-SEC-009 FIX: If OAuth is down, return 503 instead of 500
+      // so the scheduler retries instead of giving up permanently.
+      const msg = authError instanceof Error ? authError.message : "unknown";
+      if (msg.includes("ECONNREFUSED") || msg.includes("ETIMEDOUT") || msg.includes("timeout") || msg.includes("fetch")) {
+        console.error("[Scheduled discovery] OAuth server unavailable:", msg);
+        return res.status(503).json({ error: "oauth-unavailable", retryable: true });
+      }
+      throw authError;
+    }
     if (!caller.isCron || !caller.taskUid) return res.status(403).json({ error: "cron-only" });
     const schedule = await getDiscoveryScheduleByTaskUid(caller.taskUid);
     if (!schedule || !schedule.enabled) return res.json({ ok: true, skipped: "orphan-or-paused" });
