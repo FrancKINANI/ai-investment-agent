@@ -1,5 +1,5 @@
 # ─── Stage 1: Dependencies ─────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
@@ -13,7 +13,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # ─── Stage 2: Build ───────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
@@ -34,7 +34,7 @@ RUN pnpm build
 RUN pnpm prune --prod
 
 # ─── Stage 3: Production ──────────────────────────────────────────────────
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
