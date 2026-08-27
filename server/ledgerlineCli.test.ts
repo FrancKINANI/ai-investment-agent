@@ -16,13 +16,23 @@ describe("ledgerline Phase 0 CLI", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ valid: true, executionBoundary: "fail-closed", activeMcpServers: 0 });
   });
 
-  it("lists declarative disabled MCP entries but refuses mutation or activation verbs", () => {
+  it("lists declarative disabled MCP entries and reports status", () => {
     const listed = run("mcp", "list");
-    const refused = run("mcp", "enable", "sailor");
+    const status = run("mcp", "status");
     expect(listed.status).toBe(0);
     expect(JSON.parse(listed.stdout)).toEqual(expect.arrayContaining([expect.objectContaining({ id: "sailor", state: "disabled", registration: "declarative-only" })]));
+    expect(status.status).toBe(0);
+    const statusReport = JSON.parse(status.stdout);
+    expect(statusReport).toMatchObject({ mcpActivation: false });
+  });
+
+  it("refuses MCP activation and start commands when feature flag is off", () => {
+    const refused = run("mcp", "enable", "sailor");
+    const startRefused = run("mcp", "start");
     expect(refused.status).toBe(1);
-    expect(refused.stderr).toContain("inspection-only commands");
+    expect(refused.stderr).toContain("supported commands");
+    expect(startRefused.status).toBe(1);
+    expect(startRefused.stderr).toContain("MCP activation is disabled");
   });
 
   it("reports a complete read-only diagnostic without changing configuration or authority", () => {
@@ -31,6 +41,6 @@ describe("ledgerline Phase 0 CLI", () => {
     const report = JSON.parse(result.stdout);
     expect(report).toMatchObject({ healthy: true, executionBoundary: "fail-closed" });
     expect(report.checks).toEqual(expect.arrayContaining([expect.objectContaining({ id: "authority-flags", status: "pass" }), expect.objectContaining({ id: "mcp-declarations", status: "pass" })]));
-    expect(report.note).toContain("never opens a network connection");
+    expect(report.note).toContain("No MCP processes are spawned");
   });
 });
