@@ -10,7 +10,7 @@ export const localOverlaySchema = z.object({
   bindings: z.array(z.object({
     capabilityId: z.string(),
     roleKeys: z.array(z.string()).min(1),
-    permission: z.enum(["research-only", "simulation-only", "execution"]),
+    permission: z.enum(["research-only", "simulation-only"]),
   })).optional(),
   mcpActivation: z.boolean().optional(),
 });
@@ -20,7 +20,15 @@ export type LocalOverlay = z.infer<typeof localOverlaySchema>;
 export function loadLocalOverlay(): LocalOverlay {
   const raw = tryLoadYamlFile("local.yaml");
   if (raw == null) return {};
-  return localOverlaySchema.parse(raw);
+  const overlay = localOverlaySchema.parse(raw);
+  const attemptsActivation = overlay.mcpActivation === true
+    || overlay.featureFlags?.liveExecution === true
+    || overlay.featureFlags?.cexExecution === true
+    || overlay.featureFlags?.mcpActivation === true;
+  if (attemptsActivation) {
+    throw new Error("Local configuration cannot activate execution, MCP, or execution-permission bindings in a fail-closed Ledgerline build.");
+  }
+  return overlay;
 }
 
 export function writeLocalOverlay(overlay: LocalOverlay) {
@@ -32,7 +40,7 @@ export function writeLocalOverlay(overlay: LocalOverlay) {
 export function upsertOverlayBinding(binding: {
   capabilityId: string;
   roleKeys: string[];
-  permission: "research-only" | "simulation-only" | "execution";
+  permission: "research-only" | "simulation-only";
 }) {
   const current = loadLocalOverlay();
   const bindings = [...(current.bindings ?? []).filter((item) => item.capabilityId !== binding.capabilityId), binding];

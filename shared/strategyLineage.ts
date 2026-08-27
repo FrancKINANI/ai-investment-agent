@@ -137,7 +137,7 @@ export function suggestChildLineage(
  */
 export function shouldPromote(
   currentStage: LineageStage,
-  health: { passRate: number; avgDeviation: number; recommendation: string },
+  health: { passRate: number; avgDeviation: number; recommendation: string; reason: string },
 ): { promote: boolean; nextStage?: LineageStage; reason: string } {
   if (health.recommendation === "retire") {
     return { promote: true, nextStage: "retired", reason: health.reason };

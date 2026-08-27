@@ -101,7 +101,7 @@ export function isBlockedByDominantState(state: AuthorityState): boolean {
 export class AuthorityBlockedError extends Error {
   constructor(
     public readonly state: AuthorityState,
-    public readonly action: "place-order" | "read-live",
+    public readonly action: "place-order" | "cancel-order" | "read-live",
     message?: string,
   ) {
     super(message ?? `Authority blocked: state "${state}" does not permit ${action}.`);
@@ -111,13 +111,13 @@ export class AuthorityBlockedError extends Error {
 
 export function assertAuthorityAllows(
   state: AuthorityState,
-  action: "place-order" | "read-live",
+  action: "place-order" | "cancel-order" | "read-live",
 ): void {
   if (isBlockedByDominantState(state)) {
     throw new AuthorityBlockedError(state, action, `Authority state "${state}" blocks all ${action} activity (dominant state).`);
   }
-  if (action === "place-order" && !canPlaceOrders(state)) {
-    throw new AuthorityBlockedError(state, action, `Authority state "${state}" does not permit order placement.`);
+  if ((action === "place-order" || action === "cancel-order") && !canPlaceOrders(state)) {
+    throw new AuthorityBlockedError(state, action, `Authority state "${state}" does not permit ${action}.`);
   }
   if (action === "read-live" && !canReadLive(state)) {
     throw new AuthorityBlockedError(state, action, `Authority state "${state}" does not permit live reads.`);

@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router, sensitiveProcedure } from "./_core/trpc";
 import { changeAuthorityState, getAuthorityState } from "./db";
 import {
   AUTHORITY_STATE_LABELS,
@@ -37,7 +37,7 @@ export const authorityRouter = router({
   }),
 
   /** Owner-initiated transition (kill switch = transition to "paused" or "revoked"). */
-  transition: protectedProcedure.input(transitionSchema).mutation(async ({ ctx, input }) => {
+  transition: sensitiveProcedure.input(transitionSchema).mutation(async ({ ctx, input }) => {
     // Only the owner acts on their own authority record; agents have no route here.
     const result = await changeAuthorityState(ctx.user.id, input.to, input.initiatedBy || ctx.user.id.toString(), input.reason);
     if (!result.ok) {

@@ -23,12 +23,13 @@ import {
   type BinanceTimeInForce,
 } from "./binance";
 import { decryptSecret } from "./kms";
-import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval } from "./db";
+import { getAuthorityState, getPlatformApiKey, createOperatorAction, createSecurityAlert, consumeLiveOrderApproval, listWalletMandates, claimLiveOrderIntent, reserveLiveDailyRisk, updateLiveOrderIntentStatus } from "./db";
 import { assertAuthorityAllows, AuthorityBlockedError } from "@shared/authorityState";
 import { reconcileLiveExecution, liveOrderApprovalHash, type LegacyMandateMode } from "@shared/mandateAuthority";
 import { ledgerSeq } from "@shared/paperExecution";
 import { readBinanceTicker } from "./liveData";
 import { getLiveOrderByIdempotencyKey, appendLedgerEvent } from "./db";
+import { assertLiveVenueMutationAllowed } from "./liveExecutionBoundary";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,16 @@ export type MandateCheck = {
   mode?: string;
 };
 
+function getOrderNotionalUsd(order: LiveOrderRequest): number | null {
+  if (Number.isFinite(order.quoteOrderQty) && (order.quoteOrderQty ?? 0) > 0) {
+    return order.quoteOrderQty!;
+  }
+  if (Number.isFinite(order.price) && (order.price ?? 0) > 0 && Number.isFinite(order.quantity) && (order.quantity ?? 0) > 0) {
+    return order.price! * order.quantity!;
+  }
+  return null;
+}
+
 // ─── Safety Guards ────────────────────────────────────────────────────────
 
 /**
@@ -114,44 +125,62 @@ export function checkMandateAllowance(
   }
 
   // Check asset allowance
-  const baseAsset = order.symbol.replace(/(USDT|BUSD|USD|BTC|ETH)$/, "");
-  if (mandate.allowedAssets.length > 0 && !mandate.allowedAssets.some((a) => a.toUpperCase().includes(baseAsset.toUpperCase()))) {
+  const normalizedSymbol = order.symbol.trim().toUpperCase();
+  const baseAsset = normalizedSymbol.replace(/(USDT|BUSD|USD|BTC|ETH)$/, "");
+  if (mandate.allowedAssets.length > 0 && !mandate.allowedAssets.some((asset) => {
+    const allowed = asset.trim().toUpperCase();
+    return allowed === normalizedSymbol || allowed === baseAsset;
+  })) {
     return { allowed: false, reason: `Asset "${baseAsset}" is not in the allowed assets list.`, mandateId: mandate.mandateId };
   }
 
-  // Calculate order value in basis points of account balance
-  let orderValueUsd = 0;
-  if (order.quoteOrderQty && accountBalanceUsd > 0) {
-    orderValueUsd = order.quoteOrderQty;
-  } else if (order.price && order.quantity) {
-    orderValueUsd = order.price * order.quantity;
+  if (!Number.isFinite(accountBalanceUsd) || accountBalanceUsd <= 0) {
+    return { allowed: false, reason: "A verified positive account balance is required before a live order can be evaluated.", mandateId: mandate.mandateId };
   }
 
-  if (orderValueUsd > 0 && accountBalanceUsd > 0) {
-    const orderBps = Math.round((orderValueUsd / accountBalanceUsd) * 10_000);
+  const orderValueUsd = getOrderNotionalUsd(order);
+  if (orderValueUsd === null || !Number.isFinite(orderValueUsd) || orderValueUsd <= 0) {
+    return { allowed: false, reason: "A verified positive USD order value is required before a live order can be evaluated.", mandateId: mandate.mandateId };
+  }
 
-    // Check per-order limit
-    if (orderBps > mandate.maxOrderBps) {
-      return {
-        allowed: false,
-        reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate max ${mandate.maxOrderBps}bps per order.`,
-        mandateId: mandate.mandateId,
-      };
-    }
+  const orderBps = Math.round((orderValueUsd / accountBalanceUsd) * 10_000);
 
-    // Check daily cap (accumulated orders today vs dailyCapBps)
-    // ponytail: In production, query today's executed order total from Activity record
-    // For now, enforce that a single order cannot exceed the daily cap
-    if (orderBps > mandate.dailyCapBps) {
-      return {
-        allowed: false,
-        reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate daily cap ${mandate.dailyCapBps}bps.`,
-        mandateId: mandate.mandateId,
-      };
-    }
+  // Check per-order limit
+  if (orderBps > mandate.maxOrderBps) {
+    return {
+      allowed: false,
+      reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate max ${mandate.maxOrderBps}bps per order.`,
+      mandateId: mandate.mandateId,
+    };
+  }
+
+  // The aggregate cap is reserved transactionally before submission; still
+  // reject a single order that would itself exceed the full daily envelope.
+  if (orderBps > mandate.dailyCapBps) {
+    return {
+      allowed: false,
+      reason: `Order value $${orderValueUsd.toFixed(2)} (${orderBps}bps) exceeds mandate daily cap ${mandate.dailyCapBps}bps.`,
+      mandateId: mandate.mandateId,
+    };
   }
 
   return { allowed: true, reason: "Order within mandate limits.", mandateId: mandate.mandateId, mode: mandate.mode };
+}
+
+function assertPlatformKeyLimits(key: { maxOrderUsd: number | null; allocatedCapitalUsd: number | null; dailyTradeLimit: number | null }, orderValueUsd: number) {
+  if (!Number.isFinite(key.maxOrderUsd) || !Number.isFinite(key.allocatedCapitalUsd) || !Number.isInteger(key.dailyTradeLimit) || (key.maxOrderUsd ?? 0) <= 0 || (key.allocatedCapitalUsd ?? 0) <= 0 || (key.dailyTradeLimit ?? 0) <= 0) {
+    throw new Error("Platform key must have verified positive order, allocation, and daily-trade limits before live use.");
+  }
+  if (orderValueUsd > key.maxOrderUsd!) {
+    throw new Error(`Order value $${orderValueUsd.toFixed(2)} exceeds the platform-key maximum of $${key.maxOrderUsd!.toFixed(2)}.`);
+  }
+  if (orderValueUsd > key.allocatedCapitalUsd!) {
+    throw new Error(`Order value $${orderValueUsd.toFixed(2)} exceeds the platform-key allocation of $${key.allocatedCapitalUsd!.toFixed(2)}.`);
+  }
+}
+
+function utcDayKey(now = new Date()) {
+  return now.toISOString().slice(0, 10);
 }
 
 // ─── Live Execution ───────────────────────────────────────────────────────
@@ -160,6 +189,8 @@ export function checkMandateAllowance(
  * Get real balances from Binance using the stored API key.
  */
 export async function getLiveBalances(userId: number, platformKeyId: string): Promise<LiveBalance[]> {
+  const authorityState = await getAuthorityState(userId);
+  assertAuthorityAllows(authorityState, "read-live");
   const key = await getPlatformApiKey(userId, platformKeyId);
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");
@@ -190,6 +221,8 @@ export async function getLiveTicker(symbol: string): Promise<LiveTicker> {
  * Get real open orders from Binance.
  */
 export async function getLiveOpenOrders(userId: number, platformKeyId: string, symbol?: string) {
+  const authorityState = await getAuthorityState(userId);
+  assertAuthorityAllows(authorityState, "read-live");
   const key = await getPlatformApiKey(userId, platformKeyId);
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");
@@ -242,6 +275,10 @@ export async function executeLiveOrder(
   if (!order.idempotencyKey) {
     throw new AuthorityBlockedError(authorityState, "place-order", "Live orders require a caller-supplied idempotencyKey (Stage 5).");
   }
+  // Even an otherwise valid request may not cross the service boundary in this
+  // release. Keeping this after authority/idempotency guards preserves their
+  // independent fail-closed guarantees for direct callers and tests.
+  assertLiveVenueMutationAllowed();
   const duplicate = await getLiveOrderByIdempotencyKey(userId, order.idempotencyKey);
   if (duplicate) {
     await createOperatorAction(userId, {
@@ -285,8 +322,29 @@ export async function executeLiveOrder(
     }
   }
 
-  // 1. Check mandate
-  const mandateCheck = checkMandateAllowance(mandate, order, accountBalanceUsd);
+  // 0b3. Market orders must carry a fresh venue price. The verified price is
+  // also used to compute quantity-based notional limits; no unknown notional
+  // can bypass risk checks.
+  let orderForRisk = order;
+  if (order.type === "MARKET") {
+    const ticker = await readBinanceTicker({ symbol: order.symbol, authorityState });
+    if (!ticker.ok) {
+      const detail = `Live market order refused: no fresh reference price (${ticker.errorKind}: ${ticker.message}).`;
+      await createOperatorAction(userId, {
+        actionId: nanoid(),
+        kind: "simulation_blocked",
+        status: "blocked",
+        subject: `Live order blocked on stale price: ${order.symbol} ${order.side}`,
+        detail,
+        payload: { order, errorKind: ticker.errorKind },
+      });
+      throw new AuthorityBlockedError(authorityState, "place-order", detail);
+    }
+    orderForRisk = { ...order, price: ticker.data.price };
+  }
+
+  // 1. Check mandate against fully determined notional.
+  const mandateCheck = checkMandateAllowance(mandate, orderForRisk, accountBalanceUsd);
   if (!mandateCheck.allowed) {
     // Log the blocked attempt
     await createOperatorAction(userId, {
@@ -311,7 +369,7 @@ export async function executeLiveOrder(
       price: order.price ?? null,
       idempotencyKey: order.idempotencyKey!,
     });
-    const approved = await consumeLiveOrderApproval(userId, orderHash);
+    const approved = await consumeLiveOrderApproval(userId, orderHash, order.idempotencyKey!);
     if (!approved) {
       const detail = `Order ${order.symbol} ${order.side} requires per-order owner approval (authority state: approval-required-live). Approve the exact order hash ${orderHash}; approval is single-use and expires in 10 minutes.`;
       await createOperatorAction(userId, {
@@ -326,28 +384,68 @@ export async function executeLiveOrder(
     }
   }
 
-  // 0b3. Pre-trade price freshness (Stage 2 discipline applied to live): market
-  // orders must reference a fresh venue price. Stale/unavailable ⇒ truthful rejection.
-  if (order.type === "MARKET") {
-    const ticker = await readBinanceTicker({ symbol: order.symbol, authorityState });
-    if (!ticker.ok) {
-      const detail = `Live market order refused: no fresh reference price (${ticker.errorKind}: ${ticker.message}).`;
-      await createOperatorAction(userId, {
-        actionId: nanoid(),
-        kind: "simulation_blocked",
-        status: "blocked",
-        subject: `Live order blocked on stale price: ${order.symbol} ${order.side}`,
-        detail,
-        payload: { order, errorKind: ticker.errorKind },
-      });
-      throw new AuthorityBlockedError(authorityState, "place-order", detail);
-    }
-  }
-
   // 2. Get API key
   const key = await getPlatformApiKey(userId, platformKeyId);
   if (!key) throw new Error("API key is required for live orders.");
-  if (key.state !== "active") throw new Error("API key is disabled.");
+  if (key.state !== "active") throw new Error("API key is not verified for live use.");
+  const orderValueUsd = getOrderNotionalUsd(orderForRisk);
+  if (orderValueUsd === null) throw new Error("A verified order value is required for live use.");
+  assertPlatformKeyLimits(key, orderValueUsd);
+  const notionalCentsNumber = Math.round(orderValueUsd * 100);
+  const mandateDailyCentsNumber = Math.floor(accountBalanceUsd * (mandate!.dailyCapBps / 10_000) * 100);
+  const keyAllocationCentsNumber = Math.floor(key.allocatedCapitalUsd! * 100);
+  if (![notionalCentsNumber, mandateDailyCentsNumber, keyAllocationCentsNumber].every(Number.isSafeInteger)) {
+    throw new Error("Live risk limit exceeds exact fixed-unit precision.");
+  }
+  const notionalCents = notionalCentsNumber;
+  const mandateDailyCents = mandateDailyCentsNumber;
+  const keyAllocationCents = keyAllocationCentsNumber;
+  const riskReserved = await reserveLiveDailyRisk({
+    userId,
+    dayKey: utcDayKey(),
+    notionalCents,
+    maxNotionalCents: Math.min(mandateDailyCents, keyAllocationCents),
+    maxTradeCount: key.dailyTradeLimit!,
+  });
+  if (!riskReserved) {
+    const detail = "Live order refused because the atomic daily risk budget or trade-count limit is exhausted.";
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "simulation_blocked",
+      status: "blocked",
+      subject: `Live order blocked by daily risk budget: ${order.symbol} ${order.side}`,
+      detail,
+      payload: { order, accountBalanceUsd, dailyTradeLimit: key.dailyTradeLimit },
+    });
+    throw new Error(detail);
+  }
+
+  // Acquire the durable unique reservation immediately before the first
+  // submission record or venue request. A racing caller cannot acquire it.
+  const orderHash = liveOrderApprovalHash({
+    symbol: order.symbol,
+    side: order.side,
+    quantity: order.quantity ?? null,
+    quoteOrderQty: order.quoteOrderQty ?? null,
+    price: order.price ?? null,
+    idempotencyKey: order.idempotencyKey!,
+  });
+  const intent = await claimLiveOrderIntent(userId, order.idempotencyKey!, orderHash);
+  if (!intent.claimed) {
+    const detail = `Live order idempotency key is already reserved (${intent.status}); Binance was not called again.`;
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "scope_checked",
+      status: "review",
+      subject: `Live order duplicate reservation suppressed: ${order.symbol} ${order.side}`,
+      detail,
+      payload: { order, intentStatus: intent.status },
+    });
+    return {
+      result: { orderId: 0, symbol: order.symbol, side: order.side, type: order.type, status: "submitted-unknown-outcome", price: "", quantity: "", executedQty: "" },
+      mandateCheck: { ...mandateCheck, reason: detail },
+    };
+  }
 
   const clientOrderId = `ll-${nanoid(12)}`;
   // Ledger: submitted (request snapshot) before any venue call — append-only.
@@ -367,6 +465,7 @@ export async function executeLiveOrder(
     payload: { clientOrderId, mandateId: mandateCheck.mandateId ?? null },
     mandateId: mandateCheck.mandateId ?? null,
   });
+  await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, "submitted");
 
   // 3. Log the attempt
   await createOperatorAction(userId, {
@@ -408,6 +507,7 @@ export async function executeLiveOrder(
       payload: { clientOrderId, outcome: { status: "REJECTED", reason: error instanceof Error ? error.message : "unknown" } },
       mandateId: mandateCheck.mandateId ?? null,
     });
+    await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, "rejected");
     throw error;
   }
   // Reconciliation: record the authoritative venue outcome.
@@ -427,6 +527,7 @@ export async function executeLiveOrder(
     payload: { clientOrderId, outcome: { orderId: response.orderId, status: response.status, price: response.price, origQty: response.origQty, executedQty: response.cummulativeQuoteQty } },
     mandateId: mandateCheck.mandateId ?? null,
   });
+  await updateLiveOrderIntentStatus(userId, order.idempotencyKey!, response.status === "REJECTED" ? "rejected" : "filled");
 
   // 5. Log the result
   const resultStatus = response.status === "FILLED" ? "success" : response.status === "REJECTED" ? "blocked" : "review";
@@ -492,6 +593,43 @@ export async function cancelLiveOrder(
   symbol: string,
   orderId: number,
 ) {
+  // Cancellation is a signed Binance mutation. It follows the same global
+  // authority and mandate reconciliation as placement so paused/revoked
+  // authority dominates every venue-side effect.
+  const authorityState = await getAuthorityState(userId);
+  const mandate = (await listWalletMandates(userId)).find(
+    (candidate) => candidate.venue === "binance" && candidate.status === "active",
+  ) ?? null;
+
+  try {
+    assertAuthorityAllows(authorityState, "cancel-order");
+    if (!mandate) {
+      throw new AuthorityBlockedError(authorityState, "cancel-order", "No active Binance mandate permits order cancellation.");
+    }
+    const verdict = reconcileLiveExecution({
+      authorityState,
+      mandateMode: mandate.mode as LegacyMandateMode,
+      mandateStatus: mandate.status,
+    });
+    if (!verdict.allowed) {
+      throw new AuthorityBlockedError(authorityState, "cancel-order", verdict.reason);
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Authority check failed.";
+    await createOperatorAction(userId, {
+      actionId: nanoid(),
+      kind: "simulation_blocked",
+      status: "blocked",
+      subject: `Order cancellation blocked: ${symbol} #${orderId}`,
+      detail: reason,
+      payload: { symbol, orderId, authorityState, mandateId: mandate?.mandateId ?? null, reason },
+    });
+    throw error;
+  }
+
+  // No decryption or venue request is permitted in the sealed release.
+  assertLiveVenueMutationAllowed();
+
   const key = await getPlatformApiKey(userId, platformKeyId);
   if (!key) throw new Error("API key not found.");
   if (key.state !== "active") throw new Error("API key is disabled.");
@@ -502,11 +640,11 @@ export async function cancelLiveOrder(
 
   await createOperatorAction(userId, {
     actionId: nanoid(),
-    kind: "simulation_settled",
+    kind: "scope_checked",
     status: "success",
     subject: `Order cancelled: ${symbol} #${orderId}`,
-    detail: `Owner cancelled a live order on Binance.`,
-    payload: { symbol, orderId, result },
+    detail: `Owner cancelled a live order on Binance after authority and mandate validation.`,
+    payload: { symbol, orderId, result, authorityState, mandateId: mandate.mandateId },
   });
 
   return result;

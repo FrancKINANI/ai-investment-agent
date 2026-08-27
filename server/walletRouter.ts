@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router, sensitiveProcedure } from "./_core/trpc";
 import {
   connectWallet,
   disconnectWallet,
@@ -102,7 +102,7 @@ export const walletRouter = router({
   supportedChains: protectedProcedure.query(() => getSupportedChains()),
 
   // ── Sailor Mandates ───────────────────────────────────────────────────
-  createMandate: protectedProcedure.input(mandateSchema).mutation(async ({ ctx, input }) => {
+  createMandate: sensitiveProcedure.input(mandateSchema).mutation(async ({ ctx, input }) => {
     const validation = validateMandateParams({
       scopes: input.scopes as MandateScope[],
       maxTransactionValue: input.maxTransactionValue,
@@ -122,7 +122,7 @@ export const walletRouter = router({
     });
   }),
 
-  activateMandate: protectedProcedure.input(z.object({
+  activateMandate: sensitiveProcedure.input(z.object({
     mandateId: z.string().trim().min(1).max(64),
     contractAddress: z.string().trim().min(1),
   })).mutation(async ({ ctx, input }) => {
@@ -133,7 +133,7 @@ export const walletRouter = router({
     }
   }),
 
-  revokeMandate: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
+  revokeMandate: sensitiveProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
     try {
       return await revokeMandate(ctx.user.id, input.mandateId);
     } catch (error) {
@@ -143,7 +143,7 @@ export const walletRouter = router({
 
   listMandates: protectedProcedure.query(({ ctx }) => listMandates(ctx.user.id)),
 
-  executeMandateTx: protectedProcedure.input(mandateTxSchema).mutation(async ({ ctx, input }) => {
+  executeMandateTx: sensitiveProcedure.input(mandateTxSchema).mutation(async ({ ctx, input }) => {
     try {
       return await executeMandateTransaction(ctx.user.id, input.mandateId, {
         to: input.to,
@@ -156,8 +156,8 @@ export const walletRouter = router({
     }
   }),
 
-  mandateTransactions: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64) })).query(({ input }) => {
-    return listMandateTransactions(input.mandateId);
+  mandateTransactions: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64) })).query(({ ctx, input }) => {
+    return listMandateTransactions(ctx.user.id, input.mandateId);
   }),
 
   availableScopes: protectedProcedure.query(() => getAvailableScopes()),
