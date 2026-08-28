@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { agentConversations, agentEvolutionEvents, agentMessages, agentNodes, discoveryFindings, discoverySchedules, watchlistItems, watchlists } from "../drizzle/schema";
-import { defaultAgentModel, protectedTradingAgentRoles } from "@shared/tradingAgents";
+import { findTeamRole, listProtectedTeamRoles, loadAgentTeam } from "@shared/agentTeam";
+import { defaultAgentModel } from "@shared/tradingAgents";
 import { getDb } from "./db";
 
 type Provider = "openai" | "anthropic" | "google" | "custom";
@@ -8,22 +9,34 @@ type Provider = "openai" | "anthropic" | "google" | "custom";
 export async function ensureProtectedAgentNodes(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
+  const team = loadAgentTeam();
   const existing = await db.select().from(agentNodes).where(eq(agentNodes.userId, userId));
   const currentRoles = new Set(existing.filter((node) => node.protectedRole).map((node) => node.roleKey));
-  const missing = protectedTradingAgentRoles.filter((role) => !currentRoles.has(role.roleKey));
+  const missing = listProtectedTeamRoles().filter((role) => {
+    if (currentRoles.has(role.roleKey)) return false;
+    return !role.aliases.some((alias) => currentRoles.has(alias));
+  });
   if (missing.length) {
     await db.insert(agentNodes).values(missing.map((role) => ({
       userId,
       agentId: `core-${userId}-${role.roleKey}`,
       roleKey: role.roleKey,
       name: role.name,
-      parentAgentId: null,
+      parentAgentId: role.parent ? `core-${userId}-${role.parent}` : null,
       protectedRole: true,
-      provider: "openai" as const,
-      model: defaultAgentModel,
+      provider: (role.provider ?? team.defaultProvider) as Provider,
+      model: role.model ?? defaultAgentModel,
       toolScopes: [...role.tools],
-      state: "active" as const,
+      state: role.enabled ? "active" as const : "paused" as const,
     })));
+  }
+  for (const node of existing.filter((item) => item.protectedRole)) {
+    const spec = findTeamRole(node.roleKey);
+    if (!spec) continue;
+    const nextState = spec.enabled ? (node.state === "paused" ? "active" : node.state) : "paused";
+    if (nextState !== node.state) {
+      await db.update(agentNodes).set({ state: nextState, updatedAt: new Date() }).where(and(eq(agentNodes.userId, userId), eq(agentNodes.agentId, node.agentId)));
+    }
   }
   return db.select().from(agentNodes).where(eq(agentNodes.userId, userId)).orderBy(desc(agentNodes.protectedRole), desc(agentNodes.updatedAt));
 }
@@ -31,7 +44,8 @@ export async function ensureProtectedAgentNodes(userId: number) {
 export async function updateAgentModel(userId: number, agentId: string, provider: Provider, model: string) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  await db.update(agentNodes).set({ provider, model, updatedAt: new Date() }).where(and(eq(agentNodes.userId, userId), eq(agentNodes.agentId, agentId)));
+  await db.update(agentNodes).set({ provider, model, updatedAt: new Date() })
+    .where(and(eq(agentNodes.userId, userId), eq(agentNodes.agentId, agentId)));
   const result = await db.select().from(agentNodes).where(and(eq(agentNodes.userId, userId), eq(agentNodes.agentId, agentId))).limit(1);
   return result[0] ?? null;
 }
@@ -40,7 +54,7 @@ export async function createOptionalSubagent(userId: number, values: { agentId: 
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(agentNodes).values({ userId, ...values, protectedRole: false, state: "active" });
-  const result = await db.select().from(agentNodes).where(eq(agentNodes.agentId, values.agentId)).limit(1);
+  const result = await db.select().from(agentNodes).where(and(eq(agentNodes.userId, userId), eq(agentNodes.agentId, values.agentId))).limit(1);
   return result[0];
 }
 
@@ -57,7 +71,7 @@ export async function createConversation(userId: number, values: { threadId: str
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(agentConversations).values({ userId, ...values });
-  const result = await db.select().from(agentConversations).where(eq(agentConversations.threadId, values.threadId)).limit(1);
+  const result = await db.select().from(agentConversations).where(and(eq(agentConversations.userId, userId), eq(agentConversations.threadId, values.threadId))).limit(1);
   return result[0];
 }
 
@@ -72,7 +86,7 @@ export async function createAgentMessage(userId: number, values: { messageId: st
   if (!db) throw new Error("Database unavailable");
   await db.insert(agentMessages).values({ userId, ...values, agentId: values.agentId ?? null, confidence: values.confidence ?? null });
   await db.update(agentConversations).set({ updatedAt: new Date() }).where(and(eq(agentConversations.userId, userId), eq(agentConversations.threadId, values.threadId)));
-  const result = await db.select().from(agentMessages).where(eq(agentMessages.messageId, values.messageId)).limit(1);
+  const result = await db.select().from(agentMessages).where(and(eq(agentMessages.userId, userId), eq(agentMessages.messageId, values.messageId))).limit(1);
   return result[0];
 }
 
@@ -86,7 +100,7 @@ export async function createEvolutionEvent(userId: number, values: { eventId: st
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(agentEvolutionEvents).values({ userId, ...values, threadId: values.threadId ?? null, agentId: values.agentId ?? null });
-  const result = await db.select().from(agentEvolutionEvents).where(eq(agentEvolutionEvents.eventId, values.eventId)).limit(1);
+  const result = await db.select().from(agentEvolutionEvents).where(and(eq(agentEvolutionEvents.userId, userId), eq(agentEvolutionEvents.eventId, values.eventId))).limit(1);
   return result[0];
 }
 
@@ -101,7 +115,7 @@ export async function createWatchlist(userId: number, values: { watchlistId: str
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(watchlists).values({ userId, ...values, enabled: true });
-  const result = await db.select().from(watchlists).where(eq(watchlists.watchlistId, values.watchlistId)).limit(1);
+  const result = await db.select().from(watchlists).where(and(eq(watchlists.userId, userId), eq(watchlists.watchlistId, values.watchlistId))).limit(1);
   return result[0];
 }
 
@@ -123,7 +137,7 @@ export async function createWatchlistItem(userId: number, values: { itemId: stri
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(watchlistItems).values({ userId, ...values, address: values.address ?? null, symbol: values.symbol ?? null, chain: values.chain ?? null, status: "watching" });
-  const result = await db.select().from(watchlistItems).where(eq(watchlistItems.itemId, values.itemId)).limit(1);
+  const result = await db.select().from(watchlistItems).where(and(eq(watchlistItems.userId, userId), eq(watchlistItems.itemId, values.itemId))).limit(1);
   return result[0];
 }
 
@@ -154,7 +168,7 @@ export async function createDiscoverySchedule(userId: number, values: { schedule
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(discoverySchedules).values({ userId, ...values, enabled: false, scheduleCronTaskUid: null });
-  const result = await db.select().from(discoverySchedules).where(eq(discoverySchedules.scheduleId, values.scheduleId)).limit(1);
+  const result = await db.select().from(discoverySchedules).where(and(eq(discoverySchedules.userId, userId), eq(discoverySchedules.scheduleId, values.scheduleId))).limit(1);
   return result[0];
 }
 
@@ -202,14 +216,14 @@ export async function createDiscoveryFinding(userId: number, values: { findingId
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   await db.insert(discoveryFindings).values({ userId, ...values, scheduleId: values.scheduleId ?? null, watchlistItemId: values.watchlistItemId ?? null });
-  const result = await db.select().from(discoveryFindings).where(eq(discoveryFindings.findingId, values.findingId)).limit(1);
+  const result = await db.select().from(discoveryFindings).where(and(eq(discoveryFindings.userId, userId), eq(discoveryFindings.findingId, values.findingId))).limit(1);
   return result[0];
 }
 
-export async function getDiscoveryFindingById(findingId: string) {
+export async function getDiscoveryFindingById(userId: number, findingId: string) {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select().from(discoveryFindings).where(eq(discoveryFindings.findingId, findingId)).limit(1);
+  const result = await db.select().from(discoveryFindings).where(and(eq(discoveryFindings.userId, userId), eq(discoveryFindings.findingId, findingId))).limit(1);
   return result[0] ?? null;
 }
 

@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 
 const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8");
 
-describe("README product screenshots", () => {
-  it("uses current managed Command, Settings governance, and Activity assets", () => {
-    expect(readme).toContain("/manus-storage/ledgerline-command-current_73c0a7af.png");
-    expect(readme).toContain("/manus-storage/ledgerline-settings-governance-current_bc79ea06.png");
-    expect(readme).toContain("/manus-storage/ledgerline-activity-current_d578a200.png");
-    expect(readme).toContain("Settings and governance");
-    expect(readme).toContain("Immutable activity");
+describe("README product positioning", () => {
+  it("describes the current Mission Control and scoped-memory product without claiming live execution", () => {
+    expect(readme).toContain("Mission Control");
+    expect(readme).toContain("Shared and private memory");
+    expect(readme).toContain("Real-capital status: NO-GO");
+    expect(readme).not.toContain("supports real execution");
+    expect(readme).not.toContain("Binance live trading");
   });
 });

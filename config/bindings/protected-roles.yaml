@@ -1,14 +1,20 @@
 schemaVersion: 1
 bindings:
   - capabilityId: market-evidence.read
-    roleKeys: [supervisor, fundamental, sentiment, technical, news, bull, bear, trader, risk_guardians]
+    roleKeys: [supervisor, macro, onchain, fundamental, sentiment, technical, news, variation, bull, bear, decision, trader, risk, risk_guardians]
     permission: research-only
   - capabilityId: chain-evidence.read
-    roleKeys: [supervisor, fundamental, bull, bear, risk_guardians]
+    roleKeys: [supervisor, onchain, fundamental, variation, bull, bear, risk, risk_guardians]
     permission: research-only
   - capabilityId: portfolio-snapshot.read
-    roleKeys: [trader, risk_guardians, fund_manager]
-    permission: simulation-only
+    roleKeys: [decision, trader, risk, risk_guardians, evaluator, fund_manager, memory]
+    permission: research-only
   - capabilityId: paper-proposal.compose
-    roleKeys: [supervisor, trader, fund_manager]
+    roleKeys: [supervisor, variation, decision, trader, evaluator, fund_manager]
     permission: simulation-only
+  - capabilityId: execution.adapter
+    roleKeys: [execution]
+    permission: execution
+  - capabilityId: memory.journal
+    roleKeys: [memory, evaluator, fund_manager]
+    permission: research-only

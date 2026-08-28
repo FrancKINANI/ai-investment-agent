@@ -1,13 +1,15 @@
 import { z } from "zod";
-import manifest from "./capabilityManifest.json";
-import { protectedTradingAgentRoles } from "./tradingAgents";
+import { findTeamRole, isProtectedTeamRole, listProtectedTeamRoles } from "./agentTeam";
+import { loadYamlFile } from "./configFiles";
+import { loadLocalOverlay } from "./configOverlay";
 
 const safeScopeSchema = z.enum(["market.read", "portfolio.read", "chain.read", "proposal.write"]);
+const capabilityKindSchema = z.enum(["tool", "skill", "mcp", "mcp_server", "mcp_tool", "data_source", "sub_agent", "evaluator", "memory", "custom"]);
 
 const capabilitySchema = z.object({
   id: z.string().regex(/^[a-z0-9.-]+$/),
   version: z.string().min(1),
-  kind: z.enum(["tool", "skill", "mcp", "data_source"]),
+  kind: capabilityKindSchema,
   label: z.string().min(1).max(120),
   scopes: z.array(safeScopeSchema).min(1),
   tags: z.array(z.string().min(1).max(40)).min(1),
@@ -17,13 +19,13 @@ const capabilitySchema = z.object({
 const bindingSchema = z.object({
   capabilityId: z.string().regex(/^[a-z0-9.-]+$/),
   roleKeys: z.array(z.string().regex(/^[a-z0-9_-]+$/)).min(1),
-  permission: z.enum(["research-only", "simulation-only"]),
+  permission: z.enum(["research-only", "simulation-only", "execution"]),
 });
 
 export const capabilityManifestSchema = z.object({
   schemaVersion: z.literal(1),
   revision: z.string().min(1).max(80),
-  executionBoundary: z.literal("simulation-only"),
+  executionBoundary: z.enum(["fail-closed", "simulation-only"]),
   capabilities: z.array(capabilitySchema).min(1),
   bindings: z.array(bindingSchema).min(1),
 }).superRefine((value, context) => {
@@ -38,51 +40,97 @@ export const capabilityManifestSchema = z.object({
   }
 });
 
-export const capabilityRegistry = capabilityManifestSchema.parse(manifest);
+export type CapabilityRegistry = z.infer<typeof capabilityManifestSchema>;
+export type CapabilityBindingDraft = z.infer<typeof bindingSchema>;
 
-export type CapabilityRegistry = typeof capabilityRegistry;
+function bindingRespectsBoundary(
+  registry: CapabilityRegistry,
+  binding: CapabilityBindingDraft,
+  capability: { scopes: string[] },
+) {
+  if (binding.permission === "execution") return false;
+  if (capability.scopes.includes("proposal.write") && binding.permission !== "simulation-only") return false;
+  return registry.executionBoundary === "simulation-only" || registry.executionBoundary === "fail-closed";
+}
 
-export const capabilityBindingDraftSchema = z.object({
-  capabilityId: z.string().regex(/^[a-z0-9.-]+$/),
-  roleKeys: z.array(z.string().regex(/^[a-z0-9_-]+$/)).min(1).max(protectedTradingAgentRoles.length),
+export const capabilityBindingDraftSchema = bindingSchema.extend({
+  roleKeys: z.array(z.string().regex(/^[a-z0-9_-]+$/)).min(1).max(64),
   permission: z.enum(["research-only", "simulation-only"]),
 });
-
-export type CapabilityBindingDraft = z.infer<typeof capabilityBindingDraftSchema>;
 
 export type CapabilityProvenance = {
   origin: "capability-registry" | "owner-control";
   actor: "authenticated-owner";
   registryRevision: string;
-  executionBoundary: "simulation-only";
+  executionBoundary: CapabilityRegistry["executionBoundary"];
   capabilities: Array<{ id: string; version: string; label: string; scopes: string[] }>;
 };
 
-const registryCapabilitiesById = new Map(capabilityRegistry.capabilities.map((capability) => [capability.id, capability]));
+let cached: CapabilityRegistry | null = null;
 
-/**
- * Validates a staged binding before any maintainer changes the immutable manifest.
- * This phase deliberately has no write path to runtime authority, MCP, credentials,
- * signing, custody, or live execution.
- */
+function mergeOverlay(base: CapabilityRegistry): CapabilityRegistry {
+  const overlay = loadLocalOverlay();
+  if (!overlay.bindings?.length) return base;
+  const byId = new Map(base.bindings.map((binding) => [binding.capabilityId, binding]));
+  for (const binding of overlay.bindings) {
+    byId.set(binding.capabilityId, binding);
+  }
+  return capabilityManifestSchema.parse({ ...base, bindings: [...byId.values()] });
+}
+
+export function loadCapabilityRegistry(): CapabilityRegistry {
+  if (cached) return cached;
+  const file = capabilityManifestSchema.parse(loadYamlFile("capabilities/registry.yaml"));
+  cached = mergeOverlay(file);
+  return cached;
+}
+
+export function reloadCapabilityRegistry(): CapabilityRegistry {
+  cached = null;
+  return loadCapabilityRegistry();
+}
+
+export const capabilityRegistry = new Proxy({} as CapabilityRegistry, {
+  get(_target, property, receiver) {
+    return Reflect.get(loadCapabilityRegistry(), property, receiver);
+  },
+}) as CapabilityRegistry;
+
+function capabilitiesById() {
+  return new Map(loadCapabilityRegistry().capabilities.map((capability) => [capability.id, capability]));
+}
+
+export function roleMayUseCapability(roleKey: string, capabilityId: string) {
+  const registry = loadCapabilityRegistry();
+  const capability = capabilitiesById().get(capabilityId);
+  if (!capability || capability.state !== "active") return false;
+  return registry.bindings.some((binding) => binding.capabilityId === capabilityId && binding.roleKeys.includes(roleKey) && bindingRespectsBoundary(registry, binding, capability));
+}
+
+export function assertRoleMayUseCapability(roleKey: string, capabilityId: string) {
+  if (!roleMayUseCapability(roleKey, capabilityId)) {
+    throw new Error(`Role ${roleKey} is not bound to active capability ${capabilityId}.`);
+  }
+}
+
 export function validateCapabilityBindingDraft(input: CapabilityBindingDraft) {
   const draft = capabilityBindingDraftSchema.parse(input);
-  const capability = registryCapabilitiesById.get(draft.capabilityId);
+  const registry = loadCapabilityRegistry();
+  const capability = capabilitiesById().get(draft.capabilityId);
   const issues: string[] = [];
   const roleKeys = Array.from(new Set(draft.roleKeys));
   if (!capability) issues.push("Choose a capability declared in the active manifest.");
   if (capability?.state !== "active") issues.push("Only an active manifest capability can be staged for a binding.");
-  if (capability?.kind === "mcp") issues.push("MCP capabilities are not accepted by this simulation-only registry.");
   if (draft.permission === "research-only" && capability?.scopes.includes("proposal.write")) {
-    issues.push("A proposal-writing capability requires the simulation-only permission boundary.");
+    issues.push("A proposal-writing capability requires the simulation-only or execution permission boundary.");
   }
   for (const roleKey of roleKeys) {
-    const role = protectedTradingAgentRoles.find((candidate) => candidate.roleKey === roleKey);
-    if (!role) {
-      issues.push(`Unknown or optional role: ${roleKey}. Bindings may target protected TradingAgents roles only.`);
+    const role = findTeamRole(roleKey);
+    if (!role || !isProtectedTeamRole(roleKey)) {
+      issues.push(`Unknown or optional role: ${roleKey}. Bindings may target protected team roles only.`);
       continue;
     }
-    if (capability && !capability.scopes.every((scope) => (role.tools as readonly string[]).includes(scope))) {
+    if (capability && !capability.scopes.every((scope) => role.tools.includes(scope))) {
       issues.push(`${role.name} does not have the safe scope required by ${capability.label}.`);
     }
   }
@@ -91,35 +139,66 @@ export function validateCapabilityBindingDraft(input: CapabilityBindingDraft) {
     issues,
     normalized: { ...draft, roleKeys },
     capability: capability ? { id: capability.id, version: capability.version, label: capability.label, scopes: capability.scopes } : null,
-    executionBoundary: capabilityRegistry.executionBoundary,
+    executionBoundary: registry.executionBoundary,
   };
 }
 
-/** Builds immutable, human-readable source metadata for each owner activity action. */
 export function createCapabilityProvenance(capabilityIds: string[] = []): CapabilityProvenance {
+  const registry = loadCapabilityRegistry();
+  const byId = capabilitiesById();
   const capabilities = Array.from(new Set(capabilityIds))
-    .map((capabilityId) => registryCapabilitiesById.get(capabilityId))
+    .map((capabilityId) => byId.get(capabilityId))
     .filter((capability): capability is NonNullable<typeof capability> => Boolean(capability))
     .map((capability) => ({ id: capability.id, version: capability.version, label: capability.label, scopes: [...capability.scopes] }));
   return {
     origin: capabilities.length ? "capability-registry" : "owner-control",
     actor: "authenticated-owner",
-    registryRevision: capabilityRegistry.revision,
-    executionBoundary: capabilityRegistry.executionBoundary,
+    registryRevision: registry.revision,
+    executionBoundary: registry.executionBoundary,
     capabilities,
   };
 }
 
 export function getCapabilityRegistrySummary() {
-  const activeCapabilities = capabilityRegistry.capabilities.filter((capability) => capability.state === "active");
+  const registry = loadCapabilityRegistry();
+  const activeCapabilities = registry.capabilities.filter((capability) => capability.state === "active");
   return {
-    schemaVersion: capabilityRegistry.schemaVersion,
-    revision: capabilityRegistry.revision,
-    executionBoundary: capabilityRegistry.executionBoundary,
-    capabilityCount: capabilityRegistry.capabilities.length,
+    schemaVersion: registry.schemaVersion,
+    revision: registry.revision,
+    executionBoundary: registry.executionBoundary,
+    capabilityCount: registry.capabilities.length,
     activeCapabilityCount: activeCapabilities.length,
-    mcpCapabilityCount: capabilityRegistry.capabilities.filter((capability) => capability.kind === "mcp").length,
-    capabilities: capabilityRegistry.capabilities,
-    bindings: capabilityRegistry.bindings,
+    mcpCapabilityCount: registry.capabilities.filter((capability) => capability.kind === "mcp" || capability.kind === "mcp_server" || capability.kind === "mcp_tool").length,
+    capabilities: registry.capabilities,
+    bindings: registry.bindings,
+    protectedRoles: listProtectedTeamRoles().map((role) => role.roleKey),
   };
+}
+
+/** 
+ * Verify that a role has access to all required capabilities for a given operation.
+ * Throws if any capability is missing or inactive.
+ * Returns the list of capabilities used for journaling.
+ */
+export function validateCapabilityAccess(roleKey: string, requiredCapabilities: string[]): string[] {
+  const registry = loadCapabilityRegistry();
+  const capabilitiesById = new Map(registry.capabilities.map((c) => [c.id, c]));
+  
+  for (const capId of requiredCapabilities) {
+    const capability = capabilitiesById.get(capId);
+    if (!capability) {
+      throw new Error(`Capability ${capId} not found in registry.`);
+    }
+    if (capability.state !== "active") {
+      throw new Error(`Capability ${capId} (${capability.label}) is not active.`);
+    }
+    const hasBinding = registry.bindings.some(
+      (binding) => binding.capabilityId === capId && binding.roleKeys.includes(roleKey) && bindingRespectsBoundary(registry, binding, capability)
+    );
+    if (!hasBinding) {
+      throw new Error(`Role ${roleKey} is not bound to capability ${capId}.`);
+    }
+  }
+  
+  return requiredCapabilities;
 }

@@ -6,19 +6,20 @@ import RouteLoadingBar from "./components/RouteLoadingBar";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { pageLoaders } from "./lib/routePrefetch";
+import "./styles/missionControl.css";
+import "./styles/agentRoom.css";
 
 const DashboardLayout = lazy(pageLoaders.dashboardLayout);
 const Activity = lazy(pageLoaders.activity);
 const Alerts = lazy(pageLoaders.alerts);
 const Chat = lazy(pageLoaders.chat);
 const Changelog = lazy(pageLoaders.changelog);
-const CommandCenter = lazy(pageLoaders.command);
-const Connections = lazy(pageLoaders.connections);
-const Mandates = lazy(pageLoaders.mandates);
+const DecisionDesk = lazy(pageLoaders.decisions);
+const MissionControl = lazy(pageLoaders.mission);
 const NotFound = lazy(pageLoaders.notFound);
-const Platforms = lazy(pageLoaders.platforms);
+const Portfolio = lazy(pageLoaders.portfolio);
 const Settings = lazy(pageLoaders.settings);
-const Wallets = lazy(pageLoaders.wallets);
+const Tasks = lazy(pageLoaders.tasks);
 const Welcome = lazy(pageLoaders.welcome);
 
 function Router() {
@@ -27,12 +28,15 @@ function Router() {
     <Suspense fallback={<><RouteLoadingBar /><div className="os-loading">Loading Ledgerline…</div></>}><Switch>
       <Route path={"/welcome"} component={Welcome} />
       <Route path={"/changelog"} component={Changelog} />
-      <Route path={"/"}><Workspace><CommandCenter /></Workspace></Route>
+      <Route path={"/"}><Workspace><MissionControl /></Workspace></Route>
       <Route path={"/chat"}><Workspace><Chat /></Workspace></Route>
-      <Route path={"/wallets"}><Workspace><Wallets /></Workspace></Route>
-      <Route path={"/mandates"}><Workspace><Mandates /></Workspace></Route>
-      <Route path={"/platforms"}><Workspace><Platforms /></Workspace></Route>
-      <Route path={"/connections"}><Workspace><Connections /></Workspace></Route>
+      <Route path={"/tasks"}><Workspace><Tasks /></Workspace></Route>
+      <Route path={"/decisions"}><Workspace><DecisionDesk /></Workspace></Route>
+      <Route path={"/portfolio"}><Workspace><Portfolio /></Workspace></Route>
+      <Route path={"/wallets"}><Workspace><Portfolio /></Workspace></Route>
+      <Route path={"/mandates"}><Workspace><Portfolio /></Workspace></Route>
+      <Route path={"/platforms"}><Workspace><Portfolio /></Workspace></Route>
+      <Route path={"/connections"}><Workspace><Portfolio /></Workspace></Route>
       <Route path={"/alerts"}><Workspace><Alerts /></Workspace></Route>
       <Route path={"/settings"}><Workspace><Settings /></Workspace></Route>
       <Route path={"/activity"}><Workspace><Activity /></Workspace></Route>

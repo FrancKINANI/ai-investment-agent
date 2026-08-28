@@ -1,0 +1,56 @@
+schemaVersion: 1
+# Execution backend configuration for Ledgerline
+
+# Active backend: paper, cex, or onchain
+# paper = sandbox/simulation only (default)
+# cex = centralized exchange (Binance, OKX, etc.) - requires API keys + Phase 2
+# onchain = non-custodial (Sailor/WalletConnect) - requires wallet + Phase 3
+active: paper
+
+backends:
+  paper:
+    enabled: true
+    label: "Paper / Sandbox Execution"
+    description: "Deterministic paper execution for research and simulation. No real capital involved."
+    riskLevel: "none"
+    requiresAuth: false
+    requiresMandate: true
+  
+  cex:
+    enabled: false
+    label: "Centralized Exchange"
+    description: "Real CEX execution through Binance, OKX, Kraken, etc. Phase 2+ feature."
+    riskLevel: "high"
+    requiresAuth: true
+    requiresMandate: true
+    requiredConfig:
+      - "venues" # Which CEX APIs are configured
+      - "apiKeys" # KMS-protected secrets
+  
+  onchain:
+    enabled: false
+    label: "Non-custodial On-chain"
+    description: "Non-custodial on-chain execution via Sailor/WalletConnect. Phase 3+ feature."
+    riskLevel: "high"
+    requiresAuth: true
+    requiresMandate: true
+    requiredConfig:
+      - "walletConnection" # WalletConnect or Sailor endpoint
+      - "chains" # EVM chains supported
+
+# Authority state requirements for real execution
+authorityCeiling:
+  paper: "sandbox-only" # Can use paper from any state except paused/revoked
+  cex: "approval-required-live" # Requires active mandate + authority state
+  onchain: "limited-live" # Requires owner-armed on-chain permission
+
+# Phase gates (when enabled)
+phasesRequired:
+  paper: 0
+  cex: 2
+  onchain: 3
+
+notes: |
+  Paper backend is always available for research and simulation.
+  CEX and on-chain backends require owner configuration + climbing authority state machine.
+  All backends enforce mandate limits and policy gates.

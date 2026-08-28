@@ -1,4 +1,4 @@
-import { boolean, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, int, json, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /** Core identity table managed by the Manus OAuth workflow. */
 export const users = mysqlTable("users", {
@@ -90,7 +90,7 @@ export const outcomeRecords = mysqlTable("outcomeRecords", {
   runId: varchar("runId", { length: 64 }),
   expectedBps: int("expectedBps").notNull(),
   realizedBps: int("realizedBps"),
-  attribution: json("attribution").$type<Record<string, number>>().notNull(),
+  attribution: json("attribution").$type<Record<string, string | number | boolean | null>>().notNull(),
   deviation: mysqlEnum("deviation", ["on_track", "underperforming", "outperforming", "inconclusive"]).default("inconclusive").notNull(),
   narrative: text("narrative").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -187,6 +187,17 @@ export const agentConversations = mysqlTable("agentConversations", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Individual owner–agent threads are separate from legacy supervisor conversations for an additive migration. */
+export const agentIndividualConversations = mysqlTable("agentIndividualConversations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  threadId: varchar("threadId", { length: 64 }).notNull().unique(),
+  targetAgentId: varchar("targetAgentId", { length: 64 }).notNull(),
+  title: varchar("title", { length: 180 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const agentMessages = mysqlTable("agentMessages", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -198,6 +209,45 @@ export const agentMessages = mysqlTable("agentMessages", {
   /** Research-note completeness score (0–100), never a performance or return forecast. */
   confidence: int("confidence"),
   evidence: json("evidence").$type<string[]>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Owner-scoped durable research context. Private entries are readable only by their selected agent and owner. */
+export const agentMemoryEntries = mysqlTable("agentMemoryEntries", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  memoryId: varchar("memoryId", { length: 64 }).notNull().unique(),
+  scope: mysqlEnum("scope", ["shared", "private"]).notNull(),
+  agentId: varchar("agentId", { length: 64 }),
+  kind: mysqlEnum("kind", ["owner_instruction", "constraint", "verified_fact", "research_note", "question", "decision", "source_reference"]).notNull(),
+  content: text("content").notNull(),
+  contentDigest: varchar("contentDigest", { length: 64 }).notNull(),
+  sourceType: mysqlEnum("sourceType", ["owner_entry", "conversation", "watchlist", "policy", "activity"]).notNull(),
+  sourceRef: varchar("sourceRef", { length: 160 }),
+  status: mysqlEnum("status", ["active", "pending_promotion", "superseded", "expired", "redacted"]).default("active").notNull(),
+  pinned: boolean("pinned").default(false).notNull(),
+  revision: int("revision").default(1).notNull(),
+  expiresAt: timestamp("expiresAt"),
+  createdBy: mysqlEnum("createdBy", ["owner", "agent", "system"]).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Append-only memory lifecycle evidence. It holds metadata and never a duplicate unredacted secret-bearing payload. */
+export const agentMemoryActions = mysqlTable("agentMemoryActions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  actionId: varchar("actionId", { length: 64 }).notNull().unique(),
+  memoryId: varchar("memoryId", { length: 64 }).notNull(),
+  action: mysqlEnum("action", ["created", "promotion_requested", "promotion_approved", "promotion_rejected", "retired", "redacted"]).notNull(),
+  actorType: mysqlEnum("actorType", ["owner", "agent", "system"]).notNull(),
+  actorAgentId: varchar("actorAgentId", { length: 64 }),
+  fromScope: mysqlEnum("fromScope", ["shared", "private"]),
+  toScope: mysqlEnum("toScope", ["shared", "private"]),
+  fromStatus: mysqlEnum("fromStatus", ["active", "pending_promotion", "superseded", "expired", "redacted"]),
+  toStatus: mysqlEnum("toStatus", ["active", "pending_promotion", "superseded", "expired", "redacted"]),
+  reason: varchar("reason", { length: 600 }),
+  payload: json("payload").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -297,7 +347,7 @@ export const operatorActions = mysqlTable("operatorActions", {
     "platform_key_added", "platform_key_removed", "platform_key_disabled",
     "wallet_connected", "wallet_disconnected", "mode_changed",
     "authority_changed",
-    "alert_created", "alert_acknowledged",
+    "alert_created", "alert_acknowledged", "owner_note",
   ]).notNull(),
   status: mysqlEnum("status", ["success", "review", "blocked"]).notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
@@ -350,7 +400,9 @@ export const platformApiKeys = mysqlTable("platformApiKeys", {
   secretEncrypted: varchar("secretEncrypted", { length: 512 }).notNull(),
   permissions: json("permissions").$type<string[]>().notNull(),
   hasWithdrawPermission: boolean("hasWithdrawPermission").default(false).notNull(),
-  state: mysqlEnum("state", ["active", "disabled", "testing"]).default("active").notNull(),
+  // A newly ingested credential must pass a signed read-only verification
+  // before it can be used by any signed venue request.
+  state: mysqlEnum("state", ["active", "disabled", "testing"]).default("testing").notNull(),
   maxOrderUsd: int("maxOrderUsd"),
   allocatedCapitalUsd: int("allocatedCapitalUsd"),
   dailyTradeLimit: int("dailyTradeLimit"),
@@ -373,7 +425,10 @@ export type VenueConnection = typeof venueConnections.$inferSelect;
 export type AgentProposal = typeof agentProposals.$inferSelect;
 export type AgentNode = typeof agentNodes.$inferSelect;
 export type AgentConversation = typeof agentConversations.$inferSelect;
+export type AgentIndividualConversation = typeof agentIndividualConversations.$inferSelect;
 export type AgentMessage = typeof agentMessages.$inferSelect;
+export type AgentMemoryEntry = typeof agentMemoryEntries.$inferSelect;
+export type AgentMemoryAction = typeof agentMemoryActions.$inferSelect;
 export type AgentEvolutionEvent = typeof agentEvolutionEvents.$inferSelect;
 export type Watchlist = typeof watchlists.$inferSelect;
 export type WatchlistItem = typeof watchlistItems.$inferSelect;
@@ -416,6 +471,39 @@ export const executionLedger = mysqlTable("executionLedger", {
 });
 
 export type ExecutionLedgerEvent = typeof executionLedger.$inferSelect;
+
+/**
+ * A single writer reservation for a live venue order. This is intentionally
+ * separate from the append-only ledger: the unique key is acquired before any
+ * external request, closing the concurrent read-then-submit race.
+ */
+export const liveOrderIntents = mysqlTable("liveOrderIntents", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  orderHash: varchar("orderHash", { length: 128 }).notNull(),
+  status: mysqlEnum("status", ["reserved", "submitted", "filled", "rejected"]).default("reserved").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("live_order_intent_user_idempotency_unique").on(table.userId, table.idempotencyKey),
+]);
+
+export type LiveOrderIntent = typeof liveOrderIntents.$inferSelect;
+
+/** Atomic, per-owner daily risk budget reserved before a live venue call. */
+export const liveDailyRiskBuckets = mysqlTable("liveDailyRiskBuckets", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  dayKey: varchar("dayKey", { length: 10 }).notNull(),
+  // MySQL INT would overflow around $21.47m when values are stored as cents.
+  // BIGINT preserves fixed-unit arithmetic for the configured policy ranges.
+  reservedNotionalCents: bigint("reservedNotionalCents", { mode: "number" }).default(0).notNull(),
+  reservedTradeCount: int("reservedTradeCount").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("live_daily_risk_user_day_unique").on(table.userId, table.dayKey),
+]);
 
 /** Current derived order state (projection of ledger events). Mutable projection, source of truth is the ledger. */
 export const paperOrders = mysqlTable("paperOrders", {

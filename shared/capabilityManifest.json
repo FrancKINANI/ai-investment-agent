@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "revision": "paia-v0.4-foundation",
-  "executionBoundary": "simulation-only",
+  "executionBoundary": "fail-closed",
   "capabilities": [
     {
       "id": "market-evidence.read",

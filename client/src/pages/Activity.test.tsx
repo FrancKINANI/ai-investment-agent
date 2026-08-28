@@ -47,7 +47,7 @@ describe("Activity", () => {
   });
 
   it("surfaces only recorded blocked or review safety controls as security signals", async () => {
-    historyQueryState.data = [{ actionId: "blocked-real", subject: "Blocked real-mode request", detail: "A simulation-only boundary denied the request.", kind: "scope_checked", status: "blocked", createdAt }];
+    historyQueryState.data = [{ actionId: "blocked-real", subject: "Blocked real-mode request", detail: "A boundary denied the request.", kind: "scope_checked", status: "blocked", createdAt }];
     await act(async () => root.render(<Activity />));
     expect(host.textContent).toContain("Security signals");
     expect(host.textContent).toContain("Real-mode request blocked");

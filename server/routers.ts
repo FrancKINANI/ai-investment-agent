@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
-import { parse as parseCookie } from "cookie";
+import { parseCookie } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { securityRouter } from "./securityRouter";
 import { authorityRouter } from "./authorityRouter";
@@ -14,15 +14,19 @@ import { listLLMModels } from "./_core/llm";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
+import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createSecurityAlert, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, getAuthorityState, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
 import { researchRequestSchema, runTokenResearch } from "./research";
 import { calculateResearchNoteConfidence, composeFundManagerDisagreementSummary, composeSpecialistOutput, composeSupervisorReply, defaultDelegation } from "./agentFabric";
 import { activateDiscoverySchedule, createAgentMessage, createConversation, createEvolutionEvent, createOptionalSubagent, createWatchlist, createWatchlistItem, createDiscoverySchedule, deleteWatchlistItem, ensureProtectedAgentNodes, getDiscoverySchedule, listAgentMessages, listConversations, listDiscoveryFindings, listDiscoverySchedules, listEvolutionEvents, listWatchlistItems, listWatchlists, pauseDiscoverySchedule, retireOptionalSubagent, updateAgentModel, updateWatchlistCriteria, updateWatchlistItemStatus } from "./agentFabricDb";
 import { defaultAgentModel, isSafeAgentToolScope, optionalSubagentLimit } from "@shared/tradingAgents";
-import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft } from "@shared/capabilityRegistry";
+import { capabilityBindingDraftSchema, getCapabilityRegistrySummary, validateCapabilityBindingDraft, validateCapabilityAccess, createCapabilityProvenance } from "@shared/capabilityRegistry";
 import { getPhase0ConfigurationSummary } from "./phase0Config";
+import { agentMemoryRouter } from "./agentMemoryRouter";
+import { findTeamRole, loadAgentTeam } from "@shared/agentTeam";
+import { executeApprovedProposal } from "./runtime/executionOrchestrator";
+import { isBlockedByDominantState } from "@shared/authorityState";
 
 const proposalSchema = z.object({
   policyResult: z.enum(["pass", "review", "block"]),
@@ -31,12 +35,9 @@ const proposalSchema = z.object({
   requestedScope: z.enum(["market.read", "portfolio.read", "chain.read", "proposal.write", "execution.request"]),
 });
 
-const actionSchema = z.object({
-  kind: z.enum(["policy_updated", "simulation_started", "simulation_blocked", "onchain_viewed", "scope_checked", "outcome_recorded", "promotion_changed", "research_completed", "agent_configured", "subagent_created", "subagent_retired", "chat_message", "watchlist_created", "watchlist_updated", "discovery_schedule_configured", "discovery_completed"]),
-  status: z.enum(["success", "review", "blocked"]),
+const ownerNoteSchema = z.object({
   subject: z.string().trim().min(1).max(160),
   detail: z.string().trim().min(1).max(2000),
-  payload: z.record(z.string(), z.unknown()).default({}),
 });
 
 const lineageSchema = z.object({
@@ -92,6 +93,29 @@ function requireOwnerAdmin(role: "user" | "admin") {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Only an administrator can validate configuration or hard evaluation gates." });
 }
 
+/**
+ * S2 FIX: Derive gate inputs from server-side persisted records.
+ * Client-supplied gate inputs are IGNORED — this prevents manipulation.
+ */
+async function deriveGateInputs(userId: number, proposal: { runId?: string | null; policyResult: string }) {
+  const authorityState = await getAuthorityState(userId);
+  const ownerPauseActive = isBlockedByDominantState(authorityState);
+
+  // simulationPassed: derived from the associated run's status
+  let simulationPassed = false;
+  if (proposal.runId) {
+    const runs = await listAgentRuns(userId);
+    const run = runs.find((r) => r.runId === proposal.runId);
+    simulationPassed = run?.status === "passed";
+  }
+
+  // lineageCoverage and complexityPenalty: default to 0 until lineage tracking is per-proposal
+  const lineageCoverage = 0;
+  const complexityPenalty = 0;
+
+  return { simulationPassed, ownerPauseActive, lineageCoverage, complexityPenalty };
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -122,6 +146,7 @@ export const appRouter = router({
       };
     }),
   }),
+  agentMemory: agentMemoryRouter,
   policy: router({
     current: protectedProcedure.query(({ ctx }) => getInvestmentPolicy(ctx.user.id)),
     save: protectedProcedure.input(investmentPolicySchema).mutation(async ({ ctx, input }) => {
@@ -132,7 +157,7 @@ export const appRouter = router({
         kind: "policy_updated",
         status: "success",
         subject: `IPS ${policy?.name ?? normalized.name}`,
-        detail: "Owner updated a simulation-only Investment Policy Statement.",
+        detail: "Owner updated a owner-governed Investment Policy Statement.",
         payload: { version: policy?.version, allowedAssets: normalized.allowedAssets, executionMode: "simulation" },
       });
       return policy;
@@ -222,16 +247,36 @@ export const appRouter = router({
       const threadId = input.threadId ?? nanoid();
       if (!input.threadId) await createConversation(ctx.user.id, { threadId, title: input.message.slice(0, 120) });
       await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "owner", content: input.message, evidence: ["owner-message"] });
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "chat_message", status: "success", subject: "Owner message to supervisor", detail: "Owner initiated a simulation-only supervisor conversation.", payload: { threadId } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "chat_message", status: "success", subject: "Owner message to supervisor", detail: "Owner initiated a bounded supervisor conversation.", payload: { threadId } });
       const threadHistory = await listAgentMessages(ctx.user.id, threadId);
       const history = threadHistory.map((message) => ({ actor: message.actor, content: message.content }));
       const delegatedAgents = defaultDelegation.map((roleKey) => nodes.find((node) => node.roleKey === roleKey)).filter((agent): agent is NonNullable<typeof agent> => Boolean(agent));
+      
+      // Slice 2: Verify each delegated agent has access to required capabilities
+      const usedCapabilities = new Set<string>();
+      for (const agent of delegatedAgents) {
+        try {
+          const agentCapabilities = validateCapabilityAccess(agent.roleKey, ["market-evidence.read"]);
+          agentCapabilities.forEach((cap) => usedCapabilities.add(cap));
+          if (["onchain", "fundamental", "bull", "bear"].includes(agent.roleKey)) {
+            const chainCaps = validateCapabilityAccess(agent.roleKey, ["chain-evidence.read"]);
+            chainCaps.forEach((cap) => usedCapabilities.add(cap));
+          }
+        } catch (error) {
+          throw new TRPCError({ 
+            code: "FORBIDDEN", 
+            message: `Agent ${agent.name} cannot be delegated: ${error instanceof Error ? error.message : "capability check failed"}`
+          });
+        }
+      }
+      
       for (const agent of delegatedAgents) await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: agent.agentId, state: "delegated", summary: `${agent.name} was delegated a bounded research perspective.`, evidence: ["supervisor-delegation", `model:${agent.model}`, "execution-sealed"] });
-      const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, output: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history }) })));
+      const settled = await Promise.allSettled(delegatedAgents.map(async (agent) => ({ agent, result: await composeSpecialistOutput({ model: agent.model || defaultAgentModel, role: agent.roleKey, name: agent.name, message: input.message, history, userId: ctx.user.id }) })));
       const specialistReports: { role: string; name: string; output: string; confidence?: number }[] = [];
       for (const result of settled) {
         if (result.status === "fulfilled") {
-          const { agent, output } = result.value;
+          const { agent, result: specResult } = result.value;
+          const output = typeof specResult === "string" ? specResult : specResult.output;
           const confidence = agent.roleKey === "bull" || agent.roleKey === "bear" ? calculateResearchNoteConfidence(output) : undefined;
           specialistReports.push({ role: agent.roleKey, name: agent.name, output, confidence });
           await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "agent", agentId: agent.agentId, content: output, confidence, evidence: ["specialist-working-note", `role:${agent.roleKey}`, `model:${agent.model}`, ...(confidence ? ["confidence:research-note-completeness"] : []), "execution-sealed"] });
@@ -254,7 +299,7 @@ export const appRouter = router({
   watchlists: router({
     lists: protectedProcedure.query(async ({ ctx }) => ({ lists: await listWatchlists(ctx.user.id), items: await listWatchlistItems(ctx.user.id), findings: await listDiscoveryFindings(ctx.user.id) })),
     create: protectedProcedure.input(watchlistSchema).mutation(async ({ ctx, input }) => {
-      const record = await createWatchlist(ctx.user.id, { watchlistId: nanoid(), name: input.name, criteria: { scope: "owner-defined", execution: "simulation-only" } });
+      const record = await createWatchlist(ctx.user.id, { watchlistId: nanoid(), name: input.name, criteria: { scope: "owner-defined", execution: "paper-only" } });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_created", status: "success", subject: `Watchlist: ${input.name}`, detail: "Owner created a bounded discovery universe.", payload: { watchlistId: record?.watchlistId } });
       return record;
     }),
@@ -270,7 +315,7 @@ export const appRouter = router({
       return record;
     }),
     updateScope: protectedProcedure.input(watchlistScopeSchema).mutation(async ({ ctx, input }) => {
-      const record = await updateWatchlistCriteria(ctx.user.id, input.watchlistId, { scope: "owner-defined", chains: input.chains, evidenceStandard: input.evidenceStandard, execution: "simulation-only" });
+      const record = await updateWatchlistCriteria(ctx.user.id, input.watchlistId, { scope: "owner-defined", chains: input.chains, evidenceStandard: input.evidenceStandard, execution: "paper-only" });
       if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist not found." });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "watchlist_updated", status: "success", subject: `Watchlist scope: ${record.name}`, detail: "Owner changed the bounded discovery scope. No execution authority changed.", payload: { watchlistId: record.watchlistId, criteria: record.criteria } });
       return record;
@@ -302,10 +347,10 @@ export const appRouter = router({
       const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
       const cron = schedule.cadence === "daily" ? "0 0 9 * * *" : "0 0 */6 * * *";
       const job = schedule.scheduleCronTaskUid
-        ? await updateHeartbeatJob(schedule.scheduleCronTaskUid, { enable: true, cron, path: "/api/scheduled/discovery", description: `Ledgerline ${schedule.cadence} simulation-only watchlist discovery` }, sessionToken).then(() => ({ taskUid: schedule.scheduleCronTaskUid! }))
-        : await createHeartbeatJob({ name: `ledgerline-discovery-${schedule.scheduleId}`, cron, path: "/api/scheduled/discovery", payload: { schemaVersion: 1 }, description: `Ledgerline ${schedule.cadence} simulation-only watchlist discovery` }, sessionToken);
+        ? await updateHeartbeatJob(schedule.scheduleCronTaskUid, { enable: true, cron, path: "/api/scheduled/discovery", description: `Ledgerline ${schedule.cadence} watchlist discovery` }, sessionToken).then(() => ({ taskUid: schedule.scheduleCronTaskUid! }))
+        : await createHeartbeatJob({ name: `ledgerline-discovery-${schedule.scheduleId}`, cron, path: "/api/scheduled/discovery", payload: { schemaVersion: 1 }, description: `Ledgerline ${schedule.cadence} watchlist discovery` }, sessionToken);
       const active = await activateDiscoverySchedule(ctx.user.id, schedule.scheduleId, job.taskUid);
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "success", subject: `${schedule.cadence} discovery activated`, detail: "Owner activated an authenticated, simulation-only watchlist discovery job on the deployed site.", payload: { scheduleId: schedule.scheduleId, taskUid: job.taskUid, cadence: schedule.cadence, execution: "simulation-only" } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "discovery_schedule_configured", status: "success", subject: `${schedule.cadence} discovery activated`, detail: "Owner activated an authenticated, watchlist discovery job on the deployed site.", payload: { scheduleId: schedule.scheduleId, taskUid: job.taskUid, cadence: schedule.cadence,        execution: "paper-only" } });
       return active;
     }),
     pause: protectedProcedure.input(z.object({ scheduleId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
@@ -328,7 +373,15 @@ export const appRouter = router({
         version: savedPolicy.version,
         allowedAssets: savedPolicy.allowedAssets,
       } : null;
-      const research = await runTokenResearch(input, policy);
+      
+      // Wire model from team config (variation agent)
+      const variationAgent = findTeamRole("variation");
+      const researchModel = variationAgent?.model ?? loadAgentTeam().defaultModel;
+      
+      // Slice 2: Verify variation agent has research capabilities
+      const researchCapabilities = validateCapabilityAccess("variation", ["market-evidence.read", "chain-evidence.read"]);
+      
+      const research = await runTokenResearch(input, policy, ctx.user.id, { model: researchModel });
       const runId = nanoid();
       const runStatus = research.advancement.status === "allowed" ? "passed" : research.advancement.status;
       const evidence = [
@@ -345,13 +398,14 @@ export const appRouter = router({
         summary: research.report.headline,
         evidence,
       });
+      const capabilityProvenance = createCapabilityProvenance(researchCapabilities);
       await createOperatorAction(ctx.user.id, {
         actionId: nanoid(),
         kind: "research_completed",
         status: research.advancement.status === "allowed" ? "success" : research.advancement.status,
         subject: `Research report: ${research.evidence.asset.symbol}`,
-        detail: "The owner requested an evidence-bound, simulation-only token research report.",
-        payload: { runId, question: input.question, policy: research.policy, advancement: research.advancement, evidence: research.evidence, report: research.report },
+        detail: "The owner requested an evidence-bound, token research report.",
+        payload: { runId, question: input.question, policy: research.policy, advancement: research.advancement, evidence: research.evidence, report: research.report, capabilityProvenance },
       });
       await createAwarenessRecord(ctx.user.id, {
         layer: "justification",
@@ -364,7 +418,7 @@ export const appRouter = router({
       const proposal = await createAgentProposal(ctx.user.id, {
         proposalId: nanoid(), runId, walletRole: "trading", venue: "evm", status: proposalStatus, policyResult: research.policy.result,
         title: research.report.headline, rationale: research.report.thesis,
-        action: { kind: "token_research_paper_proposal", address: research.evidence.asset.address, nextStep: research.report.researchNextStep, execution: "simulation-only" },
+        action: { kind: "token_research_paper_proposal", address: research.evidence.asset.address, nextStep: research.report.researchNextStep, execution: "paper-only" },
       });
       await createOperatorAction(ctx.user.id, {
         actionId: nanoid(), kind: "proposal_created", status: proposalStatus === "review" ? "review" : "blocked", subject: `Paper proposal: ${research.evidence.asset.symbol}`,
@@ -378,37 +432,68 @@ export const appRouter = router({
     mandates: protectedProcedure.query(({ ctx }) => listWalletMandates(ctx.user.id)),
     connections: protectedProcedure.query(({ ctx }) => listVenueConnections(ctx.user.id)),
     proposals: protectedProcedure.query(({ ctx }) => listAgentProposals(ctx.user.id)),
-    reviewHardGate: protectedProcedure.input(hardGateReviewSchema).mutation(async ({ ctx, input }) => {
+    reviewHardGate: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
-      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, simulationPassed: input.simulationPassed, ownerPauseActive: input.ownerPauseActive, lineageCoverage: input.lineageCoverage / 100, complexityPenalty: input.complexityPenalty / 100 });
+      // S2: Derive gate inputs from server-side records, not client claims
+      const gateInputs = await deriveGateInputs(ctx.user.id, proposal);
+      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, ...gateInputs });
       const status = gate.state === "pass" ? "success" : gate.state === "review" ? "review" : "blocked";
       await createOperatorAction(ctx.user.id, {
         actionId: nanoid(), kind: "scope_checked", status,
         subject: `Hard gate: ${proposal.title}`,
-        detail: `${gate.reason} This gate governs paper-simulation review only; no live action can follow.`,
-        payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: { simulationPassed: input.simulationPassed, lineageCoverage: input.lineageCoverage, complexityPenalty: input.complexityPenalty, ownerPauseActive: input.ownerPauseActive }, rationale: input.rationale, decision: gate, simulationOnly: true },
+        detail: `${gate.reason} Gate inputs derived server-side from persisted records.`,
+        payload: { gateType: "promotion-review", proposalId: proposal.proposalId, inputs: gateInputs, rationale: input.rationale, decision: gate },
         capabilityIds: ["paper-proposal.compose", "portfolio-snapshot.read"],
       });
-      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, executionBoundary: "simulation-only" as const };
+      // Alert on gate block (especially owner pause)
+      if (gate.state === "block") {
+        await createSecurityAlert(ctx.user.id, {
+          alertId: nanoid(),
+          level: "warning",
+          category: "gate",
+          title: `Gate blocked: ${proposal.title}`,
+          detail: gate.reason,
+        });
+      }
+      return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, inputs: gateInputs, executionBoundary: "fail-closed" as const };
     }),
     createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
       const mandate = await createWalletMandate(ctx.user.id, { mandateId: nanoid(), ...input, mode: "simulation", status: "active" });
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a simulation-only mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a paper mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
       return mandate;
     }),
     setMandateMode: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64), mode: z.enum(["simulation", "armed", "real", "paused"]) })).mutation(async ({ ctx, input }) => {
       if (input.mode === "real") {
-        await createOperatorAction(ctx.user.id, {
-          actionId: nanoid(),
-          kind: "scope_checked",
-          status: "blocked",
-          subject: "Blocked real-mode request",
-          detail: "Ledgerline blocked a request to enable real mode because no verified live adapter, owner arming ceremony, or execution gateway exists.",
-          payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "authority-boundary", executionBoundary: "simulation-only" },
-        });
-        throw new TRPCError({ code: "FORBIDDEN", message: "Real mode is not available: no verified live adapter, owner arming ceremony, or execution gateway exists." });
+        // Real mode requires: authority state allows orders + active mandate + IPS
+        const { getAuthorityState } = await import("./db");
+        const authorityState = await getAuthorityState(ctx.user.id);
+        const { canPlaceOrders } = await import("@shared/authorityState");
+        if (!canPlaceOrders(authorityState)) {
+          await createOperatorAction(ctx.user.id, {
+            actionId: nanoid(),
+            kind: "scope_checked",
+            status: "blocked",
+            subject: "Blocked real-mode request",
+            detail: `Authority state '${authorityState}' does not permit order placement. Climb the authority state machine first.`,
+            payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "authority-boundary", authorityState },
+          });
+          throw new TRPCError({ code: "FORBIDDEN", message: `Authority state '${authorityState}' does not permit real mode. Climb the authority state machine to 'approval-required-live' or 'limited-live' first.` });
+        }
+        const ips = await getInvestmentPolicy(ctx.user.id);
+        if (!ips) {
+          await createOperatorAction(ctx.user.id, {
+            actionId: nanoid(),
+            kind: "scope_checked",
+            status: "blocked",
+            subject: "Blocked real-mode request",
+            detail: "No active Investment Policy Statement. Real mode requires an approved IPS.",
+            payload: { mandateId: input.mandateId, requestedMode: "real", alertCategory: "policy-required" },
+          });
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Real mode requires an active Investment Policy Statement. Create and approve an IPS first." });
+        }
+        // All checks passed — allow the transition
       }
       const mandate = await updateWalletMandateMode(ctx.user.id, input.mandateId, input.mode);
       if (!mandate) throw new TRPCError({ code: "NOT_FOUND", message: "Mandate not found." });
@@ -420,15 +505,17 @@ export const appRouter = router({
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "venue_configured", status: "success", subject: `${input.venue} simulated adapter`, detail: "Owner enabled a simulated adapter. No external account, credential, or signed action was connected.", payload: { connectionId: connection?.connectionId, ...input, state: "simulation" } });
       return connection;
     }),
-    approveProposal: protectedProcedure.input(hardGateReviewSchema).mutation(async ({ ctx, input }) => {
+    approveProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
-      if (proposal.status !== "review" || proposal.policyResult !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a policy-passing proposal awaiting review can be approved for simulation." });
-      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, simulationPassed: input.simulationPassed, ownerPauseActive: input.ownerPauseActive, lineageCoverage: input.lineageCoverage / 100, complexityPenalty: input.complexityPenalty / 100 });
+      if (proposal.status !== "review" || proposal.policyResult !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a policy-passing proposal awaiting review can be approved for paper execution." });
+      // S2: Derive gate inputs from server-side records, not client claims
+      const gateInputs = await deriveGateInputs(ctx.user.id, proposal);
+      const gate = evaluatePromotionGate({ policyResult: proposal.policyResult, ...gateInputs });
       if (gate.state !== "pass") throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Hard evaluation gate did not pass: ${gate.reason}` });
       const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "approved");
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Simulation approved: ${proposal.title}`, detail: "Administrator approved this proposal for simulated execution only after a passing hard evaluation gate.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, gate, rationale: input.rationale, simulationOnly: true } });
+      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Paper approved: ${proposal.title}`, detail: "Administrator approved this proposal for paper execution after a passing hard evaluation gate with server-derived inputs.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, gate, inputs: gateInputs, rationale: input.rationale } });
       return updated;
     }),
     rejectProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), reason: z.string().trim().min(2).max(500) })).mutation(async ({ ctx, input }) => {
@@ -440,18 +527,24 @@ export const appRouter = router({
       return updated;
     }),
     settleSimulation: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64) })).mutation(async ({ ctx, input }) => {
-      const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
-      if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
-      if (proposal.status !== "approved") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only an owner-approved proposal can be settled in the simulator." });
-      const updated = await updateAgentProposalStatus(ctx.user.id, input.proposalId, "simulated");
-      await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "simulation_settled", status: "success", subject: `Simulation settled: ${proposal.title}`, detail: "The simulated venue adapter recorded a paper outcome. No external order or transaction occurred.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, simulationOnly: true } });
-      await createAwarenessRecord(ctx.user.id, { layer: "result", subject: `Simulation settled: ${proposal.title}`, runId: proposal.runId ?? undefined, evidence: ["simulated-adapter", `venue:${proposal.venue}`, `proposal:${proposal.proposalId}`], summary: "An approved proposal completed the simulated adapter lifecycle without an external action." });
-      return updated;
+      // Route through the execution orchestrator (paper backend by default)
+      const result = await executeApprovedProposal({ userId: ctx.user.id, proposalId: input.proposalId });
+      if (result.status === "rejected") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: result.reason });
+      }
+      return result;
     }),
   }),
   history: router({
     list: protectedProcedure.query(({ ctx }) => listOperatorActions(ctx.user.id)),
-    record: protectedProcedure.input(actionSchema).mutation(({ ctx, input }) => createOperatorAction(ctx.user.id, { actionId: nanoid(), ...input })),
+    record: protectedProcedure.input(ownerNoteSchema).mutation(({ ctx, input }) => createOperatorAction(ctx.user.id, {
+      actionId: nanoid(),
+      kind: "owner_note",
+      status: "review",
+      subject: input.subject,
+      detail: input.detail,
+      payload: { origin: "owner-asserted-note", authoritative: false },
+    })),
     startSimulation: protectedProcedure.input(z.object({ policyVersion: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const runId = nanoid();
       const run = await createAgentRun(ctx.user.id, {
@@ -473,7 +566,7 @@ export const appRouter = router({
         layer: "action",
         subject: `Paper simulation ${runId}`,
         runId,
-        evidence: [`ips-version:${input.policyVersion}`, "simulation-only", "execution-sealed"],
+        evidence: [`ips-version:${input.policyVersion}`, "execution-sealed"],
         summary: "A paper simulation was initiated by the authenticated owner under the active IPS.",
       });
       return run;

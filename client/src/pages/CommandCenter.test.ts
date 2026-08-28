@@ -21,6 +21,6 @@ describe("getChatPresentation", () => {
   it("includes a hover-and-focus IPS context explanation next to watchlist evaluation outcomes", () => {
     expect(commandSource).toContain("HoverCard");
     expect(commandSource).toContain("Explain IPS evaluation outcomes");
-    expect(commandSource).toContain("Evaluation remains informational and simulation-only");
+    expect(commandSource).toContain("Evaluation remains informational and paper-only");
   });
 });

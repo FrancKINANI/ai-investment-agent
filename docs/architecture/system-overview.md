@@ -1,117 +1,66 @@
-# Architecture
+# System Overview
 
-Ledgerline is a React and TypeScript operator workspace backed by Express, tRPC, Drizzle, and a MySQL-compatible database. The client is responsible for presentation and interaction; server procedures enforce data ownership and simulation boundaries.
+Ledgerline is a React and TypeScript private operator workspace backed by Express, tRPC, Drizzle, and a MySQL-compatible database. The client provides a clear agent-operating interface. The server—not the client—enforces authentication, owner scope, memory scope, capability bindings, policy constraints, and the sealed real-capital boundary.
 
 ## Workspace map
 
-| Route | Responsibility |
+| Route | User purpose |
 | --- | --- |
-| `/` | Command: watchlists, evidence research, paper proposals, and recent activity. |
-| `/chat` | Dedicated supervisor research conversation and debate timeline. |
-| `/wallets` | Wallet connection (WalletConnect v2), Sailor mandates, role mandates, mode management. |
-| `/platforms` | Platform API key management + live Binance trading (balances, orders, ticker). |
-| `/connections` | Venue capabilities and simulation adapter records. |
-| `/alerts` | Security alerts: critical/warning/info levels, acknowledge/resolve, persistent badge. |
-| `/mandates` | Sailor Protocol mandate management: create, activate, revoke with scope and value caps. |
-| `/settings` | Model routing, optional subagents, schedules, policy, and local owner preferences. |
-| `/activity` | Immutable owner-scoped event log. |
+| `/` | **Mission Control**: research-desk posture, current work, tasks, decision attention, policy and account posture, and audit trace. |
+| `/chat` | **Agent Room**: supervisor or individually selected specialist conversations with inspectable shared/private context. |
+| `/tasks` | **Tasks**: current, completed, and blocked owner-scoped agent work. |
+| `/decisions` | **Decision Desk**: paper-proposal review and the policy context around a decision. |
+| `/portfolio` | **Portfolio**: truthful account, connection, and policy posture; legacy Wallets, Mandates, Platforms, and Connections links resolve here. |
+| `/activity` | Immutable owner-scoped activity and security signals. |
+| `/settings` | Models, protected roles, optional specialists, policy, schedules, and owner-local preferences. |
 
-## Server routers
+## Agent and memory architecture
 
-| Router | Purpose |
+Protected TradingAgents roles are server-defined. They cannot be removed from the interface. An owner may select an active **research** specialist for a direct conversation, but an execution-oriented role is rejected before any message, memory read, or model call.
+
+```text
+authenticated owner
+  → selected active research agent
+  → server-derived bounded context
+      ├─ policy context
+      ├─ active shared memory
+      ├─ active private memory for that exact agent
+      └─ recent messages in that exact individual thread
+  → model response labelled as research context
+  → owner-scoped conversation and activity records
+```
+
+The memory store uses three additive tables: `agentIndividualConversations`, `agentMemoryEntries`, and `agentMemoryActions`. Every record is owner-scoped. A memory entry has a scope (`shared` or `private`), a lifecycle status, an optional target agent, content digest, expiry, revision, source reference, and creator type. The audit table preserves promotion and lifecycle transitions without retaining hidden model reasoning.
+
+| Context item | Visibility | Admission and lifecycle |
+| --- | --- | --- |
+| Shared memory | Eligible research agents for the same owner | Active, non-expired entries only; items are bounded and ordered deterministically. |
+| Private memory | One selected research agent and its owner | Must retain an exact target agent ID; never falls back to a broader team scope. |
+| Pending promotion | Owner and administrator review only | Still private and excluded from model context until approved. |
+| Expired, superseded, or redacted memory | No model context | Retained only according to its recorded lifecycle and audit treatment. |
+
+## Server routers and modules
+
+| Component | Responsibility |
 | --- | --- |
-| `agentFabric` | Agent nodes, conversations, evolution, model routes, capability registry |
-| `autonomy` | Mandates, connections, proposals, hard gates, simulation settlement |
-| `policy` | Investment Policy Statement CRUD |
-| `research` | Token research with policy checks |
-| `history` | Immutable activity log |
-| `audit` | Strategy lineages, evaluations, outcomes, awareness records |
-| `onchain` | Public Ethereum token metrics |
-| `security` | Alerts (CRUD) + Platform API keys (CRUD + limits) |
-| `live` | Binance API: balances, ticker, orders (place/cancel), exchange info |
-| `wallet` | WalletConnect v2 sessions + Sailor Protocol mandates |
+| `agentFabric` | Server-defined roles, supervisor conversations, evolution events, model selection, research proposals, and watchlists. |
+| `agentMemory` | Focused individual conversations, scoped-memory retrieval, owner-created notes, promotion request/review, and audit events. |
+| `policy` | Owner-scoped Investment Policy Statement records. |
+| `research` | Public-evidence research with policy-aware checks. |
+| `history` and `audit` | Owner-scoped immutable activity, outcomes, provenance, and review records. |
+| `live` and `liveAdapter` | Future-facing adapter surfaces guarded by the compile-time venue seal; not an execution path. |
 
-## Server modules
+## Authority boundary
 
-| Module | Purpose |
-| --- | --- |
-| `kms.ts` | AES-256-GCM encryption for API secrets |
-| `binance.ts` | Binance REST API client with HMAC-SHA256 signing |
-| `liveAdapter.ts` | Live execution with mandate validation and safety guards |
-| `walletService.ts` | WalletConnect v2 session management |
-| `sailorService.ts` | Sailor Protocol mandate CRUD and execution |
-| `agentExecutor.ts` | Unified CEX + on-chain execution pipeline |
-| `security.ts` | Rate limiting, input sanitization, error classification |
-| `production.ts` | Environment validation, health checks, graceful shutdown |
-| `metrics.ts` | Prometheus metrics endpoint and tracking |
+Research and paper review remain the active product path. The runtime must fail closed for any real venue mutation. `LIVE_VENUE_MUTATIONS_SEALED = true` is a compile-time control and must be checked before key decryption, mandate reads, venue I/O, or mutation attempts. It is not an environment toggle.
 
-## Agent runtime
-
-Protected TradingAgents roles are server-defined and cannot be removed from the interface. Optional specialists have a parent role, a visible model route, read-only scopes, and a durable audit trail.
-
-Agents can now execute through two paths:
-
-### CEX execution (Binance)
-```
-Agent proposal → live adapter → mandate check → Binance API → order result → audit log
+```text
+public evidence → bounded research → policy-aware paper review → owner decision record → immutable activity
+                                                              └→ real venue mutation: sealed / unavailable
 ```
 
-### On-chain execution (Sailor)
-```
-Agent proposal → live adapter → mandate check → WalletConnect → owner signs → broadcast → audit log
-```
+The memory router has no live adapter, Binance client, wallet, signing, or key-decryption dependency. Memory cannot create authority. Model output and stored memory are untrusted research reference material, not instructions that can grant tools or bypass server controls.
 
-Both paths enforce active mandate, value caps, and immutable audit logging.
+## Operational conventions
 
-## Data and authority flow
-
-```
-Public evidence → bounded agent research → deterministic policy → owner approval
-    │                                                        │
-    ├── Paper simulation (safe path)                         │
-    │   └── simulated settlement → activity log              │
-    │                                                        │
-    ├── CEX execution (requires active mandate)              │
-    │   └── Binance API → order → activity log + alert       │
-    │                                                        │
-    └── On-chain execution (requires Sailor mandate)         │
-        └── WalletConnect → owner signs → broadcast → log    │
-```
-
-Platform API keys are stored encrypted with AES-256-GCM (KMS module). Withdrawal permissions trigger a critical alert. All key operations are logged to the immutable Activity record.
-
-WalletConnect v2 handles on-chain signing — the agent never sees private keys. Sailor Protocol mandates define scope, value caps, and allowed tokens/protocols. Mandate revocation is immediate and on-chain.
-
-## KMS — Key Management Service
-
-Secrets are encrypted with AES-256-GCM using random IVs and auth tags. The master key is derived from `ENCRYPTION_KEY` env var via scrypt. Dev fallback uses a fixed passphrase with a console warning.
-
-## Security hardening
-
-- **Rate limiting:** Sliding window per userId + IP, configurable limits (10r/s API, 5r/s auth)
-- **Input sanitization:** Strip dangerous characters, truncate to 1000 chars
-- **Error classification:** Never leak internal details to users
-- **Request validation:** Schema-based validation with Zod
-- **Security headers:** nosniff, DENY frame, XSS protection, strict referrer
-
-## Production infrastructure
-
-### Docker
-
-Multi-stage Dockerfile (deps → build → production) with Docker Compose for MySQL + App. Production overrides add resource limits and restart policies. Makefile provides convenience commands.
-
-### CI/CD
-
-GitHub Actions pipeline with quality gate (typecheck + tests + build), security scan (Trivy), Docker build, and staging/production deployment. All checks must pass before merge.
-
-### Nginx
-
-Reverse proxy with SSL termination (TLS 1.2/1.3), rate limiting, security headers, WebSocket support, and custom error pages.
-
-### Monitoring
-
-Prometheus scrapes `/metrics` endpoint for HTTP requests, response times, errors, agent executions, and security alerts. Grafana dashboard displays 8 panels. Alert rules cover availability, performance, security, and business metrics. Alertmanager routes alerts to Slack, email, or PagerDuty.
-
-## Interface system
-
-The active interface uses semantic blue/cyan tokens for normal operating states, amber for review, and red for blocked or error states. Light and dark themes share the same token vocabulary. The topbar displays a persistent alerts badge. The Platforms page shows live Binance balances and an order form for active keys.
+All changes use `feat/*` or `fix/*` branches and reach `staging` through a green pull request. A separate authorised promotion is required before `main`. Schema changes follow the same workflow and may be applied only after the target database has been explicitly identified. No migration creates sample user data as a side effect.

@@ -30,9 +30,12 @@ describe("PAIA governance surfaces", () => {
     expect(activity).toContain("capability.id");
   });
 
-  it("keeps Command out of the sidebar rail and in the owner profile menu", () => {
+  it("uses the approved agent-first Mission Control navigation without reviving the retired Command label", () => {
     const rail = dashboard.slice(dashboard.indexOf("const menuItems"), dashboard.indexOf("const routeLabels"));
     expect(rail).not.toContain('label: "Command"');
-    expect(dashboard).toContain('navigate("/")}><Bot size={14} /> Command');
+    expect(rail).toContain('label: "Mission Control"');
+    expect(rail).toContain('label: "Agent Room"');
+    expect(rail).toContain('label: "Decision Desk"');
+    expect(dashboard).toContain('navigate("/")}><LayoutDashboard size={14} /> Mission Control');
   });
 });

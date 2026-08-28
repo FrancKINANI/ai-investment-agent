@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { decideProposal, type PolicyResult } from "@shared/agentRuntime";
+import { isBlockedByDominantState } from "@shared/authorityState";
 import { invokeLLM } from "./_core/llm";
 import { getEthereumTokenMetrics } from "./onchain";
+import { getAuthorityState } from "./db";
 
 export const researchRequestSchema = z.object({
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Enter a valid Ethereum token contract address."),
@@ -74,18 +76,27 @@ function compactEvidence(metrics: Awaited<ReturnType<typeof getEthereumTokenMetr
   };
 }
 
-export async function runTokenResearch(input: z.infer<typeof researchRequestSchema>, policyContext: ResearchPolicy) {
+export async function runTokenResearch(
+  input: z.infer<typeof researchRequestSchema>,
+  policyContext: ResearchPolicy,
+  userId: number,
+  options?: { model?: string }
+) {
   const metrics = await getEthereumTokenMetrics(input.address);
   const evidence = compactEvidence(metrics);
   const policyAssessment = assessResearchPolicy(metrics.token.address, policyContext);
 
+  // S1: Wire authority state check for owner pause
+  const authorityState = await getAuthorityState(userId);
+  const ownerPauseActive = isBlockedByDominantState(authorityState);
+
   const completion = await invokeLLM({
-    model: "gpt-5-mini",
+    model: options?.model ?? "gpt-5-mini",
     maxTokens: 1_800,
     messages: [
       {
         role: "system",
-        content: "You are Ledgerline's crypto/on-chain research analyst. Produce disciplined research, not personalized financial advice. Use only the provided evidence packet. Do not fabricate figures, token facts, news, protocol claims, holders, liquidity, or sources. Do not issue buy, sell, trade, allocation, or price-target instructions. Clearly identify uncertainty and evidence limitations. The system is simulation-only and has no wallet, signing, exchange, or execution authority. Return only JSON matching the requested schema.",
+        content: "You are Ledgerline's crypto/on-chain research analyst. Produce disciplined research, not personalized financial advice. Use only the provided evidence packet. Do not fabricate figures, token facts, news, protocol claims, holders, liquidity, or sources. Do not issue buy, sell, trade, allocation, or price-target instructions. Clearly identify uncertainty and evidence limitations. The system has no wallet, signing, exchange, or execution authority. Return only JSON matching the requested schema.",
       },
       {
         role: "user",
@@ -129,7 +140,7 @@ export async function runTokenResearch(input: z.infer<typeof researchRequestSche
   const advancement = decideProposal({
     policyResult: policyAssessment.result,
     simulationOnly: true,
-    ownerPauseActive: false,
+    ownerPauseActive,
     requestedScope: "proposal.write",
   });
 

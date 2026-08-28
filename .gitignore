@@ -7,6 +7,9 @@ dist/
 build/
 *.dist
 
+# Owner overlay (bindings, flags). Never commit secrets here.
+config/local.yaml
+
 # Environment variables
 .env
 .env.local

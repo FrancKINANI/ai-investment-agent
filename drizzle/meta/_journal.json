@@ -71,6 +71,20 @@
       "when": 1787680719671,
       "tag": "0009_youthful_sir_ram",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787856037070,
+      "tag": "0010_lethal_mikhail_rasputin",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787871449556,
+      "tag": "0011_agent_memory_workspace",
+      "breakpoints": true
     }
   ]
 }

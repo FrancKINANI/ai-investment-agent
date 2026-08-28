@@ -1,211 +1,85 @@
 # Ledgerline
 
-> **A simulation-first personal investment operations workspace for policy-bound research, multi-agent debate, and reviewable paper proposals.**
+> **A private, owner-controlled multi-agent investment research workspace.**
 
-[![MIT License](https://img.shields.io/badge/license-MIT-2563EB.svg)](LICENSE) [![Simulation first](https://img.shields.io/badge/authority-simulation--only-0EA5C9.svg)](docs/architecture/security-and-data.md)
+Ledgerline is an **AI investment operating system for research, review, and simulation**. It helps an owner observe a specialist team, ask focused questions, collect evidence, preserve audit trails, and review paper proposals. It is designed so that **observability grows before authority**: the product can explain what the team knows and why, without claiming it can move real capital.
 
-Ledgerline helps an owner turn public evidence into a durable, inspectable research workflow. It brings together a bounded agent fabric, investment-policy controls, public token evidence, a dedicated debate workspace, paper-proposal review, and immutable owner activity—without confusing research with custody or execution.
+## Current product state
 
-> **Safety boundary:** Ledgerline never stores private keys, seed phrases, or signing authority. Wallet connection uses WalletConnect v2 (non-custodial). Platform API keys are encrypted with AES-256-GCM. Live execution requires explicit owner consent via active mandates with scope and value caps. All operations are audit-logged with security alerts.
+The default workspace is **Mission Control**, a calm operating view for the research desk, current work, decisions requiring attention, policy posture, and immutable activity. **Agent Room** lets an owner select a specialist for a focused conversation and inspect the memory context used for that discussion. **Tasks**, **Decision Desk**, **Portfolio**, **Activity**, and **Configure** support the rest of the operating loop.
 
-## Screenshots
-
-The current product views below show the owner workspace in its **simulation-only** posture: Command for bounded research, Settings for configuration governance, and Activity for owner-scoped history.
-
-| Command workspace | Settings and governance | Immutable activity |
+| Capability | Current state | Important boundary |
 | --- | --- | --- |
-| ![Ledgerline Command workspace with watchlists, paper-candidate research, and simulation safeguards](/manus-storage/ledgerline-command-current_73c0a7af.png) | ![Ledgerline Settings workspace with capability registry, YAML configuration, binding governance, and hard gates](/manus-storage/ledgerline-settings-governance-current_bc79ea06.png) | ![Ledgerline Activity workspace with immutable owner-scoped events](/manus-storage/ledgerline-activity-current_d578a200.png) |
+| Mission Control and specialist roster | Available | Shows only authenticated, owner-scoped records. |
+| Focused individual-agent conversations | Available after the memory schema is present | Conversations are bound server-side to one non-execution research agent. |
+| Shared and private memory | Available after the memory schema is present | Private notes stay with one agent unless explicitly promoted and approved. |
+| Research, evidence, policy review, paper proposals | Available | Outputs are research records, not investment advice or execution instructions. |
+| Live venue mutation, wallet signing, on-chain action, custody | **Not available** | `LIVE_VENUE_MUTATIONS_SEALED` is a compile-time boundary. |
 
-## What it provides
+> **Real-capital status: NO-GO.** Creating configuration records, changing a feature flag, adding a key, or editing a mandate cannot lift the compiled execution seal. A separately authorised unsealing programme is required before any real-capital capability can be considered.
 
-| Area | Capability | Boundary |
-| --- | --- | --- |
-| **Command** | Watchlists, public EVM evidence research, policy checks, paper proposals, and a recent activity snapshot. | Research can create a paper-review state; it cannot reach a venue. |
-| **Chat** | Dedicated Supervisor conversation with Bull, Bear, and Supervisor filters, disagreement summaries, and completeness bands. | Notes are research artifacts, not trade instructions or return forecasts. |
-| **Wallets** | Wallet connection (WalletConnect/injected), separate trading and investment mandate roles, mode management (Simulation → Paper → Live). | No private keys stored. Live mode requires explicit confirmation and is logged. |
-| **Platforms** | Exchange API key management (Binance, OKX, Coinbase, Kraken, Polymarket) with encrypted storage, permission warnings, per-platform limits, and test/disable/delete. | Withdrawal permissions trigger critical alerts. Secrets never shown after initial entry. |
-| **Connections** | Simulation adapter and venue-boundary records. | No account credentials or live venue control. |
-| **Alerts** | Security alerts with critical/warning/info levels, persistent badge, acknowledge/resolve, and structured audit logging. | Alerts are owner-scoped, timestamped, and linked to the Decision Journal. |
-| **Settings** | Protected model routes, optional read-only subagents, inactive discovery schedules, YAML configuration inspection, policy controls, and local owner preferences. | Changing a model or inspecting configuration never grants a new tool scope or financial authority. |
-| **Activity** | Owner-scoped immutable operating history and local read-state controls. | Activity does not fabricate balances, fills, connections, or agent actions. |
-
-## Why simulation-first
-
-Ledgerline deliberately expands **observability and review quality before authority**. A model can assist with bounded investigation; deterministic policy rules and explicit owner approval control whether a proposal moves through a **simulated** lifecycle. This structure keeps agent reasoning, policy checks, paper settlement, and any future integration concerns separated.
-
-## Architecture at a glance
-
-The application uses React and TypeScript for the operator interface, tRPC and Express for typed server contracts, Drizzle with a MySQL-compatible database for owner-scoped persistence, and server-side adapters for public evidence. Protected TradingAgents roles remain server-defined. Optional specialists carry a visible parent, model route, read-only scope, and audit trail. The PAIA v0.4 foundation adds a validated, versioned Capability Registry for safe research and paper-proposal bindings; it contains no active MCP servers or execution adapters.
+## Product flow
 
 ```text
-Public evidence → bounded agent research → deterministic policy → owner approval
-                                                    │
-                    ┌───────────────────────────────┼───────────────────────────────┐
-                    ▼                               ▼                               ▼
-            Paper simulation               CEX execution                   On-chain execution
-           (safe path)                (requires active mandate)         (requires Sailor mandate)
-                    │                               │                               │
-                    ▼                               ▼                               ▼
-            simulated settlement           Binance API → order           WalletConnect → owner signs
-                    │                               │                               │
-                    └───────────────────────────────┴───────────────────────────────┘
-                                                    │
-                                                    ▼
-                                            immutable activity + alerts
-
-Platform API keys → AES-256-GCM encrypted → permission warnings → per-platform limits → audit log
-Wallet connection → WalletConnect v2 → address display → mode management → confirmation dialog
-Security alerts → critical/warning/info → persistent badge → acknowledge/resolve → Decision Journal
+Mission Control
+  → choose a specialist in Agent Room
+  → give a bounded research brief
+  → inspect evidence, conversation, and scoped memory
+  → review a paper proposal or decision record
+  → retain an immutable owner activity trail
 ```
 
-Read the [system overview](docs/architecture/system-overview.md), [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md), [security and data boundaries](docs/architecture/security-and-data.md), and [future real-mode architecture](docs/architecture/future-real-mode-architecture.md) for the current route, capability, data, authority, and future-gate model.
+The Supervisor coordinates specialist roles but does not receive wallet, key, signing, or venue authority. A role labelled **execution** is intentionally excluded from individual conversations and memory-context retrieval.
 
-## Docker deployment
+## Shared and private memory
 
-Ledgerline includes Docker configuration for both development and production environments.
+Ledgerline treats memory as visible owner data rather than a hidden chatbot history. A **team-shared** item can be used by eligible research specialists. A **private** item is associated with one selected specialist only. The server derives every context bundle from the authenticated owner, selected agent, active status, expiry, and bounded retrieval limits.
 
-### Development with Docker
+Moving a private note to team memory requires an explicit request and administrator review. While a request is pending, the note remains private. Approval changes the same record to shared, clears its individual agent target, increments its revision, and writes a memory audit action. Rejection restores the active private item. Secret-like text is rejected before persistence, and retrieved memory is labelled as untrusted reference material when supplied to a model.
 
-```bash
-# Copy environment file
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
-
-# Start development environment (MySQL + App)
-docker-compose up
-
-# Or in background
-docker-compose up -d
-```
-
-### Production with Docker
-
-```bash
-# Set production environment variables
-export JWT_SECRET=your-super-secret-key
-export ENCRYPTION_KEY=$(openssl rand -hex 32)
-
-# Start production environment
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-### Docker commands
-
-```bash
-# Show all available commands
-make help
-
-# Common commands
-make dev          # Start development environment
-make prod         # Start production environment
-make stop         # Stop all containers
-make logs         # Show logs
-make db-push      # Push database schema
-make test         # Run tests in container
-make typecheck    # Run TypeScript checks
-```
-
-### Health check
-
-The server exposes a health check endpoint at `/healthz`:
-
-```bash
-curl http://localhost:3000/healthz
-```
-
-Response:
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "uptime": 123.456,
-  "environment": "production",
-  "version": "1.0.0"
-}
-```
+Read the detailed [memory-promotion workflow](docs/architecture/agent-memory-workspace.md) and the [system overview](docs/architecture/system-overview.md) before extending this behaviour.
 
 ## Quick start
 
-### Prerequisites
-
-Use **Node.js 22+** and pnpm. A local or hosted database and OAuth configuration are required for authenticated owner workflows. Do not commit environment files or populated credentials.
+Use **Node.js 24.x LTS** and pnpm. Do not commit `.env` files, real credentials, database URLs, wallet material, private keys, seed phrases, or account data.
 
 ```bash
-git clone https://github.com/FrancKINANI/ai-investment-agent-mvp.git
-cd ai-investment-agent-mvp
-pnpm install
+git clone https://github.com/FrancKINANI/ai-investment-agent.git
+cd ai-investment-agent
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The development server prints a local URL. Open `/welcome` for the public project introduction or `/` for the Command workspace.
-
-### Verify the project
+Open `/welcome` for the public introduction or `/` for Mission Control. Sign in before expecting owner-scoped agents, conversations, policies, portfolio posture, or activity records.
 
 ```bash
 pnpm test
 pnpm check
 pnpm build
+pnpm audit --prod
+pnpm drizzle-kit check
 ```
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Starts the development server. |
-| `pnpm test` | Runs server, policy, theme, accessibility-oriented loading, and UI regression tests. |
-| `pnpm check` | Runs TypeScript without emitting output. |
-| `pnpm build` | Produces the production client and server bundles. |
-| `pnpm ledgerline config validate` | Validates the safe, inspection-only Phase 0 YAML configuration. |
+## Database migrations
 
-### Configure the environment
-
-Follow the [environment configuration guide](docs/maintainers/environment-configuration.md). Server secrets such as `DATABASE_URL` and `JWT_SECRET` belong only in the deployment platform's protected configuration store. Values with a `VITE_` prefix are browser-visible by design and must never contain credentials.
-
-## First safe workflow
-
-1. Open **Command** and read the simulation-default authority strip.
-2. Review protected agent roles, inactive schedules, and policy controls in **Settings**.
-3. Start a bounded research brief in **Chat**; use the Bull and Bear filters to inspect disagreement.
-4. Add a watchlist and use the Evidence Lab only with a public Ethereum contract address.
-5. Review paper-proposal states and the immutable **Activity** record. Owner approval can advance a proposal only to simulated settlement.
-6. Visit **Wallets** to connect a wallet and explore mode management (Simulation → Paper → Live).
-7. Visit **Platforms & API Keys** to add an exchange API key with trading-only permissions.
-8. Check **Security Alerts** for any alerts generated by your actions.
-
-Loading skeletons indicate a real pending request. Empty states indicate a completed request with no matching owner records. Treating those states separately is important: neither is evidence of a connection, balance, policy pass, or execution result.
+Schema changes are reviewed through a branch and pull request, then applied **only to the explicitly identified target environment**. Never infer that a managed project database, local database, `staging`, or `main` is the same environment. The additive `0011_agent_memory_workspace` migration creates individual conversation, memory-entry, and memory-action tables; it does not create data and does not alter existing tables.
 
 ## Documentation
 
 | Audience | Document | Purpose |
 | --- | --- | --- |
-| New contributors | [Getting started](docs/guides/getting-started.md) | Setup, verification, and a safe first workflow. |
-| Operators | [Operator guide](docs/guides/operator-guide.md) | Day-to-day use of all workspaces. |
-| Developers | [System overview](docs/architecture/system-overview.md) | Routes, services, agents, and authority flow. |
-| Architecture contributors | [PAIA v0.4 foundation](docs/architecture/paia-v0.4-foundation.md) | Capability registry, awareness mapping, phase gates, and execution exclusions. |
-| Future-program reviewers | [Future real-mode architecture](docs/architecture/future-real-mode-architecture.md) | Prospective trust boundaries, sequential activation gates, controls, adapters, and assurance. |
-| Configuration contributors | [Safe Phase 0 configuration and CLI](docs/guides/phase0-configuration-cli.md) | YAML layout, validation, supported inspection commands, and deferred authority. |
-| Security reviewers | [Security and data](docs/architecture/security-and-data.md) | Storage, privacy, and execution boundaries. |
-| Maintainers | [Engineering and operations](docs/maintainers/engineering-and-operations.md) | Tests, releases, tokens, and maintenance conventions. |
-| Deployers | [Environment configuration](docs/maintainers/environment-configuration.md) | Required configuration names and public/private treatment. |
-| Community maintainers | [Demo dataset policy](docs/maintainers/demo-dataset-policy.md) | Rules for fixtures, screenshots, seeds, and safe synthetic examples. |
-| Open-source maintainers | [Open-source release guide](docs/maintainers/open-source-release.md) | Repository hygiene and release posture. |
-| Product contributors | [Roadmap](docs/product/roadmap.md) | Directional development milestones. |
-| Everyone | [Changelog](docs/product/changelog.md) | Public record of meaningful product, performance, and safety improvements. |
+| New operators | [Getting started](docs/guides/getting-started.md) | Run the workspace and follow a safe first research loop. |
+| Operators | [Operator guide](docs/guides/operator-guide.md) | Use Mission Control, Agent Room, tasks, decisions, and activity. |
+| Developers | [System overview](docs/architecture/system-overview.md) | Understand routes, services, data scopes, and server enforcement. |
+| Memory reviewers | [Agent memory workspace](docs/architecture/agent-memory-workspace.md) | Review context construction and private-to-shared promotion. |
+| Security reviewers | [Security and data boundaries](docs/architecture/security-and-data.md) | Review no-go controls, privacy, error handling, and migration rules. |
+| Future-program reviewers | [Future real-mode architecture](docs/architecture/future-real-mode-architecture.md) | Evaluate a future-only unsealing programme. |
+| Contributors | [CONTRIBUTING.md](CONTRIBUTING.md) | Follow the repository workflow and safety constraints. |
 
-## Contributing
+## Contribution and security
 
-Contributions that improve research review, simulation fidelity, accessibility, testing, and documentation are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The repository includes CI for tests, type checks, and production builds, plus pull request and issue templates.
+Use the required workflow: `feat/*` or `fix/*` → pull request → `staging` → separate approval before `main`. Required checks must be green before merge. Report vulnerabilities through the process in [SECURITY.md](SECURITY.md).
 
-Please do not commit credentials, personal data, database URLs, logs, generated builds, sample account data, venue secrets, private keys, or internal prompt materials. Do not add fabricated balances, fills, connected accounts, customer reviews, ratings, or execution results.
+Contributions must not add fabricated balances, fills, connected accounts, customer reviews, ratings, or execution results. They must not bypass owner isolation, policy checks, secret handling, prompt-boundary controls, or the compiled venue seal.
 
-## Security
-
-Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md). Authentication bypasses, owner-data isolation failures, policy-bypass paths, secret exposure, and any UI behavior that implies live execution are security issues.
-
-## License and repository status
-
-Ledgerline is licensed under the [MIT License](LICENSE). The GitHub repository currently remains **private** by owner choice; the built-in **Star on GitHub** links are ready for use once the owner makes it public.
-
-## Roadmap
-
-The project prioritizes stronger evidence provenance, paper-simulation review, accessible operator ergonomics, and restricted future integrations. Any live capability would require a separate security, product, operational, and legal decision; it is not enabled by this repository.
+Ledgerline is MIT licensed.
