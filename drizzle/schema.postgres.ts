@@ -1,4 +1,4 @@
-import { bigint, boolean, integer, json, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, json, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, vector } from "drizzle-orm/pg-core";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
@@ -233,8 +233,15 @@ export const agentMessages = pgTable("agentMessages", {
   content: text("content").notNull(),
   confidence: integer("confidence"),
   evidence: json("evidence").$type<string[]>().notNull(),
+  // Full-text search vector
+  searchVector: text("searchVector").$type<any>(),
+  // Vector embedding for semantic search
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_message_search_vector").using("gin", table.searchVector),
+  index("idx_message_embedding_hnsw").using("hnsw", table.embedding),
+]);
 
 // ─── Memory System ──────────────────────────────────────────────────────────
 
@@ -254,9 +261,16 @@ export const agentMemoryEntries = pgTable("agentMemoryEntries", {
   revision: integer("revision").default(1).notNull(),
   expiresAt: timestamp("expiresAt"),
   createdBy: actorTypeEnum("createdBy").notNull(),
+  // Full-text search vector
+  searchVector: text("searchVector").$type<any>(),
+  // Vector embedding for RAG (1536 dimensions for OpenAI ada-002)
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_memory_search_vector").using("gin", table.searchVector),
+  index("idx_memory_embedding_hnsw").using("hnsw", table.embedding),
+]);
 
 export const agentMemoryActions = pgTable("agentMemoryActions", {
   id: serial("id").primaryKey(),
