@@ -64,3 +64,5 @@ The memory router has no live adapter, Binance client, wallet, signing, or key-d
 ## Operational conventions
 
 All changes use `feat/*` or `fix/*` branches and reach `staging` through a green pull request. A separate authorised promotion is required before `main`. Schema changes follow the same workflow and may be applied only after the target database has been explicitly identified. No migration creates sample user data as a side effect.
+
+The active database is MySQL/TiDB-compatible. A future PostgreSQL move is governed by the separate [PostgreSQL Migration Plan](postgresql-migration-plan.md); it is not a configuration switch and does not change the real-capital execution seal.
