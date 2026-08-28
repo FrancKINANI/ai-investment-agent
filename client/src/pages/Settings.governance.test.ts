@@ -36,6 +36,9 @@ describe("PAIA governance surfaces", () => {
     expect(rail).toContain('label: "Mission Control"');
     expect(rail).toContain('label: "Agent Room"');
     expect(rail).toContain('label: "Decision Desk"');
-    expect(dashboard).toContain('navigate("/")}><LayoutDashboard size={14} /> Mission Control');
+    expect(dashboard).not.toContain('navigate("/")}><LayoutDashboard size={14} /> Mission Control');
+    expect(dashboard).not.toContain('navigate("/settings")}><Settings2 size={14} /> Configure');
+    expect(dashboard).not.toContain('markActivityRead(); navigate("/activity")');
+    expect(dashboard).not.toContain('>Open Configure</Button>');
   });
 });
