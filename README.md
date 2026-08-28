@@ -1,85 +1,248 @@
-# Ledgerline
+<div align="center">
 
-> **A private, owner-controlled multi-agent investment research workspace.**
+# 🔐 Ledgerline
 
-Ledgerline is an **AI investment operating system for research, review, and simulation**. It helps an owner observe a specialist team, ask focused questions, collect evidence, preserve audit trails, and review paper proposals. It is designed so that **observability grows before authority**: the product can explain what the team knows and why, without claiming it can move real capital.
+### A Private, Owner-Controlled Multi-Agent Investment Research Workspace
 
-## Current product state
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Phase](https://img.shields.io/badge/phase-research%20%26%20simulation-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Node](https://img.shields.io/badge/node-%3E%3D24-orange)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 
-The default workspace is **Mission Control**, a calm operating view for the research desk, current work, decisions requiring attention, policy posture, and immutable activity. **Agent Room** lets an owner select a specialist for a focused conversation and inspect the memory context used for that discussion. **Tasks**, **Decision Desk**, **Portfolio**, **Activity**, and **Configure** support the rest of the operating loop.
+---
 
-| Capability | Current state | Important boundary |
-| --- | --- | --- |
-| Mission Control and specialist roster | Available | Shows only authenticated, owner-scoped records. |
-| Focused individual-agent conversations | Available after the memory schema is present | Conversations are bound server-side to one non-execution research agent. |
-| Shared and private memory | Available after the memory schema is present | Private notes stay with one agent unless explicitly promoted and approved. |
-| Research, evidence, policy review, paper proposals | Available | Outputs are research records, not investment advice or execution instructions. |
-| Live venue mutation, wallet signing, on-chain action, custody | **Not available** | `LIVE_VENUE_MUTATIONS_SEALED` is a compile-time boundary. |
+**Ledgerline** is an **AI investment operating system** for research, review, and simulation. It helps an owner operate a specialist research team, maintain visible evidence trails, and review paper decisions.
 
-> **Real-capital status: NO-GO.** Creating configuration records, changing a feature flag, adding a key, or editing a mandate cannot lift the compiled execution seal. A separately authorised unsealing programme is required before any real-capital capability can be considered.
+> *Observability grows before authority. The product explains what the team knows and why, without claiming it can move real capital.*
 
-## Product flow
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/FrancKINANI/ai-investment-agent)
+[![Documentation](https://img.shields.io/badge/Docs-Read%20More-009688?style=for-the-badge)](docs/architecture/current-architecture.md)
+[![Contributing](https://img.shields.io/badge/Contributing-Guide-FF5722?style=for-the-badge)](CONTRIBUTING.md)
 
-```text
-Mission Control
-  → choose a specialist in Agent Room
-  → give a bounded research brief
-  → inspect evidence, conversation, and scoped memory
-  → review a paper proposal or decision record
-  → retain an immutable owner activity trail
-```
+</div>
 
-The Supervisor coordinates specialist roles but does not receive wallet, key, signing, or venue authority. A role labelled **execution** is intentionally excluded from individual conversations and memory-context retrieval.
+---
 
-## Shared and private memory
+## 🎯 What is Ledgerline?
 
-Ledgerline treats memory as visible owner data rather than a hidden chatbot history. A **team-shared** item can be used by eligible research specialists. A **private** item is associated with one selected specialist only. The server derives every context bundle from the authenticated owner, selected agent, active status, expiry, and bounded retrieval limits.
+Ledgerline is a **research-first investment workspace** that helps you:
 
-Moving a private note to team memory requires an explicit request and administrator review. While a request is pending, the note remains private. Approval changes the same record to shared, clears its individual agent target, increments its revision, and writes a memory audit action. Rejection restores the active private item. Secret-like text is rejected before persistence, and retrieved memory is labelled as untrusted reference material when supplied to a model.
+| Capability | Description |
+|------------|-------------|
+| 🤖 **Operate Specialists** | Run a team of AI research agents with clear roles and boundaries |
+| 📊 **Collect Evidence** | Gather public market data, on-chain evidence, and research findings |
+| 📝 **Review Paper Proposals** | Evaluate investment decisions before any real execution |
+| 🔍 **Maintain Audit Trails** | Keep immutable records of all research and decisions |
+| 🔒 **Enforce Security** | Compile-time sealed boundaries prevent real capital movement |
 
-Read the detailed [memory-promotion workflow](docs/architecture/agent-memory-workspace.md) and the [system overview](docs/architecture/system-overview.md) before extending this behaviour.
+---
 
-## Quick start
+## 🚀 Current Product State
 
-Use **Node.js 24.x LTS** and pnpm. Do not commit `.env` files, real credentials, database URLs, wallet material, private keys, seed phrases, or account data.
+The workspace provides a complete research environment:
+
+| Workspace | Purpose | Status |
+|-----------|---------|--------|
+| **Mission Control** | Research desk, current work, tasks, decision attention | ✅ Active |
+| **Agent Room** | Specialist conversations with inspectable context | ✅ Active |
+| **Tasks** | Current, completed, and blocked agent work | ✅ Active |
+| **Decision Desk** | Paper-proposal review and policy context | ✅ Active |
+| **Portfolio** | Truthful account, connection, and policy posture | ✅ Active |
+| **Activity** | Immutable owner-scoped activity and security signals | ✅ Active |
+| **Configure** | Models, protected roles, specialists, policy | ✅ Active |
+
+---
+
+## 🔒 Security Boundary
+
+<div align="center">
+
+### 🚫 Real-Capital Status: **NO-GO**
+
+</div>
+
+| Capability | Status | Enforcement |
+|------------|--------|-------------|
+| Wallet Signing | 🚫 **Sealed** | Compile-time |
+| On-Chain Action | 🚫 **Sealed** | Compile-time |
+| Custody | 🚫 **Sealed** | Compile-time |
+| Withdrawal | 🚫 **Sealed** | Compile-time |
+| Binance Orders | 🚫 **Sealed** | Service boundary |
+| MCP Activation | 🚫 **Sealed** | Manager rejects |
+
+> **Important:** Creating configuration records, changing a feature flag, adding a key, or editing a mandate **cannot** lift the compiled execution seal. A separately authorised unsealing programme is required before any real-capital capability can be considered.
+
+---
+
+## ⚡ Quick Start
+
+### Prerequisites
+
+- **Node.js** ≥ 24.x LTS
+- **pnpm** (package manager)
+- **MySQL/TiDB** database
+
+### Installation
 
 ```bash
+# Clone the repository
 git clone https://github.com/FrancKINANI/ai-investment-agent.git
 cd ai-investment-agent
+
+# Install dependencies
 pnpm install --frozen-lockfile
+
+# Start development server
 pnpm dev
 ```
 
-Open `/welcome` for the public introduction or `/` for Mission Control. Sign in before expecting owner-scoped agents, conversations, policies, portfolio posture, or activity records.
+### Available Commands
 
-```bash
-pnpm test
-pnpm check
-pnpm build
-pnpm audit --prod
-pnpm drizzle-kit check
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | 🚀 Start development server |
+| `pnpm test` | 🧪 Run test suite |
+| `pnpm check` | 🔍 TypeScript type check |
+| `pnpm build` | 📦 Production build |
+| `pnpm audit --prod` | 🔒 Security audit |
+| `pnpm drizzle-kit check` | 🗄️ Schema validation |
+
+---
+
+## 🧠 Memory System
+
+Ledgerline treats memory as **visible owner data** rather than hidden chatbot history:
+
+| Scope | Purpose | Visibility |
+|-------|---------|------------|
+| **Shared** | Team research context | Eligible research agents |
+| **Private** | Specialist working notes | One agent + owner only |
+
+### Promotion Workflow
+
+```
+Private Note → Owner Requests → Pending → Admin Review → Shared/Rejected
 ```
 
-## Database migrations
+Memory is **always labelled as untrusted reference material** in model prompts.
 
-Schema changes are reviewed through a branch and pull request, then applied **only to the explicitly identified target environment**. Never infer that a managed project database, local database, `staging`, or `main` is the same environment. The additive `0011_agent_memory_workspace` migration creates individual conversation, memory-entry, and memory-action tables; it does not create data and does not alter existing tables.
+---
 
-## Documentation
+## 🏗️ Architecture Overview
 
-| Audience | Document | Purpose |
-| --- | --- | --- |
-| New operators | [Getting started](docs/guides/getting-started.md) | Run the workspace and follow a safe first research loop. |
-| Operators | [Operator guide](docs/guides/operator-guide.md) | Use Mission Control, Agent Room, tasks, decisions, and activity. |
-| Developers | [System overview](docs/architecture/system-overview.md) | Understand routes, services, data scopes, and server enforcement. |
-| Memory reviewers | [Agent memory workspace](docs/architecture/agent-memory-workspace.md) | Review context construction and private-to-shared promotion. |
-| Security reviewers | [Security and data boundaries](docs/architecture/security-and-data.md) | Review no-go controls, privacy, error handling, and migration rules. |
-| Future-program reviewers | [Future real-mode architecture](docs/architecture/future-real-mode-architecture.md) | Evaluate a future-only unsealing programme. |
-| Contributors | [CONTRIBUTING.md](CONTRIBUTING.md) | Follow the repository workflow and safety constraints. |
+```mermaid
+graph TB
+    subgraph Client["🖥️ Client (React + Vite)"]
+        MC[Mission Control]
+        AR[Agent Room]
+        TK[Tasks]
+        DD[Decision Desk]
+    end
 
-## Contribution and security
+    subgraph Server["⚙️ Server (Express + tRPC)"]
+        AF[Agent Fabric]
+        AM[Agent Memory]
+        PL[Policy Engine]
+        RV[Research]
+    end
 
-Use the required workflow: `feat/*` or `fix/*` → pull request → `staging` → separate approval before `main`. Required checks must be green before merge. Report vulnerabilities through the process in [SECURITY.md](SECURITY.md).
+    subgraph Database["🗄️ Database"]
+        DB[(MySQL/TiDB)]
+    end
 
-Contributions must not add fabricated balances, fills, connected accounts, customer reviews, ratings, or execution results. They must not bypass owner isolation, policy checks, secret handling, prompt-boundary controls, or the compiled venue seal.
+    MC --> AF
+    AR --> AM
+    TK --> PL
+    DD --> RV
 
-Ledgerline is MIT licensed.
+    AF --> DB
+    AM --> DB
+    PL --> DB
+    RV --> DB
+
+    style Client fill:#e3f2fd,stroke:#1976d2
+    style Server fill:#fff3e0,stroke:#f57c00
+    style Database fill:#e8f5e9,stroke:#388e3c
+```
+
+> 📖 **Full architecture details:** [docs/architecture/current-architecture.md](docs/architecture/current-architecture.md)
+
+---
+
+## 📚 Documentation
+
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [Getting Started](docs/guides/getting-started.md) | 🆕 New operators | Run workspace, first research loop |
+| [Operator Guide](docs/guides/operator-guide.md) | 👩‍💼 Operators | Mission Control, Agent Room, tasks |
+| [Architecture](docs/architecture/current-architecture.md) | 🏗️ Developers | System design, routes, services |
+| [System Overview](docs/architecture/system-overview.md) | 👨‍💻 Developers | Data scopes, server enforcement |
+| [Agent Memory](docs/architecture/agent-memory-workspace.md) | 🧠 Memory reviewers | Context construction, promotion |
+| [Security](docs/architecture/security-and-data.md) | 🔐 Security reviewers | No-go controls, privacy |
+| [Contributing](CONTRIBUTING.md) | 🤝 Contributors | Workflow, safety constraints |
+
+---
+
+## 🛠️ Technology Stack
+
+<div align="center">
+
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | React 19 · Vite · tRPC · TanStack Query · Tailwind CSS · Radix UI |
+| **Backend** | Express 5 · tRPC · Drizzle ORM · jose · Zod |
+| **Database** | MySQL / TiDB |
+| **Infrastructure** | Docker · Nginx · Prometheus · Grafana · GitHub Actions |
+
+</div>
+
+---
+
+## 🔄 Development Workflow
+
+```mermaid
+graph LR
+    A[feat/* or fix/*] --> B[Pull Request]
+    B --> C{CI Green?}
+    C -->|Yes| D[Staging]
+    C -->|No| B
+    D --> E[Review & Test]
+    E --> F[Separate Approval]
+    F --> G[Main]
+    
+    style A fill:#e8f5e9,stroke:#388e3c
+    style G fill:#e3f2fd,stroke:#1976d2
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting a PR.
+
+### Guidelines
+
+- ✅ Use `feat/*` or `fix/*` branches
+- ✅ All CI checks must pass before merge
+- ✅ Follow the branch → PR → staging → approval → main workflow
+- ❌ No fabricated balances, fills, or execution results
+- ❌ No bypassing security controls
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**Built with ❤️ for research-first investing**
+
+[![GitHub Stars](https://img.shields.io/github/stars/FrancKINANI/ai-investment-agent?style=social)](https://github.com/FrancKINANI/ai-investment-agent)
+[![GitHub Forks](https://img.shields.io/github/forks/FrancKINANI/ai-investment-agent?style=social)](https://github.com/FrancKINANI/ai-investment-agent)
+
+</div>
