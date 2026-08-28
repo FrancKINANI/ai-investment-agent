@@ -59,7 +59,7 @@ The workspace provides a complete research environment:
 
 <div align="center">
 
-### 🚫 Real-Capital Status: **NO-GO**
+### 🚫 Real-capital status: NO-GO
 
 </div>
 
@@ -113,7 +113,7 @@ pnpm dev
 
 ## 🧠 Memory System
 
-Ledgerline treats memory as **visible owner data** rather than hidden chatbot history:
+Ledgerline treats memory as **visible owner data** rather than hidden chatbot history. The system supports **Shared and private memory** scopes:
 
 | Scope | Purpose | Visibility |
 |-------|---------|------------|
