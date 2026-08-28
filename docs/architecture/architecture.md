@@ -78,7 +78,7 @@ graph TB
 
     subgraph Database["🗄️ Database Layer"]
         DRIZZLE[Drizzle ORM]
-        DB[(MySQL/TiDB)]
+        DB[(PostgreSQL)]
     end
 
     MC & AR & TK & DD & PF & AC & CF --> TRPC
@@ -231,7 +231,7 @@ All data is owner-scoped:
 | **Express 5** | HTTP server |
 | **tRPC** | Type-safe RPC |
 | **Drizzle ORM** | Database access |
-| **MySQL/TiDB** | Database |
+| **PostgreSQL** | Database |
 | **jose** | JWT handling |
 | **Zod** | Schema validation |
 

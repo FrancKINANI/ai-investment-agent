@@ -1,6 +1,6 @@
 # System Overview
 
-Ledgerline is a React and TypeScript private operator workspace backed by Express, tRPC, Drizzle, and a MySQL-compatible database. The client provides a clear agent-operating interface. The server—not the client—enforces authentication, owner scope, memory scope, capability bindings, policy constraints, and the sealed real-capital boundary.
+Ledgerline is a React and TypeScript private operator workspace backed by Express, tRPC, Drizzle, and PostgreSQL. The client provides a clear agent-operating interface. The server—not the client—enforces authentication, owner scope, memory scope, capability bindings, policy constraints, and the sealed real-capital boundary.
 
 ## Workspace map
 
@@ -65,4 +65,4 @@ The memory router has no live adapter, Binance client, wallet, signing, or key-d
 
 All changes use `feat/*` or `fix/*` branches and reach `staging` through a green pull request. A separate authorised promotion is required before `main`. Schema changes follow the same workflow and may be applied only after the target database has been explicitly identified. No migration creates sample user data as a side effect.
 
-The active database is MySQL/TiDB-compatible. A future PostgreSQL move is governed by the separate [PostgreSQL Migration Plan](postgresql-migration-plan.md); it is not a configuration switch and does not change the real-capital execution seal.
+The active database is PostgreSQL with extensions for vector search (pgvector), full-text search, caching (UNLOGGED tables), and scheduling (pg_cron).

@@ -82,7 +82,7 @@ The workspace provides a complete research environment:
 
 - **Node.js** ≥ 24.x LTS
 - **pnpm** (package manager)
-- **MySQL/TiDB** database
+- **PostgreSQL** database
 
 ### Installation
 
@@ -149,7 +149,7 @@ graph TB
     end
 
     subgraph Database["🗄️ Database"]
-        DB[(MySQL/TiDB)]
+        DB[(PostgreSQL)]
     end
 
     MC --> AF
@@ -193,7 +193,7 @@ graph TB
 |-------|--------------|
 | **Frontend** | React 19 · Vite · tRPC · TanStack Query · Tailwind CSS · Radix UI |
 | **Backend** | Express 5 · tRPC · Drizzle ORM · jose · Zod |
-| **Database** | MySQL / TiDB |
+| **Database** | PostgreSQL |
 | **Infrastructure** | Docker · Nginx · Prometheus · Grafana · GitHub Actions |
 
 </div>

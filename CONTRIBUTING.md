@@ -70,7 +70,7 @@ git push origin feat/my-feature
 |-------------|---------|---------|
 | **Node.js** | ≥ 24.x LTS | Runtime |
 | **pnpm** | Latest | Package manager |
-| **MySQL/TiDB** | 8.0+ | Database |
+| **PostgreSQL** | 16+ | Database |
 
 ### Environment Setup
 

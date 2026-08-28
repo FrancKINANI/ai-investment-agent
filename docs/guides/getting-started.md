@@ -4,7 +4,7 @@ Ledgerline is a **private research and simulation workspace**. It helps you oper
 
 ## Prerequisites and local run
 
-Use Node.js **24.x LTS**, pnpm, a MySQL-compatible database, and the required OAuth configuration. Keep all credentials and personal data outside the repository.
+Use Node.js **24.x LTS**, pnpm, PostgreSQL, and the required OAuth configuration. Keep all credentials and personal data outside the repository.
 
 ```bash
 git clone https://github.com/FrancKINANI/ai-investment-agent.git
