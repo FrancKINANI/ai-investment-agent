@@ -68,6 +68,22 @@ describe("DashboardLayout operating controls", () => {
     expect(JSON.parse(localStorage.getItem("ledgerline.owner-preferences.owner-test") ?? "{}").displayName).toBe("Ledger Operator");
   });
 
+  it("keeps workspace navigation in the sidebar instead of duplicating it in the owner menu", async () => {
+    await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout><div>workspace</div></DashboardLayout></ThemeProvider>));
+    const sidebarMenu = host.querySelector('[data-slot="sidebar-menu"]');
+    expect(sidebarMenu?.textContent).toContain("Mission Control");
+    expect(sidebarMenu?.textContent).toContain("Activity");
+    expect(sidebarMenu?.textContent).toContain("Configure");
+
+    const profileButton = host.querySelector<HTMLButtonElement>('[aria-label="Open owner profile menu"]');
+    await act(async () => profileButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const ownerMenu = document.querySelector<HTMLElement>(".os-profile-menu");
+    expect(ownerMenu?.textContent).toContain("Profile details");
+    expect(ownerMenu?.textContent).not.toContain("Mission Control");
+    expect(ownerMenu?.textContent).not.toContain("Activity");
+    expect(ownerMenu?.textContent).not.toContain("Configure");
+  });
+
   it("shows an unread activity badge only for persisted events newer than the owner’s last visit", async () => {
     const createdAt = new Date("2026-08-24T12:00:00.000Z");
     historyEntries.entries = [{ actionId: "audit-1", subject: "Saved IPS", detail: "Policy revision persisted", kind: "policy_saved", status: "success", createdAt }];
