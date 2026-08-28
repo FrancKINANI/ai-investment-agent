@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { name: "Owner" }, isAuthenticated: true, loading: false, logout: vi.fn() }) }));
+vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: null, isAuthenticated: false, loading: false, logout: vi.fn() }) }));
 vi.mock("wouter", () => ({ useLocation: () => ["/chat", vi.fn()] }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -14,6 +14,14 @@ vi.mock("@/lib/trpc", () => ({
       evolution: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
       sendSupervisorMessage: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
+    agentMemory: {
+      conversations: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+      workspace: { useQuery: () => ({ data: { entries: [] }, refetch: vi.fn() }) },
+      sendIndividualMessage: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      create: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      requestPromotion: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      reviewPromotion: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
     policy: { current: { useQuery: () => ({ data: null, refetch: vi.fn() }) } },
     autonomy: {
       mandates: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
@@ -21,6 +29,7 @@ vi.mock("@/lib/trpc", () => ({
       setMandateMode: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
     history: { list: { useQuery: () => ({ data: [], refetch: vi.fn() }) } },
+    useUtils: () => ({ agentFabric: { evolution: { invalidate: vi.fn() } } }),
   },
 }));
 
@@ -47,19 +56,17 @@ afterEach(async () => {
   host?.remove();
 });
 
-describe("Chat and Wallets theme rendering", () => {
-  it.each([["Chat", <Chat />, ".solo-chat-page"], ["Wallets", <Wallets />, ".mode-control"]] as const)("keeps %s mounted while switching from dark to light", async (_name, workspace, selector) => {
+describe("Agent Console and Wallets theme rendering", () => {
+  it.each([["Agent Console", <Chat />, ".agent-console-locked-preview"], ["Wallets", <Wallets />, ".mode-control"]] as const)("keeps %s mounted while switching from dark to light", async (_name, workspace, selector) => {
     await act(async () => root.render(<ThemeProvider defaultTheme="dark" switchable><DashboardLayout>{workspace}</DashboardLayout></ThemeProvider>));
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(host.querySelector(selector)).not.toBeNull();
-    if (_name === "Chat") {
-      expect(host.querySelector('form[aria-label="Supervisor message composer"] .chatgpt-input-shell')).not.toBeNull();
-      expect(host.querySelector('button[aria-label="Send research brief"]')).not.toBeNull();
-      const composer = host.querySelector<HTMLTextAreaElement>("#supervisor-brief");
-      expect(composer).not.toBeNull();
-      Object.defineProperty(composer, "scrollHeight", { configurable: true, value: 132 });
-      await act(async () => { if (composer) { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(composer, "A longer research brief that needs more than one line."); composer.dispatchEvent(new Event("input", { bubbles: true })); } });
-      expect(composer?.style.height).toBe("132px");
+    if (_name === "Agent Console") {
+      expect(host.textContent).toContain("AGENT ROSTER");
+      expect(host.textContent).toContain("FOCUSED CONVERSATION");
+      expect(host.textContent).toContain("MEMORY INSPECTOR");
+      expect(host.textContent).toContain("Roster is owner-scoped");
+      expect(host.textContent).toContain("Explicit scope and review");
     }
 
     const profileButton = host.querySelector<HTMLButtonElement>('button[aria-label="Open owner profile menu"]');
