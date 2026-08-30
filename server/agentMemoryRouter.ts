@@ -91,7 +91,7 @@ export const agentMemoryRouter = router({
     if (!existing) await createIndividualAgentConversation(ctx.user.id, { threadId, targetAgentId: target.agentId, title: `${target.name}: ${input.message.slice(0, 112)}` });
     const history = (await listAgentMessages(ctx.user.id, threadId)).slice(-20).map((message) => ({ actor: message.actor, content: message.content }));
     const workspace = await listMemoryWorkspace(ctx.user.id, target.agentId);
-    const context = selectMemoryContext(workspace.entries, target.agentId);
+    const context = selectMemoryContext(workspace.entries, target.agentId, Date.now(), ctx.user.id);
     await createAgentMessage(ctx.user.id, { messageId: nanoid(), threadId, actor: "owner", content: input.message, evidence: ["owner-message", `target-agent:${target.agentId}`, "execution-sealed"] });
     await createEvolutionEvent(ctx.user.id, { eventId: nanoid(), threadId, agentId: target.agentId, state: "working", summary: `${target.name} is preparing a bounded response using the selected memory context.`, evidence: ["individual-agent-conversation", `memory-items:${context.length}`, "execution-sealed"] });
     const result = await composeSpecialistOutput({ model: target.model, role: target.roleKey, name: target.name, message: input.message, history, userId: ctx.user.id, memoryContext: formatMemoryContext(context) });

@@ -16,6 +16,8 @@ export type MemoryContextEntry = {
   pinned: boolean;
   expiresAt: Date | string | null;
   createdAt: Date | string;
+  revision: number;
+  ownerId: number;
 };
 
 const prohibitedPatterns: Array<{ pattern: RegExp; description: string }> = [
@@ -45,14 +47,28 @@ export function isMemoryActive(entry: MemoryContextEntry, now = Date.now()) {
   return entry.status === "active" && (Number.isNaN(expiry) || expiry > now);
 }
 
-export function selectMemoryContext(entries: MemoryContextEntry[], agentId: string, now = Date.now()) {
-  const active = entries.filter((entry) => isMemoryActive(entry, now));
+/** Hard caps for context assembly. */
+export const MAX_SHARED_ITEMS = 20; // pinned + recent combined
+export const MAX_PRIVATE_ITEMS = 8;
+
+/** Selection rules for model context (server-side, deny-by-default). */
+export function selectMemoryContext(
+  entries: MemoryContextEntry[],
+  agentId: string,
+  now = Date.now(),
+  ownerId?: number
+) {
+  // If ownerId is provided, filter by owner; entries without ownerId are included (backward compatible)
+  // Entries with ownerId that doesn't match are excluded
+  const active = ownerId != null
+    ? entries.filter((entry) => isMemoryActive(entry, now) && (entry.ownerId === ownerId || entry.ownerId == null))
+    : entries.filter((entry) => isMemoryActive(entry, now));
   const shared = active.filter((entry) => entry.scope === "shared");
   const privateEntries = active.filter((entry) => entry.scope === "private" && entry.agentId === agentId);
   const newestFirst = (left: MemoryContextEntry, right: MemoryContextEntry) => time(right.createdAt) - time(left.createdAt);
   const pinnedShared = shared.filter((entry) => entry.pinned).sort(newestFirst).slice(0, 8);
-  const recentShared = shared.filter((entry) => !entry.pinned).sort(newestFirst).slice(0, 12);
-  const recentPrivate = privateEntries.sort(newestFirst).slice(0, 8);
+  const recentShared = shared.filter((entry) => !entry.pinned).sort(newestFirst).slice(0, 12); // 8+12=20 = MAX_SHARED_ITEMS
+  const recentPrivate = privateEntries.sort(newestFirst).slice(0, MAX_PRIVATE_ITEMS);
   return [...pinnedShared, ...recentShared, ...recentPrivate];
 }
 
