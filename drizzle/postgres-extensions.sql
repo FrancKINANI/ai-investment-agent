@@ -14,8 +14,8 @@
 -- Vector search for embeddings/RAG
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Job scheduling
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- pg_cron is intentionally not enabled here. Managed PostgreSQL providers
+-- may prohibit it, and scheduling remains an application-level concern.
 
 -- Trigram similarity for fuzzy search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -29,18 +29,18 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ─── Full-Text Search Setup ────────────────────────────────────────────────
 
 -- Add search vector columns to memory entries
-ALTER TABLE "agentMemoryEntries" 
-    ADD COLUMN IF NOT EXISTS search_vector tsvector;
+ALTER TABLE "agentMemoryEntries"
+    ADD COLUMN IF NOT EXISTS "searchVector" tsvector;
 
 -- Create index for full-text search
-CREATE INDEX IF NOT EXISTS idx_memory_search_vector 
-    ON "agentMemoryEntries" USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS idx_memory_search_vector
+    ON "agentMemoryEntries" USING GIN ("searchVector");
 
 -- Function to update search vector
 CREATE OR REPLACE FUNCTION update_memory_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := 
+    NEW."searchVector" :=
         setweight(to_tsvector('english', COALESCE(NEW.content, '')), 'A') ||
         setweight(to_tsvector('english', COALESCE(NEW.kind, '')), 'B');
     RETURN NEW;
@@ -54,16 +54,16 @@ CREATE TRIGGER trg_memory_search_vector
     FOR EACH ROW EXECUTE FUNCTION update_memory_search_vector();
 
 -- Add search vector to messages
-ALTER TABLE "agentMessages" 
-    ADD COLUMN IF NOT EXISTS search_vector tsvector;
+ALTER TABLE "agentMessages"
+    ADD COLUMN IF NOT EXISTS "searchVector" tsvector;
 
-CREATE INDEX IF NOT EXISTS idx_message_search_vector 
-    ON "agentMessages" USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS idx_message_search_vector
+    ON "agentMessages" USING GIN ("searchVector");
 
 CREATE OR REPLACE FUNCTION update_message_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
+    NEW."searchVector" := to_tsvector('english', COALESCE(NEW.content, ''));
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -76,18 +76,18 @@ CREATE TRIGGER trg_message_search_vector
 -- ─── Vector Embeddings (pgvector) ──────────────────────────────────────────
 
 -- Add embedding column to memory entries for RAG
-ALTER TABLE "agentMemoryEntries" 
+ALTER TABLE "agentMemoryEntries"
     ADD COLUMN IF NOT EXISTS embedding vector(1536);  -- OpenAI ada-002 dimensions
 
 -- HNSW index for fast approximate nearest neighbor search
-CREATE INDEX IF NOT EXISTS idx_memory_embedding_hnsw 
+CREATE INDEX IF NOT EXISTS idx_memory_embedding_hnsw
     ON "agentMemoryEntries" USING hnsw (embedding vector_cosine_ops);
 
 -- Add embedding to messages for context retrieval
-ALTER TABLE "agentMessages" 
+ALTER TABLE "agentMessages"
     ADD COLUMN IF NOT EXISTS embedding vector(1536);
 
-CREATE INDEX IF NOT EXISTS idx_message_embedding_hnsw 
+CREATE INDEX IF NOT EXISTS idx_message_embedding_hnsw
     ON "agentMessages" USING hnsw (embedding vector_cosine_ops);
 
 -- ─── Caching Tables (UNLOGGED - replaces Redis) ────────────────────────────
@@ -131,43 +131,8 @@ CREATE UNLOGGED TABLE IF NOT EXISTS rate_limit_cache (
     expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 minute'
 );
 
--- ─── Scheduling (pg_cron) ──────────────────────────────────────────────────
-
--- Auto-cleanup for cache tables (every 5 minutes)
-SELECT cron.schedule(
-    'cache-cleanup',
-    '*/5 * * * *',
-    $$DELETE FROM cache_store WHERE expires_at < NOW()$$
-);
-
--- Auto-cleanup for API cache (every minute)
-SELECT cron.schedule(
-    'api-cache-cleanup',
-    '* * * * *',
-    $$DELETE FROM api_cache WHERE expires_at < NOW()$$
-);
-
--- Auto-cleanup for session cache (every hour)
-SELECT cron.schedule(
-    'session-cleanup',
-    '0 * * * *',
-    $$DELETE FROM session_cache WHERE expires_at < NOW()$$
-);
-
--- Auto-cleanup for rate limit cache (every minute)
-SELECT cron.schedule(
-    'rate-limit-cleanup',
-    '* * * * *',
-    $$DELETE FROM rate_limit_cache WHERE expires_at < NOW()$$
-);
-
--- Discovery schedule runner (daily at 8 AM)
--- This replaces external cron services
-SELECT cron.schedule(
-    'discovery-daily',
-    '0 8 * * *',
-    $$SELECT run_discovery_for_enabled_schedules()$$
-);
+-- ─── Scheduling ─────────────────────────────────────────────────────────────
+-- Scheduling is provisioned separately after provider capability review.
 
 -- ─── Helper Functions ───────────────────────────────────────────────────────
 
@@ -206,7 +171,7 @@ BEGIN
     SELECT value INTO result
     FROM cache_store
     WHERE key = p_key AND expires_at > NOW();
-    
+
     RETURN result;
 END;
 $$ LANGUAGE plpgsql;
@@ -234,15 +199,15 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         me."memoryId",
         me.content,
         me.kind::VARCHAR,
         me.scope::VARCHAR,
-        ts_rank(me.search_vector, plainto_tsquery('english', p_query))::REAL as rank
+        ts_rank(me."searchVector", plainto_tsquery('english', p_query))::REAL as rank
     FROM "agentMemoryEntries" me
     WHERE me."userId" = p_user_id
-        AND me.search_vector @@ plainto_tsquery('english', p_query)
+        AND me."searchVector" @@ plainto_tsquery('english', p_query)
     ORDER BY rank DESC
     LIMIT p_limit;
 END;
@@ -264,11 +229,11 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         me."memoryId",
         me.content,
         me.kind::VARCHAR,
-        me.scope::VARCHAR",
+        me.scope::VARCHAR,
         (1 - (me.embedding <=> p_embedding))::REAL as similarity
     FROM "agentMemoryEntries" me
     WHERE me."userId" = p_user_id
@@ -298,27 +263,27 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     WITH text_scores AS (
-        SELECT 
+        SELECT
             me."memoryId",
-            ts_rank(me.search_vector, plainto_tsquery('english', p_query)) as text_rank
+            ts_rank(me."searchVector", plainto_tsquery('english', p_query)) as text_rank
         FROM "agentMemoryEntries" me
         WHERE me."userId" = p_user_id
-            AND me.search_vector @@ plainto_tsquery('english', p_query)
+            AND me."searchVector" @@ plainto_tsquery('english', p_query)
     ),
     vector_scores AS (
-        SELECT 
+        SELECT
             me."memoryId",
             (1 - (me.embedding <=> p_embedding)) as vec_rank
         FROM "agentMemoryEntries" me
         WHERE me."userId" = p_user_id
             AND me.embedding IS NOT NULL
     )
-    SELECT 
+    SELECT
         me."memoryId",
         me.content,
         me.kind::VARCHAR,
         me.scope::VARCHAR,
-        (COALESCE(ts.text_rank, 0) * p_text_weight + 
+        (COALESCE(ts.text_rank, 0) * p_text_weight +
          COALESCE(vs.vec_rank, 0) * p_vector_weight)::REAL as combined_score
     FROM "agentMemoryEntries" me
     LEFT JOIN text_scores ts ON me."memoryId" = ts."memoryId"
@@ -343,17 +308,16 @@ CREATE INDEX IF NOT EXISTS idx_memory_content_trgm ON "agentMemoryEntries" USING
 CREATE INDEX IF NOT EXISTS idx_message_content_trgm ON "agentMessages" USING GIN (content gin_trgm_ops);
 
 -- Partial indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_memory_active ON "agentMemoryEntries" ("userId", scope) 
+CREATE INDEX IF NOT EXISTS idx_memory_active ON "agentMemoryEntries" ("userId", scope)
     WHERE status = 'active';
-CREATE INDEX IF NOT EXISTS idx_memory_pending ON "agentMemoryEntries" ("userId") 
+CREATE INDEX IF NOT EXISTS idx_memory_pending ON "agentMemoryEntries" ("userId")
     WHERE status = 'pending_promotion';
-CREATE INDEX IF NOT EXISTS idx_alerts_unack ON "securityAlerts" ("userId") 
+CREATE INDEX IF NOT EXISTS idx_alerts_unack ON "securityAlerts" ("userId")
     WHERE acknowledged = false;
 
 -- ─── Comments ───────────────────────────────────────────────────────────────
 
 COMMENT ON EXTENSION vector IS 'Open-source vector similarity search for PostgreSQL';
-COMMENT ON EXTENSION pg_cron IS 'Job scheduler for PostgreSQL';
 COMMENT ON EXTENSION pg_trgm IS 'Trigram similarity matching for fuzzy search';
 
 COMMENT ON TABLE cache_store IS 'UNLOGGED cache table replacing Redis for key-value caching';
@@ -361,6 +325,6 @@ COMMENT ON TABLE api_cache IS 'UNLOGGED cache for API responses';
 COMMENT ON TABLE session_cache IS 'UNLOGGED cache for user sessions';
 
 COMMENT ON COLUMN "agentMemoryEntries".embedding IS 'Vector embedding for semantic search (1536 dimensions for OpenAI ada-002)';
-COMMENT ON COLUMN "agentMemoryEntries".search_vector IS 'Full-text search vector for content and kind';
+COMMENT ON COLUMN "agentMemoryEntries"."searchVector" IS 'Full-text search vector for content and kind';
 COMMENT ON COLUMN "agentMessages".embedding IS 'Vector embedding for message semantic search';
-COMMENT ON COLUMN "agentMessages".search_vector IS 'Full-text search vector for message content';
+COMMENT ON COLUMN "agentMessages"."searchVector" IS 'Full-text search vector for message content';

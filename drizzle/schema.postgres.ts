@@ -1,4 +1,10 @@
-import { bigint, boolean, index, integer, json, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, vector } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, index, integer, jsonb, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, vector } from "drizzle-orm/pg-core";
+
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +77,7 @@ export const agentProfiles = pgTable("agentProfiles", {
   role: agentRoleEnum("role").notNull(),
   provider: providerEnum("provider").notNull(),
   model: varchar("model", { length: 120 }).notNull(),
-  toolScopes: json("toolScopes").$type<string[]>().notNull(),
+  toolScopes: jsonb("toolScopes").$type<string[]>().notNull(),
   state: agentStateEnum("state").default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -85,7 +91,7 @@ export const agentRuns = pgTable("agentRuns", {
   policyResult: policyResultEnum("policyResult").notNull(),
   simulationOnly: boolean("simulationOnly").default(true).notNull(),
   summary: text("summary").notNull(),
-  evidence: json("evidence").$type<string[]>().notNull(),
+  evidence: jsonb("evidence").$type<string[]>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -95,7 +101,7 @@ export const awarenessRecords = pgTable("awarenessRecords", {
   layer: awarenessLayerEnum("layer").notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
   runId: varchar("runId", { length: 64 }),
-  evidence: json("evidence").$type<string[]>().notNull(),
+  evidence: jsonb("evidence").$type<string[]>().notNull(),
   summary: text("summary").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -108,7 +114,7 @@ export const strategyLineages = pgTable("strategyLineages", {
   stage: strategyStageEnum("stage").default("research").notNull(),
   generation: integer("generation").default(1).notNull(),
   parentVersion: varchar("parentVersion", { length: 64 }),
-  scores: json("scores").$type<Record<string, number>>().notNull(),
+  scores: jsonb("scores").$type<Record<string, number>>().notNull(),
   rationale: text("rationale").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -134,7 +140,7 @@ export const outcomeRecords = pgTable("outcomeRecords", {
   runId: varchar("runId", { length: 64 }),
   expectedBps: integer("expectedBps").notNull(),
   realizedBps: integer("realizedBps"),
-  attribution: json("attribution").$type<Record<string, string | number | boolean | null>>().notNull(),
+  attribution: jsonb("attribution").$type<Record<string, string | number | boolean | null>>().notNull(),
   deviation: deviationEnum("deviation").default("inconclusive").notNull(),
   narrative: text("narrative").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -152,7 +158,7 @@ export const investmentPolicies = pgTable("investmentPolicies", {
   minReserveBps: integer("minReserveBps").notNull(),
   maxTransactionBps: integer("maxTransactionBps").notNull(),
   dailyMandateBps: integer("dailyMandateBps").notNull(),
-  allowedAssets: json("allowedAssets").$type<string[]>().notNull(),
+  allowedAssets: jsonb("allowedAssets").$type<string[]>().notNull(),
   executionMode: executionModeEnum("executionMode").default("simulation").notNull(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -167,7 +173,7 @@ export const walletMandates = pgTable("walletMandates", {
   venue: venueEnum("venue").notNull(),
   mode: mandateModeEnum("mode").default("simulation").notNull(),
   status: mandateStatusEnum("status").default("active").notNull(),
-  allowedAssets: json("allowedAssets").$type<string[]>().notNull(),
+  allowedAssets: jsonb("allowedAssets").$type<string[]>().notNull(),
   maxOrderBps: integer("maxOrderBps").notNull(),
   dailyCapBps: integer("dailyCapBps").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -180,7 +186,7 @@ export const venueConnections = pgTable("venueConnections", {
   connectionId: varchar("connectionId", { length: 64 }).notNull().unique(),
   venue: venueEnum("venue").notNull(),
   state: connectionStateEnum("state").default("disconnected").notNull(),
-  capabilities: json("capabilities").$type<string[]>().notNull(),
+  capabilities: jsonb("capabilities").$type<string[]>().notNull(),
   credentialRef: varchar("credentialRef", { length: 160 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -198,7 +204,7 @@ export const agentNodes = pgTable("agentNodes", {
   protectedRole: boolean("protectedRole").default(false).notNull(),
   provider: providerEnum("provider").notNull(),
   model: varchar("model", { length: 160 }).notNull(),
-  toolScopes: json("toolScopes").$type<string[]>().notNull(),
+  toolScopes: jsonb("toolScopes").$type<string[]>().notNull(),
   state: agentStateEnum("state").default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -232,15 +238,14 @@ export const agentMessages = pgTable("agentMessages", {
   agentId: varchar("agentId", { length: 64 }),
   content: text("content").notNull(),
   confidence: integer("confidence"),
-  evidence: json("evidence").$type<string[]>().notNull(),
+  evidence: jsonb("evidence").$type<string[]>().notNull(),
   // Full-text search vector
-  searchVector: text("searchVector").$type<any>(),
+  searchVector: tsvector("searchVector"),
   // Vector embedding for semantic search
   embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [
   index("idx_message_search_vector").using("gin", table.searchVector),
-  index("idx_message_embedding_hnsw").using("hnsw", table.embedding),
 ]);
 
 // ─── Memory System ──────────────────────────────────────────────────────────
@@ -262,14 +267,13 @@ export const agentMemoryEntries = pgTable("agentMemoryEntries", {
   expiresAt: timestamp("expiresAt"),
   createdBy: actorTypeEnum("createdBy").notNull(),
   // Full-text search vector
-  searchVector: text("searchVector").$type<any>(),
+  searchVector: tsvector("searchVector"),
   // Vector embedding for RAG (1536 dimensions for OpenAI ada-002)
   embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => [
   index("idx_memory_search_vector").using("gin", table.searchVector),
-  index("idx_memory_embedding_hnsw").using("hnsw", table.embedding),
 ]);
 
 export const agentMemoryActions = pgTable("agentMemoryActions", {
@@ -285,7 +289,7 @@ export const agentMemoryActions = pgTable("agentMemoryActions", {
   fromStatus: memoryStatusEnum("fromStatus"),
   toStatus: memoryStatusEnum("toStatus"),
   reason: varchar("reason", { length: 600 }),
-  payload: json("payload").$type<Record<string, unknown>>().notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -297,7 +301,7 @@ export const agentEvolutionEvents = pgTable("agentEvolutionEvents", {
   agentId: varchar("agentId", { length: 64 }),
   state: evolutionStateEnum("state").notNull(),
   summary: text("summary").notNull(),
-  evidence: json("evidence").$type<string[]>().notNull(),
+  evidence: jsonb("evidence").$type<string[]>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -309,7 +313,7 @@ export const watchlists = pgTable("watchlists", {
   watchlistId: varchar("watchlistId", { length: 64 }).notNull().unique(),
   name: varchar("name", { length: 120 }).notNull(),
   enabled: boolean("enabled").default(true).notNull(),
-  criteria: json("criteria").$type<Record<string, unknown>>().notNull(),
+  criteria: jsonb("criteria").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -350,7 +354,7 @@ export const discoveryFindings = pgTable("discoveryFindings", {
   confidence: confidenceEnum("confidence").notNull(),
   status: watchlistStatusEnum("status").notNull(),
   summary: text("summary").notNull(),
-  evidence: json("evidence").$type<string[]>().notNull(),
+  evidence: jsonb("evidence").$type<string[]>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -375,7 +379,7 @@ export const operatorActions = pgTable("operatorActions", {
   status: actionStatusEnum("status").notNull(),
   subject: varchar("subject", { length: 160 }).notNull(),
   detail: text("detail").notNull(),
-  payload: json("payload").$type<Record<string, unknown>>().notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -384,7 +388,7 @@ export const bindingChangeRequests = pgTable("bindingChangeRequests", {
   userId: integer("userId").notNull(),
   requestId: varchar("requestId", { length: 64 }).notNull().unique(),
   capabilityId: varchar("capabilityId", { length: 120 }).notNull(),
-  roleKeys: json("roleKeys").$type<string[]>().notNull(),
+  roleKeys: jsonb("roleKeys").$type<string[]>().notNull(),
   permission: bindingPermissionEnum("permission").notNull(),
   rationale: text("rationale").notNull(),
   status: bindingStatusEnum("status").default("pending").notNull(),
@@ -418,7 +422,7 @@ export const platformApiKeys = pgTable("platformApiKeys", {
   keyPrefix: varchar("keyPrefix", { length: 16 }).notNull(),
   apiKeyEncrypted: varchar("apiKeyEncrypted", { length: 512 }).notNull(),
   secretEncrypted: varchar("secretEncrypted", { length: 512 }).notNull(),
-  permissions: json("permissions").$type<string[]>().notNull(),
+  permissions: jsonb("permissions").$type<string[]>().notNull(),
   hasWithdrawPermission: boolean("hasWithdrawPermission").default(false).notNull(),
   state: platformKeyStateEnum("state").default("testing").notNull(),
   maxOrderUsd: integer("maxOrderUsd"),
@@ -442,7 +446,7 @@ export const agentProposals = pgTable("agentProposals", {
   policyResult: policyResultEnum("policyResult").notNull(),
   title: varchar("title", { length: 180 }).notNull(),
   rationale: text("rationale").notNull(),
-  action: json("action").$type<Record<string, unknown>>().notNull(),
+  action: jsonb("action").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -463,7 +467,7 @@ export const executionLedger = pgTable("executionLedger", {
   quoteOrderQty: varchar("quoteOrderQty", { length: 40 }),
   seq: integer("seq").notNull(),
   eventType: ledgerEventTypeEnum("eventType").notNull(),
-  payload: json("payload").$type<Record<string, unknown>>().notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   mandateId: varchar("mandateId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -522,7 +526,7 @@ export const walletSessions = pgTable("walletSessions", {
   chainId: integer("chainId").notNull(),
   provider: walletProviderEnum("provider").notNull(),
   state: walletSessionStateEnum("state").default("active").notNull(),
-  capabilities: json("capabilities").$type<string[]>().notNull(),
+  capabilities: jsonb("capabilities").$type<string[]>().notNull(),
   connectedAt: timestamp("connectedAt").defaultNow().notNull(),
   revokedAt: timestamp("revokedAt"),
 });

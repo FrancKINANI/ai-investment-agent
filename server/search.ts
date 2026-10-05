@@ -1,9 +1,9 @@
 /**
  * PostgreSQL Search Service
- * 
+ *
  * Provides full-text search and vector similarity search for memory entries.
  * Replaces Elasticsearch for text search and Pinecone for vector search.
- * 
+ *
  * Features:
  * - Full-text search with tsvector + GIN indexes
  * - Vector similarity search with pgvector
@@ -59,36 +59,36 @@ export class PostgresSearch {
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
     const { limit = 20, offset = 0, minScore = 0.1, kinds, scopes } = options;
-    
+
     let whereClause = sql`
       me."userId" = ${userId}
-        AND me.search_vector @@ plainto_tsquery('english', ${query})
-        AND ts_rank(me.search_vector, plainto_tsquery('english', ${query})) > ${minScore}
+        AND me."searchVector" @@ plainto_tsquery('english', ${query})
+        AND ts_rank(me."searchVector", plainto_tsquery('english', ${query})) > ${minScore}
     `;
-    
+
     if (kinds && kinds.length > 0) {
       whereClause = sql`${whereClause} AND me.kind = ANY(${kinds})`;
     }
-    
+
     if (scopes && scopes.length > 0) {
       whereClause = sql`${whereClause} AND me.scope = ANY(${scopes})`;
     }
-    
+
     const result = await this.db.execute(sql`
-      SELECT 
+      SELECT
         me."memoryId" as id,
         me.content,
         me.kind,
         me.scope,
-        ts_rank(me.search_vector, plainto_tsquery('english', ${query})) as score,
-        ts_headline('english', me.content, plainto_tsquery('english', ${query}), 
+        ts_rank(me."searchVector", plainto_tsquery('english', ${query})) as score,
+        ts_headline('english', me.content, plainto_tsquery('english', ${query}),
           'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20') as highlight
       FROM "agentMemoryEntries" me
       WHERE ${whereClause}
       ORDER BY score DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
-    
+
     return result.rows.map((row: any) => ({
       id: row.id,
       content: row.content,
@@ -108,23 +108,23 @@ export class PostgresSearch {
     options: VectorSearchOptions = {}
   ): Promise<SearchResult[]> {
     const { limit = 10, offset = 0, similarityThreshold = 0.7, kinds, scopes } = options;
-    
+
     let whereClause = sql`
       me."userId" = ${userId}
         AND me.embedding IS NOT NULL
         AND (1 - (me.embedding <=> ${JSON.stringify(embedding)}::vector)) > ${similarityThreshold}
     `;
-    
+
     if (kinds && kinds.length > 0) {
       whereClause = sql`${whereClause} AND me.kind = ANY(${kinds})`;
     }
-    
+
     if (scopes && scopes.length > 0) {
       whereClause = sql`${whereClause} AND me.scope = ANY(${scopes})`;
     }
-    
+
     const result = await this.db.execute(sql`
-      SELECT 
+      SELECT
         me."memoryId" as id,
         me.content,
         me.kind,
@@ -135,7 +135,7 @@ export class PostgresSearch {
       ORDER BY me.embedding <=> ${JSON.stringify(embedding)}::vector
       LIMIT ${limit} OFFSET ${offset}
     `);
-    
+
     return result.rows.map((row: any) => ({
       id: row.id,
       content: row.content,
@@ -155,31 +155,31 @@ export class PostgresSearch {
     options: HybridSearchOptions = {}
   ): Promise<SearchResult[]> {
     const { limit = 10, offset = 0, textWeight = 0.3, vectorWeight = 0.7, kinds, scopes } = options;
-    
+
     let kindFilter = sql``;
     let scopeFilter = sql``;
-    
+
     if (kinds && kinds.length > 0) {
       kindFilter = sql`AND me.kind = ANY(${kinds})`;
     }
-    
+
     if (scopes && scopes.length > 0) {
       scopeFilter = sql`AND me.scope = ANY(${scopes})`;
     }
-    
+
     const result = await this.db.execute(sql`
       WITH text_scores AS (
-        SELECT 
+        SELECT
           me."memoryId",
-          ts_rank(me.search_vector, plainto_tsquery('english', ${query})) as text_rank
+          ts_rank(me."searchVector", plainto_tsquery('english', ${query})) as text_rank
         FROM "agentMemoryEntries" me
         WHERE me."userId" = ${userId}
-          AND me.search_vector @@ plainto_tsquery('english', ${query})
+          AND me."searchVector" @@ plainto_tsquery('english', ${query})
           ${kindFilter}
           ${scopeFilter}
       ),
       vector_scores AS (
-        SELECT 
+        SELECT
           me."memoryId",
           (1 - (me.embedding <=> ${JSON.stringify(embedding)}::vector)) as vec_rank
         FROM "agentMemoryEntries" me
@@ -188,12 +188,12 @@ export class PostgresSearch {
           ${kindFilter}
           ${scopeFilter}
       )
-      SELECT 
+      SELECT
         me."memoryId" as id,
         me.content,
         me.kind,
         me.scope,
-        (COALESCE(ts.text_rank, 0) * ${textWeight} + 
+        (COALESCE(ts.text_rank, 0) * ${textWeight} +
          COALESCE(vs.vec_rank, 0) * ${vectorWeight}) as score
       FROM "agentMemoryEntries" me
       LEFT JOIN text_scores ts ON me."memoryId" = ts."memoryId"
@@ -203,7 +203,7 @@ export class PostgresSearch {
       ORDER BY score DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
-    
+
     return result.rows.map((row: any) => ({
       id: row.id,
       content: row.content,
@@ -222,22 +222,22 @@ export class PostgresSearch {
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
     const { limit = 20, offset = 0, minScore = 0.3, kinds, scopes } = options;
-    
+
     let whereClause = sql`
       me."userId" = ${userId}
         AND similarity(me.content, ${query}) > ${minScore}
     `;
-    
+
     if (kinds && kinds.length > 0) {
       whereClause = sql`${whereClause} AND me.kind = ANY(${kinds})`;
     }
-    
+
     if (scopes && scopes.length > 0) {
       whereClause = sql`${whereClause} AND me.scope = ANY(${scopes})`;
     }
-    
+
     const result = await this.db.execute(sql`
-      SELECT 
+      SELECT
         me."memoryId" as id,
         me.content,
         me.kind,
@@ -248,7 +248,7 @@ export class PostgresSearch {
       ORDER BY score DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
-    
+
     return result.rows.map((row: any) => ({
       id: row.id,
       content: row.content,
@@ -274,7 +274,7 @@ export class PostgresSearch {
       ORDER BY similarity(content, ${prefix}) DESC
       LIMIT ${limit}
     `);
-    
+
     return result.rows.map((row: any) => row.content);
   }
 
@@ -286,15 +286,15 @@ export class PostgresSearch {
     if (userId) {
       whereClause = sql`WHERE "userId" = ${userId}`;
     }
-    
+
     const result = await this.db.execute(sql`
       UPDATE "agentMemoryEntries"
-      SET search_vector = 
+      SET "searchVector" =
         setweight(to_tsvector('english', COALESCE(content, '')), 'A') ||
         setweight(to_tsvector('english', COALESCE(kind, '')), 'B')
       ${whereClause}
     `);
-    
+
     return result.rowCount ?? 0;
   }
 
@@ -310,16 +310,16 @@ export class PostgresSearch {
     if (userId) {
       whereClause = sql`WHERE "userId" = ${userId}`;
     }
-    
+
     const result = await this.db.execute(sql`
-      SELECT 
+      SELECT
         COUNT(*) as total_entries,
-        COUNT(*) FILTER (WHERE search_vector IS NOT NULL) as indexed_entries,
+        COUNT(*) FILTER (WHERE "searchVector" IS NOT NULL) as indexed_entries,
         COUNT(*) FILTER (WHERE embedding IS NOT NULL) as embedded_entries
       FROM "agentMemoryEntries"
       ${whereClause}
     `);
-    
+
     const row = result.rows[0];
     return {
       totalEntries: parseInt(row.total_entries),

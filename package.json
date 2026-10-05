@@ -14,7 +14,9 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "ledgerline": "node scripts/ledgerline.mjs",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "db:generate:postgres": "drizzle-kit generate --config=drizzle.config.postgres.ts",
+    "db:check:postgres": "drizzle-kit check --config=drizzle.config.postgres.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
