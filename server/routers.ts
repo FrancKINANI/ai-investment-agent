@@ -13,7 +13,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { listLLMModels } from "./_core/llm";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, sensitiveProcedure, publicProcedure, router } from "./_core/trpc";
 import { createAgentProposal, createAgentRun, createAwarenessRecord, createBindingChangeRequest, createOperatorAction, createOutcomeRecord, createSecurityAlert, createStrategyEvaluation, createStrategyLineage, createVenueConnection, createWalletMandate, getAgentProposal, getBindingChangeRequest, getInvestmentPolicy, getAuthorityState, listAgentProfiles, listAgentProposals, listAgentRuns, listAwarenessRecords, listBindingChangeRequests, listOperatorActions, listOutcomeRecords, listStrategyEvaluations, listStrategyLineages, listVenueConnections, listWalletMandates, reviewBindingChangeRequest, saveInvestmentPolicy, updateAgentProposalStatus, updateWalletMandateMode } from "./db";
 import { getEthereumTokenMetrics } from "./onchain";
 import { ethereumAddressSchema, investmentPolicySchema, normalizeInvestmentPolicy } from "@shared/ips";
@@ -432,7 +432,7 @@ export const appRouter = router({
     mandates: protectedProcedure.query(({ ctx }) => listWalletMandates(ctx.user.id)),
     connections: protectedProcedure.query(({ ctx }) => listVenueConnections(ctx.user.id)),
     proposals: protectedProcedure.query(({ ctx }) => listAgentProposals(ctx.user.id)),
-    reviewHardGate: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
+    reviewHardGate: sensitiveProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
@@ -459,12 +459,12 @@ export const appRouter = router({
       }
       return { proposal: { proposalId: proposal.proposalId, title: proposal.title, status: proposal.status }, gate, inputs: gateInputs, executionBoundary: "fail-closed" as const };
     }),
-    createSimulationMandate: protectedProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
+    createSimulationMandate: sensitiveProcedure.input(mandateCreateSchema).mutation(async ({ ctx, input }) => {
       const mandate = await createWalletMandate(ctx.user.id, { mandateId: nanoid(), ...input, mode: "simulation", status: "active" });
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "mandate_created", status: "success", subject: `${input.walletRole} wallet · ${input.venue} mandate`, detail: "Owner created a paper mandate. No credential or live venue action was configured.", payload: { mandateId: mandate?.mandateId, ...input, mode: "simulation" } });
       return mandate;
     }),
-    setMandateMode: protectedProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64), mode: z.enum(["simulation", "armed", "real", "paused"]) })).mutation(async ({ ctx, input }) => {
+    setMandateMode: sensitiveProcedure.input(z.object({ mandateId: z.string().trim().min(1).max(64), mode: z.enum(["simulation", "armed", "real", "paused"]) })).mutation(async ({ ctx, input }) => {
       if (input.mode === "real") {
         // Real mode requires: authority state allows orders + active mandate + IPS
         const { getAuthorityState } = await import("./db");
@@ -505,7 +505,7 @@ export const appRouter = router({
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "venue_configured", status: "success", subject: `${input.venue} simulated adapter`, detail: "Owner enabled a simulated adapter. No external account, credential, or signed action was connected.", payload: { connectionId: connection?.connectionId, ...input, state: "simulation" } });
       return connection;
     }),
-    approveProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
+    approveProposal: sensitiveProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), rationale: z.string().trim().min(5).max(1_000) })).mutation(async ({ ctx, input }) => {
       requireOwnerAdmin(ctx.user.role);
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
@@ -518,7 +518,7 @@ export const appRouter = router({
       await createOperatorAction(ctx.user.id, { actionId: nanoid(), kind: "proposal_approved", status: "success", subject: `Paper approved: ${proposal.title}`, detail: "Administrator approved this proposal for paper execution after a passing hard evaluation gate with server-derived inputs.", payload: { proposalId: input.proposalId, venue: proposal.venue, walletRole: proposal.walletRole, gate, inputs: gateInputs, rationale: input.rationale } });
       return updated;
     }),
-    rejectProposal: protectedProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), reason: z.string().trim().min(2).max(500) })).mutation(async ({ ctx, input }) => {
+    rejectProposal: sensitiveProcedure.input(z.object({ proposalId: z.string().trim().min(1).max(64), reason: z.string().trim().min(2).max(500) })).mutation(async ({ ctx, input }) => {
       const proposal = await getAgentProposal(ctx.user.id, input.proposalId);
       if (!proposal) throw new TRPCError({ code: "NOT_FOUND", message: "Proposal not found." });
       if (proposal.status !== "review") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Only a proposal awaiting review can be rejected." });
