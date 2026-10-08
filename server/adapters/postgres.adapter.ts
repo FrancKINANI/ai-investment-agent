@@ -15,15 +15,17 @@ import { nanoid } from "nanoid";
 import { AUTHORITY_STATE_MACHINE_VERSION, AuthorityState, evaluateAuthorityTransition } from "@shared/authorityState";
 import type { LedgerEventType } from "@shared/paperExecution";
 import type { DatabaseAdapter } from "../db.factory";
+import { isMissingPostgresRelation, requirePostgresDatabaseUrl } from "../postgresConnection";
 
 let _pool: Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
 
 async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db) {
+    const connectionString = requirePostgresDatabaseUrl();
     try {
       _pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString,
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
@@ -291,6 +293,7 @@ export class PostgresAdapter implements DatabaseAdapter {
     try {
       return await db.select().from(securityAlerts).where(eq(securityAlerts.userId, userId)).orderBy(desc(securityAlerts.createdAt)).limit(100);
     } catch (error) {
+      if (!isMissingPostgresRelation(error)) throw error;
       console.warn("[Security alerts] Alert table is unavailable; returning an empty owner-scoped result.");
       return [];
     }
@@ -310,7 +313,8 @@ export class PostgresAdapter implements DatabaseAdapter {
     try {
       const result = await db.select().from(securityAlerts).where(and(eq(securityAlerts.userId, userId), eq(securityAlerts.acknowledged, false)));
       return result.length;
-    } catch {
+    } catch (error) {
+      if (!isMissingPostgresRelation(error)) throw error;
       return 0;
     }
   }

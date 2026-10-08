@@ -5,7 +5,7 @@
  * Imports data from JSON files (exported from MySQL) into PostgreSQL.
  * 
  * Usage:
- *   DATABASE_URL=postgresql://... npx tsx scripts/import-postgres.ts
+ *   POSTGRES_DATABASE_URL=postgresql://... npx tsx scripts/import-postgres.ts
  * 
  * Prerequisites:
  *   - PostgreSQL database with schema created
@@ -17,6 +17,7 @@ import { Pool } from "pg";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import * as schema from "../drizzle/schema.postgres";
+import { requirePostgresDatabaseUrl } from "../server/postgresConnection";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -122,11 +123,7 @@ function transformRow(row: any, tableName: string): any {
 // ─── Main Import Function ───────────────────────────────────────────────────
 
 async function importData() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error("❌ DATABASE_URL environment variable is required");
-    process.exit(1);
-  }
+  const databaseUrl = requirePostgresDatabaseUrl();
 
   if (!existsSync(EXPORT_DIR)) {
     console.error(`❌ Export directory not found: ${EXPORT_DIR}`);

@@ -9,7 +9,7 @@ const scheduler = readFileSync(fileURLToPath(new URL("./scheduledDiscovery.ts", 
 
 describe("security hardening baseline", () => {
   it("keeps audited runtime dependencies patched and removes the unused renderer tree", () => {
-    expect(packageJson.dependencies.axios).toBe("^1.19.0");
+    expect(packageJson.dependencies.axios).toBe("^1.20.0");
     expect(packageJson.dependencies["drizzle-orm"]).toBe("^0.45.2");
     expect(packageJson.dependencies.express).toBe("^5.2.1");
     expect(packageJson.dependencies.cookie).toBe("^2.0.1");

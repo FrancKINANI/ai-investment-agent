@@ -248,6 +248,17 @@ WHERE metadata @> '{"type": "research", "status": "active"}';
 
 ### Phase 2: Application Layer ✅ COMPLETED
 
+### Staging execution order
+
+PostgreSQL is not enabled by reusing the active `DATABASE_URL`. Provision a
+dedicated staging database and set `POSTGRES_DATABASE_URL` to a distinct
+`postgresql://` URL. Apply `drizzle/postgres-preflight.sql` first so the
+`vector` type exists, then apply the generated migration under
+`drizzle/postgres/`, and only then apply the optional objects in
+`drizzle/postgres-extensions.sql`. The shared extension script deliberately
+does not enable `pg_cron`; managed-provider scheduling must be reviewed and
+provisioned separately.
+
 **Objective:** Update database connection and queries
 
 #### Tasks
@@ -286,7 +297,7 @@ WHERE metadata @> '{"type": "research", "status": "active"}';
 | 3.3 | Install and configure pgvector | ✅ |
 | 3.4 | Add embedding columns for RAG | ✅ |
 | 3.5 | Create HNSW indexes for vector search | ✅ |
-| 3.6 | Set up pg_cron for scheduling | ✅ |
+| 3.6 | Evaluate pg_cron separately per managed-provider capability; application scheduling remains the default | ⏸️ |
 | 3.7 | Create cache service (`server/cache.ts`) | ✅ |
 | 3.8 | Create search service (`server/search.ts`) | ✅ |
 | 3.9 | Create extensions SQL file (`drizzle/postgres-extensions.sql`) | ✅ |
@@ -403,7 +414,7 @@ WHERE metadata @> '{"type": "research", "status": "active"}';
 - [x] pgvector configured
 - [x] Full-text search configured
 - [x] Cache tables created
-- [x] pg_cron configured
+- [ ] pg_cron configured (provider-dependent; not enabled by the shared extension script)
 - [x] Cache service implemented
 - [x] Search service implemented
 
